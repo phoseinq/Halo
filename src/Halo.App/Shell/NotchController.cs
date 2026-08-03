@@ -419,7 +419,8 @@ internal sealed partial class NotchController
         if (!Win32.GetSystemTimes(out long idle, out long kern, out long user)) return;
         long total = kern + user;
 
-        bool watching = _progress > 0.02f || _notif != null || _drop >= 0f;
+        bool watching = _progress > 0.02f || _notif != null || _drop >= 0f
+                        || _cue.Alive(Environment.TickCount64);
         int target = _fps;
         if (_cpuBusyBase != 0 && total > _cpuBusyBase)
         {
@@ -1361,6 +1362,8 @@ internal sealed partial class NotchController
         _lastSec = DateTime.Now.Second;
 
         bool forceAnim = false;
+
+        if (_cue.Alive(Environment.TickCount64)) forceAnim = true;
         bool animating = _widgets[_primary].Animating;
 
         bool sprint = animating && _widgets[_primary].Sprinting;
@@ -1640,7 +1643,7 @@ internal sealed partial class NotchController
         _row = -1;
     }
 
-    private RightDoubleClick _rightDouble;
+    private DoubleClick _appReveal;
 
     private void PollClick(Win32.POINT p)
     {
@@ -1648,8 +1651,9 @@ internal sealed partial class NotchController
         bool overPill = _progress > 0.02f
             ? InRect(p, _el, _et, Sc(ExpandedW), Sc(ExpandedH))
             : InRect(p, _cl, _ct, Sc(CollapsedW), Sc(CollapsedH));
-        if (_rightDouble.Step((Win32.GetAsyncKeyState(Win32.VK_RBUTTON) & 0x8000) != 0 && overPill,
-                              Environment.TickCount64, p.X, p.Y, Win32.GetDoubleClickTime()))
+        bool inert = overPill && !_moving && !OverPressable(new Point(p.X, p.Y));
+        if (_appReveal.Step((Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0 && inert,
+                            Environment.TickCount64, p.X, p.Y, Win32.GetDoubleClickTime()))
             RevealPrimaryApp();
 
         bool down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0;
@@ -2009,7 +2013,20 @@ internal sealed partial class NotchController
         bool banner = _notif != null || ((_ask ?? _askGhost) != null && _askT > 0f);
         float glassFade = _empty && !Privacy.Active && !banner ? 1f - SmoothStep(_shrink) : 1f;
         _notch.Render(w, h, r, tint, fade, mini, glass, frame,
-            (g, cw, ch, f) => { content(g, cw, ch, f); if (pin) DrawPin(g, cw, ch, f); if (holdCue > 0.01f) DrawHoldCue(g, cw, ch); },
+            (g, cw, ch, f) =>
+            {
+                content(g, cw, ch, f);
+                if (holdCue > 0.01f) DrawHoldCue(g, cw, ch);
+
+                long ms = Environment.TickCount64;
+                float cue = _cue.Alpha(ms) * f;
+
+                float pulse = 0.5f - 0.5f * MathF.Cos(ms % 2900 / 2900f * MathF.Tau);
+                DrawToggleCue(g, cw, ch, r, cue, _cueCapture, _cueOn, pulse);
+                DrawCueEdge(g, cw, ch, r, cue, _cueCapture, _cueOn, pulse);
+
+                if (pin) DrawPin(g, cw, ch, f);
+            },
             _empty ? static (_, _, _, _) => { } : _widgets[_primary].DrawCollapsed,
             glassFade, banner ? BannerClarity : 0f);
     }
@@ -2243,13 +2260,162 @@ internal sealed partial class NotchController
                 _recordable = !_recordable;
                 SaveRecordable();
                 _notch.SetCapturable(_recordable);
+                FireToggleCue(capture: true, on: _recordable);
             }
             return true;
         }
 
-        if (!_pinHoldFired && over) { _pinned = !_pinned; SavePin(); }
+        if (!_pinHoldFired && over) { _pinned = !_pinned; SavePin(); FireToggleCue(capture: false, on: _pinned); }
         _pinPressAt = DateTime.MaxValue;
         return true;
+    }
+
+    private ToggleCue _cue;
+    private bool _cueCapture, _cueOn;
+
+    private void FireToggleCue(bool capture, bool on)
+    {
+        _cue = new ToggleCue(Environment.TickCount64);
+        _cueCapture = capture;
+        _cueOn = on;
+    }
+
+    private const string GlyphPin = "\uE718", GlyphPinOff = "\uE77A";
+    private const string GlyphEye = "\uE890", GlyphEyeOff = "\uED1A";
+
+    private static (string Glyph, string Title, string Body, Color Accent) CueText(bool capture, bool on) => capture
+        ? on
+            ? (GlyphEye, "Visible in captures",
+               "Screenshots, screen recordings and shared screens will now include the pill, so whatever it "
+               + "happens to be showing goes out with them. Turn this off by holding the pushpin again.",
+               Color.FromArgb(255, 240, 196, 120))
+            : (GlyphEyeOff, "Hidden from captures",
+               "The pill is left out of screenshots, recordings and screen shares. It stays on your own "
+               + "screen exactly as it is - it simply will not appear in the picture, so notifications and "
+               + "session panels do not end up in anything you send.",
+               Color.FromArgb(255, 158, 168, 184))
+        : on
+
+            ? (GlyphPin, "Pinned over fullscreen",
+               "Everything keeps its place at the top: what is playing, its controls, and any live session "
+               + "stay one glance away while a game or a video owns the whole display.",
+
+               Color.FromArgb(255, 92, 226, 198))
+            : (GlyphPinOff, "Unpinned from fullscreen",
+               "Fullscreen stays uncovered - the widgets step aside so nothing sits over a game or a film. "
+               + "Notifications still reach you as banners, and the pill comes back the moment you leave.",
+               Color.FromArgb(255, 158, 168, 184));
+
+    internal static void DrawToggleCue(Graphics g, int w, int h, float radius, float alpha, bool capture,
+                                       bool on, float pulse)
+    {
+        if (alpha <= 0.01f) return;
+        var (glyph, title, body, accent) = CueText(capture, on);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        int A(int v) => (int)Math.Clamp(v * alpha, 0, 255);
+
+        var st = g.Save();
+        using (var shape = Fx.PillPath(w, h, radius))
+        {
+
+            g.SetClip(shape);
+
+            using (var frost = new SolidBrush(Color.FromArgb(A(250), 9, 10, 13)))
+                g.FillRectangle(frost, 0, 0, w, h);
+
+            using (var sheen = new System.Drawing.Drawing2D.LinearGradientBrush(
+                       new RectangleF(0, 0, w, h), Color.White, Color.White, 90f))
+            {
+                sheen.InterpolationColors = new System.Drawing.Drawing2D.ColorBlend(3)
+                {
+                    Colors = new[] { Color.FromArgb(A(26), 255, 255, 255), Color.FromArgb(A(8), 255, 255, 255),
+                                     Color.FromArgb(0, 255, 255, 255) },
+                    Positions = new[] { 0f, 0.55f, 1f },
+                };
+                g.FillRectangle(sheen, 0, 0, w, h);
+            }
+
+            float lift = (1f - alpha) * 10f;
+            float pad = Math.Max(18f, w * 0.055f);
+            float top = Math.Max(16f, h * 0.20f) + lift;
+
+            const int headA = 255;
+
+            float gs = Math.Max(17f, h * 0.105f);
+            using var gfont = new Font("Segoe Fluent Icons", gs, FontStyle.Regular, GraphicsUnit.Pixel);
+            using var tf = new Font("Segoe UI", Math.Max(15f, h * 0.098f), FontStyle.Bold, GraphicsUnit.Pixel);
+            using var bf = new Font("Segoe UI", Math.Max(11f, h * 0.063f), FontStyle.Regular, GraphicsUnit.Pixel);
+            using var gfmt = new StringFormat(StringFormat.GenericTypographic);
+            using var titleFmt = new StringFormat(StringFormat.GenericTypographic)
+            { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+
+            using var bodyFmt = new StringFormat(StringFormat.GenericTypographic)
+            { Trimming = StringTrimming.Word };
+
+            var gsz = g.MeasureString(glyph, gfont, int.MaxValue, gfmt);
+            var tsz = g.MeasureString(title, tf, int.MaxValue, titleFmt);
+            float rowH = Math.Max(gsz.Height, tsz.Height);
+            float gapX = Math.Max(10f, gs * 0.55f);
+
+            var textHint = g.TextRenderingHint;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+            using (var gbrush = new SolidBrush(Color.FromArgb(A(headA), accent.R, accent.G, accent.B)))
+                g.DrawString(glyph, gfont, gbrush, new PointF(pad, top + (rowH - gsz.Height) / 2f), gfmt);
+            g.TextRenderingHint = textHint;
+            using (var tb = new SolidBrush(Color.FromArgb(A(headA), accent.R, accent.G, accent.B)))
+                g.DrawString(title, tf, tb, new RectangleF(pad + gsz.Width + gapX, top + (rowH - tsz.Height) / 2f,
+                                                          w - pad * 2 - gsz.Width - gapX, rowH), titleFmt);
+
+            using (var bb = new SolidBrush(Color.FromArgb(A(190), 226, 231, 240)))
+                g.DrawString(body, bf, bb, new RectangleF(pad, top + rowH + rowH * 0.62f,
+                                                         w - pad * 2, h - (top + rowH * 1.62f) - pad * 0.6f), bodyFmt);
+        }
+        g.Restore(st);
+    }
+
+    private static Color Vivid(Color c)
+    {
+        int m = Math.Max(c.R, Math.Max(c.G, c.B));
+        int Deepen(int v) => (int)Math.Clamp(m - (m - v) * 1.45f, 0, 255);
+        return Color.FromArgb(c.A, Deepen(c.R), Deepen(c.G), Deepen(c.B));
+    }
+
+    internal static void DrawCueEdge(Graphics g, int w, int h, float radius, float alpha, bool capture,
+                                     bool on, float pulse)
+    {
+        if (alpha <= 0.01f) return;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        const float width = 3.4f;
+
+        float lit = 0.30f + 0.70f * Math.Clamp(pulse, 0f, 1f);
+        int a = (int)Math.Clamp(255 * alpha, 0, 255);
+
+        Color Mix(Color c) => Color.FromArgb(a, (int)(c.R * lit), (int)(c.G * lit), (int)(c.B * lit));
+        var ribbon = new[]
+        {
+            Mix(Vivid(Color.FromArgb(255, 255, 105, 120))),
+            Mix(Vivid(Color.FromArgb(255, 255, 170, 90))),
+            Mix(Vivid(Color.FromArgb(255, 250, 225, 110))),
+            Mix(Vivid(Color.FromArgb(255, 120, 235, 150))),
+            Mix(Vivid(Color.FromArgb(255, 90, 220, 240))),
+            Mix(Vivid(Color.FromArgb(255, 120, 160, 255))),
+            Mix(Vivid(Color.FromArgb(255, 190, 130, 255))),
+            Mix(Vivid(Color.FromArgb(255, 255, 105, 120))),
+        };
+
+        using var path = Fx.PillPath(w, h, radius, width / 2f);
+
+        using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
+            new RectangleF(-1f, -1f, w + 2f, h + 2f), Color.White, Color.White, 20f);
+        var positions = new float[ribbon.Length];
+        for (int i = 0; i < ribbon.Length; i++) positions[i] = i / (float)(ribbon.Length - 1);
+        brush.InterpolationColors = new System.Drawing.Drawing2D.ColorBlend(ribbon.Length)
+        { Colors = ribbon, Positions = positions };
+
+        using var pen = new Pen(brush, width);
+        g.DrawPath(pen, path);
     }
 
     private float PinHoldProgress()
@@ -2266,8 +2432,6 @@ internal sealed partial class NotchController
 
         DrawPushpin(g, r, _pinned, hv, a, _recordable, PinHoldProgress());
     }
-
-    private static readonly Color Slate = Color.FromArgb(255, 154, 165, 180);
 
     private static void Sphere(Graphics g, RectangleF head, float hr, GraphicsPath? needle, float a,
         Color baseColor, Color? needleColor = null)
@@ -2334,10 +2498,9 @@ internal sealed partial class NotchController
         float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f, u = r.Width / 24f * 0.7f;
         g.TranslateTransform(cx, cy);
         g.RotateTransform(28f);
+
         float hr = 6.4f * u;
         var head = new RectangleF(-hr, -3f * u - hr, hr * 2, hr * 2);
-        using var needle = new GraphicsPath();
-        needle.AddPolygon(new[] { new PointF(-2.3f * u, 2.5f * u), new PointF(2.3f * u, 2.5f * u), new PointF(0, 12f * u) });
 
         float grow = 1f + 0.18f * holdT;
         if (grow > 1.001f)
@@ -2351,29 +2514,21 @@ internal sealed partial class NotchController
         {
 
             var amber = Color.FromArgb(255, 255, 200, 92);
-            if (pinned)
-            {
-
-                Sphere(g, head, hr, needle, a, amber, Slate);
-            }
-            else
-            {
-                using (var pen = new Pen(Color.FromArgb((int)((122 + 78 * hover) * a), 255, 255, 255), 1.7f * u)
-                       { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    g.DrawPath(pen, needle);
-                Sphere(g, head, hr, null, a, amber);
-            }
+            Sphere(g, head, hr, null, a, pinned ? amber : amber);
         }
         else if (pinned)
         {
-            Sphere(g, head, hr, needle, a, Slate);
+
+            using (var fill = new SolidBrush(Color.FromArgb((int)((15 + 19 * hover) * a), 255, 255, 255)))
+                g.FillEllipse(fill, head);
+            using (var pen = new Pen(Color.FromArgb((int)((34 + 30 * hover) * a), 255, 255, 255), 1.7f * u))
+                g.DrawEllipse(pen, head);
         }
         else
         {
             int dim = (int)((122 + 78 * hover) * a);
             using var pen = new Pen(Color.FromArgb(dim, 255, 255, 255), 1.7f * u)
             { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
-            g.DrawPath(pen, needle);
             g.DrawEllipse(pen, head.X, head.Y, hr * 2, hr * 2);
         }
         g.Restore(st);
@@ -2590,9 +2745,10 @@ internal sealed partial class NotchController
 
         try
         {
-            string legacy = System.IO.File.Exists(PinPath) && System.IO.File.ReadAllText(PinPath).Trim() == "1"
-                ? "on" : "off";
-            _pinned = _settings.Current.Bool(Halo.Settings.SettingsKeys.OverFullscreen, legacy == "on");
+
+            bool fresh = !System.IO.File.Exists(PinPath);
+            bool legacyOn = !fresh && System.IO.File.ReadAllText(PinPath).Trim() == "1";
+            _pinned = _settings.Current.Bool(Halo.Settings.SettingsKeys.OverFullscreen, fresh || legacyOn);
         }
         catch { }
     }

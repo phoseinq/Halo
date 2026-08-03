@@ -115,7 +115,7 @@ internal static class Fx
     }
 
     public static void PillBar(Graphics g, int w, int h, float fade, float frac, Color accent, float strength,
-                               bool alive = false)
+                               bool alive = false, bool track = true, bool decorated = true)
     {
         if (accent == White || fade <= 0.01f || strength <= 0f) return;
         frac = Math.Clamp(frac, 0f, 1f);
@@ -126,11 +126,14 @@ internal static class Fx
 
         using var pp = PillPath(w, h, h / 2f, 0.5f);
 
-        RgbToHsv(accent, out float th, out float ts, out float tv);
-        var track = HsvToRgb(th, ts * 0.42f, Math.Max(0.16f, tv * 0.34f));
+        if (track)
+        {
+            RgbToHsv(accent, out float th, out float ts, out float tv);
+            var trackColor = HsvToRgb(th, ts * 0.42f, Math.Max(0.16f, tv * 0.34f));
 
-        using (var tb = new SolidBrush(Alpha(track, fade * strength * (0.34f + 0.28f * strength))))
+            using var tb = new SolidBrush(Alpha(trackColor, fade * strength * (0.34f + 0.28f * strength)));
             g.FillPath(tb, pp);
+        }
         if (frac <= 0.001f) return;
 
         float fill = w * frac;
@@ -140,7 +143,7 @@ internal static class Fx
         float lit = alive ? 0.78f + 0.42f * breath : 1f;
         var solid = Alpha(accent, fade * 0.52f * strength * lit);
 
-        if (fill > 6f)
+        if (decorated && fill > 6f)
         {
             var oldG = g.Clip;
             g.SetClip(new RectangleF(0, 0, fill, h), CombineMode.Intersect);
@@ -149,11 +152,12 @@ internal static class Fx
             g.Clip = oldG;
         }
 
+        float soft = Math.Clamp(3f / w, 0.0008f, 0.02f);
+
         if (frac >= 0.999f) { using (var fb = new SolidBrush(solid)) g.FillPath(fb, pp); }
         else
         {
 
-            float soft = Math.Clamp(2.5f / w, 0.0008f, 0.02f);
             float cut = Math.Clamp(fill / w, soft + 0.0005f, 0.9985f);
             using var lb = new LinearGradientBrush(new RectangleF(0, 0, w, h), solid, Color.FromArgb(0, accent),
                        LinearGradientMode.Horizontal);
@@ -165,7 +169,7 @@ internal static class Fx
             g.FillPath(lb, pp);
         }
 
-        if (fill > 4f && strength >= 0.4f)
+        if (decorated && fill > 4f && strength >= 0.4f)
         {
             using var sheen = new LinearGradientBrush(new RectangleF(0, -0.5f, Math.Max(w, 1), h + 1f),
                 Color.White, Color.White, LinearGradientMode.Vertical);
@@ -186,19 +190,27 @@ internal static class Fx
             g.Clip = oldC;
         }
 
-        if (fill > 8f && strength >= 0.5f)
+        if (decorated && fill > 8f && strength >= 0.5f)
         {
-            float lipW = Math.Min(38f, fill), x0 = fill - lipW;
-            using var lip = new LinearGradientBrush(new RectangleF(x0 - 0.5f, 0, lipW + 1f, h),
-                Color.FromArgb(0, accent), Alpha(accent, fade * 0.3f * strength * lit),
-                LinearGradientMode.Horizontal);
-            var old = g.Clip;
-            g.SetClip(new RectangleF(x0, 0, lipW, h), CombineMode.Intersect);
+
+            float lipW = Math.Min(38f, fill);
+            float tail = Math.Min(soft * w * 1.6f, 6f);
+            var clear = Color.FromArgb(0, accent);
+
+            float pStart = Math.Clamp((fill - lipW) / w, 0.0002f, 0.9990f);
+            float pPeak = Math.Clamp(fill / w, pStart + 0.0002f, 0.9994f);
+            float pEnd = Math.Clamp((fill + tail) / w, pPeak + 0.0002f, 0.9998f);
+            using var lip = new LinearGradientBrush(new RectangleF(0, 0, w, h), clear, clear,
+                                                    LinearGradientMode.Horizontal);
+            lip.InterpolationColors = new ColorBlend(5)
+            {
+                Positions = new[] { 0f, pStart, pPeak, pEnd, 1f },
+                Colors = new[] { clear, clear, Alpha(accent, fade * 0.3f * strength * lit), clear, clear },
+            };
             g.FillPath(lip, pp);
-            g.Clip = old;
         }
 
-        if (fill > 6f)
+        if (decorated && fill > 6f)
         {
             var oldG = g.Clip;
             g.SetClip(new RectangleF(0, 0, fill, h), CombineMode.Intersect);

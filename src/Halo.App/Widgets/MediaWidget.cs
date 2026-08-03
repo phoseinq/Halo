@@ -1374,7 +1374,8 @@ internal sealed class MediaWidget : IWidget
             _pillEpoch = epoch;
             return _pillFrac = frac;
         }
-        _pillFrac = Ease(_pillFrac, frac, dt, 0.14f);
+
+        _pillFrac = Ease(_pillFrac, frac, dt, 0.30f);
         if (Math.Abs(frac - _pillFrac) < 0.0004f) _pillFrac = frac;
         return _pillFrac;
     }
@@ -1403,7 +1404,7 @@ internal sealed class MediaWidget : IWidget
         _barIn = Ease(_barIn, prog >= 0f ? 1f : 0f, dt, 0.20f);
         if (_barIn > 0.01f && _lastProg >= 0f)
 
-        Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f);
+        Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f, track: false, decorated: false);
         else if (playing && RingProgress < 0f && Halo.Settings.SettingsStore.On("media.progress"))
         {
 

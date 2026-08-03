@@ -2,7 +2,7 @@ using System;
 
 namespace Halo.Shell;
 
-internal struct RightDoubleClick
+internal struct DoubleClick
 {
 
     internal const int SlopPx = 8;

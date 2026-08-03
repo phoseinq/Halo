@@ -27,6 +27,8 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-pill") { RenderPill(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--render-bar") { RenderBar(args[1]); return; }
+
         if (args.Length >= 2 && args[0] == "--render-morph") { RenderMorph(args[1]); return; }
 
         if (args.Length >= 1 && args[0] == "--probe-display") { ProbeDisplay(); return; }
@@ -45,6 +47,8 @@ internal static class Program
             Console.WriteLine($"body     {Almanac.Detail(DateTime.Now)}");
             return;
         }
+
+        if (args.Length >= 2 && args[0] == "--render-cue") { RenderCue(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-pin") { RenderPin(args[1]); return; }
 
@@ -157,6 +161,11 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--probe-seek") { ProbeSeek(double.Parse(args[1],
             System.Globalization.CultureInfo.InvariantCulture), args.Length > 2 ? int.Parse(args[2]) : 1); return; }
+        if (args.Length >= 1 && args[0] == "--probe-subpixel") { ProbeSubpixel(); return; }
+        if (args.Length >= 1 && args[0] == "--probe-bar")
+        {
+            ProbeBar(args.Length > 1 ? int.Parse(args[1]) : 12); return;
+        }
 
         if (args.Length >= 1 && args[0] == "--probe-behind")
         {
@@ -502,6 +511,69 @@ internal static class Program
         t.SetApartmentState(System.Threading.ApartmentState.STA);
         t.Start();
         t.Join();
+    }
+
+    private static void RenderBar(string outPath)
+    {
+        const int W = 220, H = 40, Pad = 16;
+        float[] fracs = { 0.06f, 0.28f, 0.55f, 0.82f, 1f };
+        var accent = System.Drawing.Color.FromArgb(255, 232, 96, 120);
+        using var bmp = new System.Drawing.Bitmap(W * 2 + Pad * 3 + 90, (H + Pad) * fracs.Length + Pad + 26);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            g.Clear(System.Drawing.Color.FromArgb(20, 20, 24));
+            using var lf = new System.Drawing.Font("Segoe UI", 11f);
+            using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(190, 232, 236, 244));
+            g.DrawString("with track (agents)", lf, lb, 90 + Pad, 6);
+            g.DrawString("no track (music)", lf, lb, 90 + Pad * 2 + W, 6);
+
+            for (int i = 0; i < fracs.Length; i++)
+            {
+                float y = 26 + Pad + i * (H + Pad);
+                g.DrawString($"{fracs[i] * 100:0}%", lf, lb, 22, y + H / 2f - 10);
+                for (int col = 0; col < 2; col++)
+                {
+                    var st = g.Save();
+                    g.TranslateTransform(90 + Pad + col * (W + Pad), y);
+
+                    using (var path = Halo.Widgets.Fx.PillPath(W, H, H / 2f))
+                    using (var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 26, 27, 32)))
+                        g.FillPath(back, path);
+                    Halo.Widgets.Fx.PillBar(g, W, H, 1f, fracs[i], accent, 0.5f, alive: false, track: col == 0, decorated: col == 0);
+                    g.Restore(st);
+                }
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    private static void RenderCue(string outPath)
+    {
+
+        const int W = 560, H = 220, Gap = 14;
+        var states = new[] { (cap: false, on: true), (cap: false, on: false),
+                             (cap: true,  on: true), (cap: true,  on: false) };
+        using var bmp = new System.Drawing.Bitmap(W * 2 + Gap * 3, H * 2 + Gap * 3);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(System.Drawing.Color.FromArgb(18, 18, 22));
+            for (int i = 0; i < states.Length; i++)
+            {
+                var st = g.Save();
+                g.TranslateTransform(Gap + i % 2 * (W + Gap), Gap + i / 2 * (H + Gap));
+                using (var path = Halo.Widgets.Fx.PillPath(W, H, 30f))
+                using (var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 30, 32, 38)))
+                    g.FillPath(back, path);
+                Halo.Shell.NotchController.DrawToggleCue(g, W, H, 30f, 1f, states[i].cap, states[i].on, i % 2 == 0 ? 1f : 0f);
+                Halo.Shell.NotchController.DrawCueEdge(g, W, H, 30f, 1f, states[i].cap, states[i].on,
+                                                       i % 2 == 0 ? 1f : 0f);
+                g.Restore(st);
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 
     private static void RenderPin(string outPath)
@@ -970,6 +1042,58 @@ internal static class Program
         catch { return hwnd.ToString(); }
     }
 
+    private static void ProbeSubpixel()
+    {
+        const int W = 220, H = 40;
+        var accent = System.Drawing.Color.FromArgb(255, 232, 96, 120);
+        double prev = 0;
+        Console.WriteLine("frac        fill px    ink        change");
+        for (int i = 0; i <= 14; i++)
+        {
+            float frac = 0.30f + i * 0.00072f;
+            using var bmp = new System.Drawing.Bitmap(W, H,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                Halo.Widgets.Fx.PillBar(g, W, H, 1f, frac, accent, 0.5f, alive: false, track: false, decorated: false);
+            }
+            double ink = 0;
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    var c = bmp.GetPixel(x, y);
+                    ink += c.A / 255.0 * (c.R + c.G + c.B) / 3.0;
+                }
+            Console.WriteLine($"{frac:0.00000}   {W * frac,7:0.000}   {ink,10:0.0}   {(i == 0 ? "" : (ink - prev).ToString("+0.0;-0.0; 0.0"))}");
+            prev = ink;
+        }
+    }
+
+    private static void ProbeBar(int secs)
+    {
+        var sessions = new Halo.Widgets.MediaSessions();
+        for (int i = 0; i < 40 && sessions.Session(0) is null; i++) System.Threading.Thread.Sleep(100);
+        if (sessions.Session(0) is null) { Console.WriteLine("no session"); return; }
+        var widget = new Halo.Widgets.MediaWidget(sessions, 0);
+        System.Threading.Thread.Sleep(600);
+
+        long t0 = Environment.TickCount64;
+        float lastFrac = -1f;
+        int lastPx = -1;
+        for (int i = 0; i < Math.Max(1, secs) * 10; i++)
+        {
+            float frac = widget.RingProgress;
+            int px = frac < 0 ? -1 : (int)(220 * frac);
+            string dF = lastFrac < 0 || frac < 0 ? "" : $"  d={frac - lastFrac:+0.000000;-0.000000; 0.000000}";
+            string dP = lastPx < 0 || px < 0 ? "" : (px != lastPx ? $"  PIXEL MOVED {lastPx}->{px}" : "");
+            Console.WriteLine($"{(Environment.TickCount64 - t0) / 1000.0,6:0.0}s  frac={frac,8:0.00000}  px={px,4}{dF}{dP}");
+            lastFrac = frac;
+            lastPx = px;
+            System.Threading.Thread.Sleep(100);
+        }
+    }
+
     private static void ProbeArt(int secs, bool nudge)
     {
         var sessions = new Halo.Widgets.MediaSessions();
@@ -993,8 +1117,21 @@ internal static class Program
             {
                 var props = s.TryGetMediaPropertiesAsync().AsTask().GetAwaiter().GetResult();
                 var tl = s.GetTimelineProperties();
-                byte[]? thumb = props?.Thumbnail is null ? null
-                    : Halo.Widgets.MediaWidget.ReadThumbForProbe(props.Thumbnail).GetAwaiter().GetResult();
+
+                string thumbState;
+                byte[]? thumb = null;
+                if (props?.Thumbnail is null) thumbState = "NO-REF (player published nothing)";
+                else
+                {
+                    try
+                    {
+                        thumb = Halo.Widgets.MediaWidget.ReadThumbForProbe(props.Thumbnail).GetAwaiter().GetResult();
+                        thumbState = thumb is { Length: > 0 }
+                            ? thumb.Length + "B"
+                            : "REF-BUT-EMPTY (we opened it and got 0 bytes)";
+                    }
+                    catch (Exception ex) { thumbState = "READ-THREW " + ex.GetType().Name + ": " + ex.Message; }
+                }
                 string title = props?.Title ?? "";
                 if (title != last)
                 {
@@ -1003,7 +1140,7 @@ internal static class Program
                     nudged = false;
                     Console.WriteLine($"{Stamp()}  TRACK '{title}'");
                 }
-                Console.WriteLine($"{Stamp()}  thumb={(thumb is { Length: > 0 } ? thumb.Length + "B" : "NONE")}"
+                Console.WriteLine($"{Stamp()}  thumb={thumbState}"
                     + $"  pos={tl.Position:mm\\:ss}");
 
                 if (nudge && !nudged && thumb is not { Length: > 0 } && Environment.TickCount64 - t0 > 20_000)

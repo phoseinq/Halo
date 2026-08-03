@@ -64,7 +64,7 @@ internal static class Catalog
             ]),
             new("STARTUP", "\uE7E8", [
                 Toggle("general.startup", "Start with Windows", "Launch Halo after you sign in"),
-                Toggle("general.fullscreen", "Stay visible over fullscreen", "Keep the pill above games and video", false),
+                Toggle("general.fullscreen", "Stay visible over fullscreen", "Keep the pill above games and video", true),
             ]),
             new("BEHAVIOUR", "\uE945", [
                 Toggle("general.capture", "Include Halo in captures", "Show the pill in screenshots and recordings", false),

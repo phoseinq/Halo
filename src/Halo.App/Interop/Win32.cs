@@ -318,7 +318,6 @@ internal static class Win32
     public static extern bool GetCursorPos(out POINT p);
 
     public const int VK_LBUTTON = 0x01;
-    public const int VK_RBUTTON = 0x02;
 
     [DllImport("user32.dll")]
     public static extern int GetDoubleClickTime();

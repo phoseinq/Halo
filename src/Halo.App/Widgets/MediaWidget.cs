@@ -1,0 +1,1597 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Threading.Tasks;
+using Windows.Media.Control;
+using Windows.Storage.Streams;
+
+namespace Halo.Widgets;
+
+internal sealed class MediaWidget : IWidget
+{
+    private static readonly Color White = Color.FromArgb(238, 255, 255, 255);
+    private static readonly Color Dim = Color.FromArgb(150, 255, 255, 255);
+    private static readonly Color Track = Color.FromArgb(46, 255, 255, 255);
+
+    private readonly object _lock = new();
+    private readonly MediaSessions _sessions;
+    private readonly int _slot;
+    private GlobalSystemMediaTransportControlsSession? _session;
+
+    private string? _title, _artist, _trackKey, _appId;
+    private bool _playing, _isVideo;
+    private double _rate = 1.0;
+    private bool _rateEnabled;
+    private bool _seekEnabled;
+    private bool _thumbWide;
+
+    private GlobalSystemMediaTransportControlsSessionPlaybackStatus _status;
+    private byte[]? _thumb;
+    private TimeSpan _pos, _end;
+    private TimeSpan _start, _minSeek, _maxSeek;
+
+    private TimeSpan _wallBase;
+    private DateTime _wallAt;
+    private TimeSpan? _seekPending;
+    private DateTimeOffset _seekSentAt, _seekAskedAt;
+    private TimeSpan _reported;
+    private TimeSpan _prevEnd;
+    private long _trackAt;
+    private int _seekTries;
+    private bool _seekBusy;
+    private DateTime _posAt;
+    private int _version;
+
+    private string? _artKey;
+    private Bitmap? _art;
+    private volatile bool _artStale;
+    private Bitmap[]? _frames;
+    private int[]? _delays;
+    private int _totalDelay;
+    private Color _accent = White;
+
+    public MediaWidget(MediaSessions sessions, int slot)
+    {
+        _sessions = sessions;
+        _slot = slot;
+        _sessions.Changed += Resync;
+        Resync();
+    }
+
+    internal void Seed(string title, string artist, byte[]? thumb, double through)
+    {
+        lock (_lock)
+        {
+            _title = title;
+            _artist = artist;
+            _trackKey = title + "|" + artist;
+            _thumb = thumb;
+            _thumbWide = false;
+            _playing = true;
+            _start = TimeSpan.Zero;
+            _end = TimeSpan.FromMinutes(4);
+            _pos = TimeSpan.FromMinutes(4 * through);
+            _posAt = DateTime.UtcNow;
+            _version++;
+        }
+    }
+
+    public string App => _sessions.SlotApp(_slot);
+
+    public int Slot => _slot;
+    public string? TitleText { get { lock (_lock) return _title; } }
+    public string? ArtistText { get { lock (_lock) return _artist; } }
+    public bool Playing { get { lock (_lock) return _playing; } }
+
+    public string Icon => "\uE768";
+
+    public bool IsActive
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _title != null
+                    && (_status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+                     || _status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused);
+            }
+        }
+    }
+    public int Version { get { lock (_lock) { return _version; } } }
+
+    public Bitmap? IconImage
+    {
+        get
+        {
+            string? id; lock (_lock) { id = _appId; }
+            var app = AppIcon.ForSessionApp(id);
+            if (app != null) return app;
+            EnsureArt();
+            return _art;
+        }
+    }
+
+    private void EnsureArt()
+    {
+        byte[]? thumb; string? key; bool stale;
+
+        lock (_lock)
+        {
+            thumb = _thumb; key = _trackKey;
+            stale = _artStale;
+            if (key != _artKey || stale) _artStale = false;
+        }
+        if (key != _artKey || stale)
+        {
+
+            long hash = ThumbHash(thumb);
+            if (hash == _artHash)
+            {
+                _artKey = key;
+                return;
+            }
+
+            _prevArt?.Dispose();
+            _prevArt = _art != null ? (Bitmap)_art.Clone() : null;
+            _flipAt = Environment.TickCount64 - (_prevArt == null ? FlipMs / 2 : 0);
+            _artHash = hash;
+            DisposeFrames();
+            (_frames, _delays) = DecodeFrames(thumb);
+            _art = _frames is { Length: > 0 } ? _frames[0] : null;
+            _totalDelay = 0;
+            if (_delays != null) foreach (var d in _delays) _totalDelay += d;
+            _animatedArt = _frames is { Length: > 1 } && _totalDelay > 0;
+            _artKey = key;
+            _accent = _art != null ? Fx.Accent(_art) : White;
+            _palette = Palette(_accent);
+        }
+    }
+
+    private void DisposeFrames()
+    {
+        if (_frames != null) foreach (var f in _frames) f?.Dispose();
+        _frames = null; _delays = null; _art = null;
+    }
+
+    private Bitmap? CurArt()
+    {
+        if (_frames == null || _frames.Length == 0) return null;
+        if (_frames.Length == 1 || _totalDelay <= 0) return _frames[0];
+        int t = (int)(Environment.TickCount64 % _totalDelay);
+        for (int i = 0; i < _frames.Length; i++) { t -= _delays![i]; if (t < 0) return _frames[i]; }
+        return _frames[^1];
+    }
+
+    private void Resync() => Hook(_sessions.Session(_slot));
+
+    private void Hook(GlobalSystemMediaTransportControlsSession? s)
+    {
+        string? newId = s?.SourceAppUserModelId;
+        lock (_lock)
+        {
+            if (s != null && _session != null && newId == _appId) return;
+            _session = s; _appId = newId;
+        }
+        if (s == null) { Clear(); return; }
+        try
+        {
+            s.MediaPropertiesChanged += (_, __) => RefreshProps(s);
+            s.PlaybackInfoChanged += (_, __) => RefreshPlayback(s);
+            s.TimelinePropertiesChanged += (_, __) => RefreshTimeline(s);
+            RefreshProps(s);
+            RefreshPlayback(s);
+            RefreshTimeline(s);
+        }
+        catch { }
+    }
+
+    private async void RefreshProps(GlobalSystemMediaTransportControlsSession s)
+    {
+        try
+        {
+            var props = await s.TryGetMediaPropertiesAsync();
+            string title = Fx.CleanText(props.Title);
+            string artist = Fx.CleanText(props.Artist);
+            string key = title + "" + artist;
+            byte[]? thumb = props.Thumbnail != null ? await ReadStream(props.Thumbnail) : null;
+            bool wide = ThumbIsWide(thumb);
+            bool trackChanged, chase;
+            int epoch;
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_session, s)) return;
+                trackChanged = key != _trackKey;
+                bool firstTrack = _trackKey == null;
+                _title = title.Length > 0 ? title : (artist.Length > 0 ? artist : null);
+                _artist = artist;
+                _trackKey = key;
+                if (thumb != null || trackChanged) { _thumb = thumb; _thumbWide = wide; }
+
+                if (trackChanged && !firstTrack)
+                {
+                    _prevEnd = _end;
+                    _trackAt = Environment.TickCount64;
+                    _pos = _end = _start = TimeSpan.Zero;
+                    _minSeek = _maxSeek = TimeSpan.Zero;
+                    _posAt = DateTime.UtcNow;
+                }
+                if (trackChanged)
+                {
+                    _trackEpoch++;
+                    _wallBase = TimeSpan.Zero;
+                    _wallAt = _playing ? DateTime.UtcNow : default;
+                    if (_tgTimeline) TelegramPlayer.Reset();
+                    _tgTimeline = false;
+                }
+                _version++;
+
+                chase = _thumb is not { Length: > 0 };
+                epoch = _trackEpoch;
+            }
+            if (trackChanged) DebugLog(title);
+            if (chase) ChaseArt(s, epoch);
+        }
+        catch { }
+    }
+
+    private static readonly int[] ArtRetries = [350, 700, 1400, 2600, 4500, 6000];
+    private const int ArtSlowRetry = 10_000;
+    private const int ArtSlowTries = 30;
+
+    internal static int ArtDelay(int attempt)
+        => attempt < 0 ? -1
+        : attempt < ArtRetries.Length ? ArtRetries[attempt]
+        : attempt < ArtRetries.Length + ArtSlowTries ? ArtSlowRetry
+        : -1;
+
+    private async void ChaseArt(GlobalSystemMediaTransportControlsSession s, int epoch)
+    {
+
+        if (_chasing) return;
+        _chasing = true;
+        try
+        {
+            for (int i = 0; ; i++)
+            {
+                int delay = ArtDelay(i);
+                if (delay < 0) return;
+                await System.Threading.Tasks.Task.Delay(delay);
+                switch (ChaseStep(s, epoch))
+                {
+                    case ArtChase.Done: return;
+                    case ArtChase.Restart:
+                        lock (_lock) { s = _session!; epoch = _trackEpoch; }
+                        i = -1;
+                        continue;
+                }
+                try
+                {
+                    var props = await s.TryGetMediaPropertiesAsync();
+                    byte[]? thumb = props.Thumbnail != null ? await ReadStream(props.Thumbnail) : null;
+                    if (thumb is not { Length: > 0 }) continue;
+                    bool wide = ThumbIsWide(thumb);
+                    lock (_lock)
+                    {
+                        if (!ReferenceEquals(_session, s) || _trackEpoch != epoch) continue;
+                        _thumb = thumb;
+                        _thumbWide = wide;
+                        _artStale = true;
+                        _version++;
+                    }
+                    return;
+                }
+                catch { }
+            }
+        }
+        catch { }
+        finally { _chasing = false; }
+    }
+
+    internal enum ArtChase { Done, Restart, Fetch }
+
+    internal static ArtChase Decide(bool sessionAlive, bool trackMoved, bool hasArt) =>
+        !sessionAlive ? ArtChase.Done
+        : hasArt ? ArtChase.Done
+        : trackMoved ? ArtChase.Restart
+        : ArtChase.Fetch;
+
+    private ArtChase ChaseStep(GlobalSystemMediaTransportControlsSession s, int epoch)
+    {
+        lock (_lock)
+        {
+            return Decide(_session != null,
+                          !ReferenceEquals(_session, s) || _trackEpoch != epoch,
+                          _thumb is { Length: > 0 });
+        }
+    }
+
+    private volatile bool _chasing;
+
+    private void DebugLog(string title)
+    {
+        try
+        {
+            string app = App, id; bool video; lock (_lock) { id = _appId ?? ""; video = _isVideo; }
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Halo", "media-debug.txt"),
+                $"{DateTime.Now:HH:mm:ss} app='{app}' aumid='{id}' video={video} title='{title}'\r\n");
+        }
+        catch { }
+    }
+
+    private void RefreshPlayback(GlobalSystemMediaTransportControlsSession s)
+    {
+        try
+        {
+            var info = s.GetPlaybackInfo();
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_session, s)) return;
+                bool moved = _status != info.PlaybackStatus
+                    || _rateEnabled != info.Controls.IsPlaybackRateEnabled
+                    || _seekEnabled != info.Controls.IsPlaybackPositionEnabled;
+                _status = info.PlaybackStatus;
+                bool nowPlaying = info.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                if (nowPlaying && !_playing) _wallAt = DateTime.UtcNow;
+                else if (!nowPlaying && _playing && _wallAt != default) _wallBase += DateTime.UtcNow - _wallAt;
+                _playing = nowPlaying;
+                _isVideo = info.PlaybackType == Windows.Media.MediaPlaybackType.Video;
+                _rateEnabled = info.Controls.IsPlaybackRateEnabled;
+                _seekEnabled = info.Controls.IsPlaybackPositionEnabled;
+                if (info.PlaybackRate is double pr && pr > 0 && Math.Abs(pr - _rate) > 0.001)
+                { _rate = pr; moved = true; }
+                if (moved) _version++;
+            }
+        }
+        catch { }
+    }
+
+    private void RefreshTimeline(GlobalSystemMediaTransportControlsSession s)
+    {
+        try
+        {
+            var t = s.GetTimelineProperties();
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_session, s)) return;
+
+                if (_prevEnd > TimeSpan.Zero)
+                {
+                    if (MediaTiming.IsLeftover(t.EndTime, _prevEnd, Environment.TickCount64 - _trackAt)) return;
+                    _prevEnd = TimeSpan.Zero;
+                }
+
+                if (MediaTiming.IsBlank(t.StartTime, t.EndTime, _start, _end)) return;
+                _start = t.StartTime;
+                _minSeek = t.MinSeekTime;
+                _maxSeek = t.MaxSeekTime;
+                _end = t.EndTime;
+
+                bool repeated = t.Position == _reported;
+                _reported = t.Position;
+
+                bool stale = _seekPending is { } want
+                    && (t.Position - want).Duration() > TimeSpan.FromSeconds(1.5);
+                bool confirming = _seekPending is not null;
+                if (!stale)
+                {
+                    _seekPending = null;
+
+                    if (MediaTiming.ShouldRestamp(repeated, _playing, confirming))
+                    {
+                        bool moved = (t.Position - _pos).Duration() > TimeSpan.FromMilliseconds(250);
+                        _pos = t.Position;
+                        _posAt = DateTime.UtcNow;
+                        if (moved) _version++;
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private long _pollAt;
+    private void PollTimeline()
+    {
+        long now = Environment.TickCount64;
+        if (now - _pollAt < 200) return;
+        _pollAt = now;
+        if (Cur() is { } s) { RefreshTimeline(s); RefreshPlayback(s); }
+        TelegramTimeline();
+        NudgeSeek();
+    }
+
+    private bool _tgTimeline;
+
+    private void TelegramTimeline()
+    {
+        bool want; string? smtcTitle;
+        lock (_lock)
+        {
+            want = _title != null && (_end <= _start || _tgTimeline)
+                && _appId?.Contains("telegram", StringComparison.OrdinalIgnoreCase) == true;
+            smtcTitle = _title;
+        }
+        if (!want) return;
+        TelegramPlayer.Poke();
+        var (pos, dur) = TelegramPlayer.Read();
+
+        bool mine = TelegramPlayer.VideoSource
+            || TelegramPlayer.TitleMatches(TelegramPlayer.Title, smtcTitle);
+        if (mine && TelegramPlayer.Live && dur is { } d && d > TimeSpan.Zero)
+        {
+            lock (_lock)
+            {
+                if (!_tgTimeline && _end > _start) return;
+                _tgTimeline = true;
+                _start = TimeSpan.Zero;
+                bool moved = _end != d;
+                _end = d;
+
+                var cur = _playing ? _pos + (DateTime.UtcNow - _posAt) : _pos;
+                if ((pos - cur).Duration() > TimeSpan.FromSeconds(1.2))
+                {
+                    _pos = pos; _posAt = DateTime.UtcNow;
+                    moved = true;
+                }
+                if (moved) _version++;
+            }
+        }
+        else if (!mine || Environment.TickCount64 - TelegramPlayer.LastLiveAt > 5000)
+        {
+
+            lock (_lock)
+            {
+                if (!_tgTimeline) return;
+                _tgTimeline = false;
+                _pos = _end = _start = TimeSpan.Zero;
+                _posAt = DateTime.UtcNow;
+                _version++;
+            }
+        }
+    }
+
+    private void Clear()
+    {
+        lock (_lock)
+        {
+            _status = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
+            if (_title == null) return;
+            _title = _artist = _trackKey = null;
+            _thumb = null;
+            _pos = _end = _start = _minSeek = _maxSeek = TimeSpan.Zero;
+            _wallBase = TimeSpan.Zero; _wallAt = default;
+            _tgTimeline = false;
+            _seekPending = null;
+            _version++;
+        }
+    }
+
+    private static async Task<byte[]?> ReadStream(IRandomAccessStreamReference r)
+    {
+        try
+        {
+            using var s = await r.OpenReadAsync();
+            uint size = (uint)s.Size;
+            if (size == 0) return null;
+            using var reader = new DataReader(s);
+            await reader.LoadAsync(size);
+            var bytes = new byte[size];
+            reader.ReadBytes(bytes);
+            return bytes;
+        }
+        catch { return null; }
+    }
+
+    private GlobalSystemMediaTransportControlsSession? Cur() { lock (_lock) { return _session; } }
+    private void Toggle() { var s = Cur(); if (s != null) _ = s.TryTogglePlayPauseAsync(); }
+    private void Prev() { var s = Cur(); if (s != null) _ = s.TrySkipPreviousAsync(); }
+    private void Next() { var s = Cur(); if (s != null) _ = s.TrySkipNextAsync(); }
+    private void Stop() { var s = Cur(); if (s != null) _ = s.TryStopAsync(); }
+
+    private void SeekBy(int secs)
+    {
+        var s = Cur();
+        TimeSpan pos; bool playing; DateTime at;
+        lock (_lock) { pos = _pos; playing = _playing; at = _posAt; }
+        if (s == null) return;
+        var cur = playing ? pos + (DateTime.UtcNow - at) : pos;
+        SeekTo(s, cur + TimeSpan.FromSeconds(secs));
+    }
+
+    private void SeekTo(GlobalSystemMediaTransportControlsSession s, TimeSpan target)
+    {
+        TimeSpan start, end, lo, hi;
+        lock (_lock) { start = _start; end = _end; lo = _minSeek; hi = _maxSeek; }
+        var floor = lo > TimeSpan.Zero ? lo : start;
+        var ceil = hi > TimeSpan.Zero ? hi : end;
+        if (target < floor) target = floor;
+        if (ceil > TimeSpan.Zero && target > ceil) target = ceil;
+        lock (_lock)
+        {
+            _seekPending = target;
+            _seekAskedAt = DateTimeOffset.UtcNow;
+            _seekTries = 0;
+            _pos = target;
+            _posAt = DateTime.UtcNow;
+            _version++;
+        }
+    }
+
+        private void NudgeSeek()
+    {
+        TimeSpan target, reported;
+        DateTimeOffset asked, sent;
+        int tries;
+        lock (_lock)
+        {
+            if (_seekPending is not { } want || _seekBusy) return;
+            target = want; reported = _reported; asked = _seekAskedAt; sent = _seekSentAt; tries = _seekTries;
+        }
+
+        if ((reported - target).Duration() <= TimeSpan.FromSeconds(1.5))
+        {
+            lock (_lock) _seekPending = null;
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        switch (MediaTiming.NextSeekStep(tries, (now - asked).TotalMilliseconds, (now - sent).TotalMilliseconds))
+        {
+            case MediaTiming.SeekStep.Wait: return;
+            case MediaTiming.SeekStep.GiveUp: lock (_lock) _seekPending = null; return;
+        }
+
+        lock (_lock) { _seekSentAt = now; _seekTries = tries + 1; _seekBusy = true; }
+        var s = Cur();
+        if (s is null) { lock (_lock) _seekBusy = false; return; }
+
+        _ = Task.Run(async () =>
+        {
+            try { await s.TryChangePlaybackPositionAsync(target.Ticks); } catch { }
+            lock (_lock) _seekBusy = false;
+        });
+    }
+
+    internal void SeekByForProbe(int secs) => SeekBy(secs);
+    internal TimeSpan PositionForProbe { get { lock (_lock) return _pos; } }
+
+    internal static Task<byte[]?> ReadThumbForProbe(IRandomAccessStreamReference r) => ReadStream(r);
+
+    internal string? ProbeLine()
+    {
+        PollTimeline();
+        lock (_lock)
+        {
+            if (_title == null) return null;
+            static string F(TimeSpan t) => t == TimeSpan.Zero ? "0" : t.ToString(@"h\:mm\:ss");
+            var t = _title.Length > 22 ? _title[..22] : _title;
+
+            return $"{t,-22} play={(_playing ? 1 : 0)} end={F(_end),-7} pos={F(_pos),-7} " +
+                   $"rep={F(_reported),-7} prevEnd={F(_prevEnd),-7} seek={(_seekPending is { } p ? F(p) : "-"),-7} " +
+                   $"ring={RingProgress:0.000} accent={(_accent == Fx.White ? "WHITE (no bar!)" : _accent.ToString())} " +
+                   $"art={(_thumb == null ? "none" : "yes")}";
+        }
+    }
+
+    private void SetVol(float f) { _meter.SetVolume(f); Bump(); }
+    private void Mute() { _meter.ToggleMute(); Bump(); }
+    private void Bump() { lock (_lock) { _version++; } }
+
+    private void Seek(float f)
+    {
+        f = Math.Clamp(f, 0f, 1f);
+        bool tg; TimeSpan start, end;
+        lock (_lock) { tg = _tgTimeline; start = _start; end = _end; }
+        if (end <= start) return;
+        if (tg)
+        {
+
+            lock (_lock)
+            {
+                _pos = start + TimeSpan.FromTicks((long)(f * (end - start).Ticks));
+                _posAt = DateTime.UtcNow;
+                _version++;
+            }
+            _ = Task.Run(() => TelegramPlayer.SeekTo(f));
+            return;
+        }
+        var s = Cur();
+        if (s == null) return;
+        SeekTo(s, start + TimeSpan.FromTicks((long)(f * (end - start).Ticks)));
+    }
+
+    private static (RectangleF bar, RectangleF mute) VolLayout(int w) => (new RectangleF(62, 178, 96, 20), new RectangleF(24, 172, 32, 32));
+    private static RectangleF SeekRect(int w) { float tx = 180; return new RectangleF(tx, 108, w - tx - 26, 18); }
+
+    private enum Btn { Prev, Play, Next, Back10, Fwd10, Cc }
+
+    private static readonly double[] Rates = { 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0 };
+
+    private const float SpeedW = 44f, SpeedH = 22f, MenuW = 64f, ItemH = 21f, MenuPad = 5f;
+    private bool _speedOpen;
+    private float _speedT;
+
+    private static RectangleF SpeedRect(int w) => new(w - 26f - SpeedW, 27f, SpeedW, SpeedH);
+    private static RectangleF MenuRect(int w)
+        => new(w - 26f - MenuW, 27f + SpeedH + 5f, MenuW, Rates.Length * ItemH + MenuPad * 2f);
+    private static RectangleF ItemRect(int w, int i)
+    {
+        var m = MenuRect(w);
+        return new RectangleF(m.X, m.Y + MenuPad + i * ItemH, m.Width, ItemH);
+    }
+
+    private void SetRate(double r)
+    {
+        var s = Cur();
+        if (s == null) return;
+        lock (_lock) { _rate = r; }
+        try { _ = s.TryChangePlaybackRateAsync(r); } catch { }
+        Bump();
+    }
+
+    private Btn[] Layout()
+    {
+        var app = App;
+        if (!IsVideo()) return new[] { Btn.Prev, Btn.Play, Btn.Next };
+        bool rateOk, seekOk; lock (_lock) { rateOk = _rateEnabled; seekOk = _seekEnabled; }
+        var l = new List<Btn>();
+        if (seekOk) l.Add(Btn.Back10);
+        l.Add(Btn.Play);
+        if (seekOk) l.Add(Btn.Fwd10);
+        if (SubtitleKey(app) != 0) l.Add(Btn.Cc);
+        return l.ToArray();
+    }
+
+    private static string RateText(double r) =>
+        (r % 1 == 0 ? ((int)r).ToString() : r.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)) + "×";
+
+    private bool IsVideo()
+    {
+        bool video, wide; string? title, artist; TimeSpan end;
+        lock (_lock) { video = _isVideo; wide = _thumbWide; title = _title; artist = _artist; end = _end; }
+        return video || wide || IsVideoApp(App) || HasVideoExt(title)
+            || (IsBrowser(App) && (string.IsNullOrEmpty(artist) || end <= TimeSpan.Zero));
+    }
+
+    private static bool ThumbIsWide(byte[]? thumb)
+    {
+        if (thumb == null || thumb.Length == 0) return false;
+        try
+        {
+            using var ms = new MemoryStream(thumb);
+            using var img = Image.FromStream(ms, useEmbeddedColorManagement: false, validateImageData: false);
+            return img.Height > 0 && img.Width >= img.Height * 1.4f;
+        }
+        catch { return false; }
+    }
+
+    internal static string MetaLine(string? title, string? artist, string? size, string? resolution = null)
+    {
+        var parts = new List<string>(4);
+
+        if (!string.IsNullOrWhiteSpace(artist)) parts.Add(artist!.Trim());
+        else if (Group(title) is { } grp) parts.Add(grp);
+
+        if ((HeightLabel(resolution) ?? resolution ?? Quality(title)) is { } q) parts.Add(q);
+        if (Source(title) is { } src) parts.Add(src);
+        if (!string.IsNullOrWhiteSpace(size)) parts.Add(size!);
+
+        return parts.Count == 0 ? "·" : string.Join("  ·  ", parts);
+    }
+
+    private static readonly (string token, string label)[] Qualities =
+    {
+        ("2160p", "4K"), ("4320p", "8K"), ("1440p", "1440p"), ("1080p", "1080p"), ("720p", "720p"),
+        ("576p", "576p"), ("480p", "480p"), ("360p", "360p"), ("uhd", "4K"),
+    };
+    internal static string? Quality(string? title)
+    {
+        if (string.IsNullOrEmpty(title)) return null;
+        var t = title.ToLowerInvariant();
+        foreach (var (token, label) in Qualities) if (t.Contains(token)) return label;
+        return null;
+    }
+
+        internal static string? HeightLabel(string? resolution)
+    {
+        if (string.IsNullOrWhiteSpace(resolution)) return null;
+        int x = resolution.IndexOf('x');
+        if (x <= 0 || !int.TryParse(resolution.AsSpan(x + 1), out int hgt) || hgt <= 0) return null;
+        return hgt >= 4000 ? "8K" : hgt >= 2000 ? "4K" : hgt + "p";
+    }
+
+    private static readonly (string token, string label)[] Sources =
+    {
+        ("remux", "Remux"), ("bluray", "BluRay"), ("blu-ray", "BluRay"), ("brrip", "BRRip"),
+        ("bdrip", "BDRip"), ("web-dl", "WEB-DL"), ("webdl", "WEB-DL"), ("webrip", "WEBRip"),
+        ("hdtv", "HDTV"), ("dvdrip", "DVDRip"), ("hdcam", "CAM"), ("camrip", "CAM"),
+    };
+    internal static string? Source(string? title)
+    {
+        if (string.IsNullOrEmpty(title)) return null;
+        var t = title.ToLowerInvariant();
+        foreach (var (token, label) in Sources) if (t.Contains(token)) return label;
+        return null;
+    }
+
+    internal static string? Group(string? title)
+    {
+        if (string.IsNullOrEmpty(title)) return null;
+        var name = title;
+        int dot = name.LastIndexOf('.');
+        if (dot > 0 && name.Length - dot <= 5) name = name.Substring(0, dot);
+        var bits = name.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (bits.Length < 4) return null;
+        var last = bits[^1].Trim();
+        if (last.Length is < 3 or > 18) return null;
+        foreach (var ch in last) if (!char.IsLetterOrDigit(ch) && ch != '-' && ch != '_') return null;
+
+        var lower = last.ToLowerInvariant();
+        if (Quality(lower) != null || Source(lower) != null) return null;
+        foreach (var noise in new[] { "x264", "x265", "hevc", "av1", "aac", "ac3", "dts", "mp3", "10bit" })
+            if (lower == noise) return null;
+        return last;
+    }
+
+    private string? FileFacts()
+    {
+        string? title; lock (_lock) title = _title;
+        var size = MediaFileInfo.Size(title, Bump);
+        return size is { } b ? MediaFileInfo.Human(b) : null;
+    }
+
+    private static bool IsVideoApp(string app) =>
+        app.Contains("vlc") || app.Contains("mpc") || app.Contains("mpv") || app.Contains("potplayer")
+        || app.Contains("wmplayer") || app.Contains("kmplayer") || app.Contains("gom")
+        || app.Contains("smplayer") || app.Contains("video.ui") || app.Contains("media.player");
+
+    private static readonly string[] VideoExt =
+        { ".mkv", ".mp4", ".avi", ".mov", ".webm", ".m4v", ".flv", ".wmv", ".mpg", ".mpeg", ".ts", ".3gp", ".ogv" };
+    private static bool HasVideoExt(string? title)
+    {
+        if (string.IsNullOrEmpty(title)) return false;
+        var t = title.ToLowerInvariant();
+        foreach (var e in VideoExt) if (t.Contains(e)) return true;
+        return false;
+    }
+
+    public IReadOnlyList<(RectangleF rect, Action<PointF> onClick)> Buttons(int w, int h)
+    {
+
+        if (_speedOpen && _speedT > 0.5f)
+        {
+            var items = new List<(RectangleF, Action<PointF>)>(Rates.Length);
+            for (int i = 0; i < Rates.Length; i++)
+            {
+                double pick = Rates[i];
+                items.Add((ItemRect(w, i), _ => SetRate(pick)));
+            }
+            return items;
+        }
+        var (vbar, mute) = VolLayout(w);
+        var seek = SeekRect(w);
+        var list = new List<(RectangleF, Action<PointF>)>
+        {
+            (vbar, pt => SetVol((pt.X - vbar.X) / vbar.Width)),
+            (mute, _ => Mute()),
+        };
+        bool seekOk2; lock (_lock) { seekOk2 = _seekEnabled; }
+        if (seekOk2) list.Insert(0, (seek, pt => Seek((pt.X - seek.X) / seek.Width)));
+        var layout = Layout();
+        var r = BtnRects(w, h, layout.Length);
+        for (int i = 0; i < layout.Length; i++)
+        {
+            Action act = layout[i] switch
+            {
+                Btn.Prev => Prev,
+                Btn.Next => Next,
+                Btn.Back10 => () => SeekBy(-10),
+                Btn.Fwd10 => () => SeekBy(10),
+                Btn.Cc => () => SendHotkey(SubtitleKey(App)),
+                _ => Toggle,
+            };
+            list.Add((r[i], _ => act()));
+        }
+        return list;
+    }
+
+    private static bool IsBrowser(string app) =>
+        app.Contains("chrome") || app.Contains("msedge") || app.Contains("edge") || app.Contains("firefox")
+        || app.Contains("brave") || app.Contains("opera") || app.Contains("vivaldi");
+
+    private static byte SubtitleKey(string app) =>
+        app.Contains("vlc") || app.Contains("mpv") ? (byte)'V' : (byte)0;
+
+    private void SendHotkey(byte vk)
+    {
+        if (vk == 0) return;
+        string? title; lock (_lock) { title = _title; }
+        KeyInject.Send(PlayerWindow(App, title), vk);
+    }
+
+    private static IntPtr PlayerWindow(string app, string? mediaTitle)
+    {
+        if (app.Length == 0) return IntPtr.Zero;
+        string hint = (mediaTitle ?? "").Trim();
+        if (hint.Length > 24) hint = hint[..24];
+        IntPtr first = IntPtr.Zero, matched = IntPtr.Zero;
+        var buf = new System.Text.StringBuilder(512);
+        Halo.Interop.Win32.EnumWindows((h, _) =>
+        {
+            if (!Halo.Interop.Win32.IsWindowVisible(h) || Halo.Interop.Win32.GetWindowTextLengthW(h) == 0) return true;
+            try
+            {
+                Halo.Interop.Win32.GetWindowThreadProcessId(h, out uint pid);
+                using var p = System.Diagnostics.Process.GetProcessById((int)pid);
+                string pn = p.ProcessName.ToLowerInvariant();
+                if (pn != app && !pn.Contains(app) && !app.Contains(pn)) return true;
+                if (first == IntPtr.Zero) first = h;
+                if (hint.Length >= 4)
+                {
+                    buf.Clear();
+                    Halo.Interop.Win32.GetWindowTextW(h, buf, buf.Capacity);
+                    if (buf.ToString().Contains(hint, StringComparison.OrdinalIgnoreCase)) { matched = h; return false; }
+                }
+                else return false;
+            }
+            catch { }
+            return true;
+        }, IntPtr.Zero);
+        return matched != IntPtr.Zero ? matched : first;
+    }
+
+    private static RectangleF[] BtnRects(int w, int h, int n)
+    {
+        const float artX = 26, artSize = 132, size = 40, gap = 18;
+        float colL = artX + artSize + 22, colR = w - 26;
+        float cx = (colL + colR) / 2f, total = n * size + (n - 1) * gap, x0 = cx - total / 2f, y = 158;
+        var r = new RectangleF[n];
+        for (int i = 0; i < n; i++) r[i] = new RectangleF(x0 + i * (size + gap), y, size, size);
+        return r;
+    }
+
+    public void DrawContent(Graphics g, int w, int h, float fade)
+    {
+        if (fade <= 0.01f) return;
+        PollTimeline();
+        string? title, artist; bool playing; TimeSpan pos, end, start, wall; DateTime posAt;
+        lock (_lock)
+        {
+            title = _title; artist = _artist; playing = _playing;
+            pos = _pos; end = _end; start = _start; posAt = _posAt;
+            wall = _wallAt == default ? TimeSpan.MinValue
+                 : _wallBase + (_playing ? DateTime.UtcNow - _wallAt : TimeSpan.Zero);
+        }
+        if (title == null) return;
+
+        EnsureArt();
+        float dt = Dt();
+
+        var art = ArtRect(h);
+        float artX = art.X, artY = art.Y, artSize = art.Width;
+
+        Fx.Glow(g, w, h, fade, artX + artSize / 2f, artY + artSize / 2f, w * 1.35f, h * 1.9f, 38, _accent);
+        DrawArt(g, artX, artY, artSize, fade, ArtRadius(h));
+
+        float tx = artX + artSize + 22, tw = w - tx - 26;
+        bool rateOk0; lock (_lock) rateOk0 = _rateEnabled;
+        bool showSpeed = rateOk0 && IsVideo();
+        if (showSpeed) tw -= SpeedW + 12f;
+        using var titleF = new Font("Segoe UI Semibold", 22f, GraphicsUnit.Pixel);
+        using var bodyF = new Font("Segoe UI", 15f, GraphicsUnit.Pixel);
+        using var timeF = new Font("Segoe UI", 12f, GraphicsUnit.Pixel);
+
+        var titleRow = new RectangleF(tx, 34, tw, titleF.Height + 4);
+        titleRow.Inflate(6f, 6f);
+        bool onTitle = WidgetInput.Over && titleRow.Contains(WidgetInput.Mouse);
+        using (var tb = new SolidBrush(Mul(White, fade)))
+            _marquee.Draw(g, title, titleF, tb, tx, 34, tw, onTitle, dt);
+
+        using (var ab = new SolidBrush(Mul(Dim, fade)))
+            DrawLine(g, MetaLine(title, artist, FileFacts()), bodyF, ab, tx, 66, tw);
+
+        var now = playing ? pos + (DateTime.UtcNow - posAt) : pos;
+
+        float frac = end > start ? (float)Math.Clamp((now - start) / (end - start), 0, 1) : 0f;
+        int epoch; lock (_lock) epoch = _trackEpoch;
+        if (epoch != _shownEpoch) { _shownEpoch = epoch; _fracShown = frac; }
+        _fracShown = _fracShown < 0 ? frac : Ease(_fracShown, frac, dt, 0.10f);
+        if (Math.Abs(frac - _fracShown) < 0.0004f) _fracShown = frac;
+
+        var seek = SeekRect(w);
+        var seekHit = seek; seekHit.Inflate(6f, 10f);
+        bool onSeek = WidgetInput.Over && seekHit.Contains(WidgetInput.Mouse);
+
+        bool seekable; lock (_lock) seekable = _seekEnabled || (_tgTimeline && TelegramPlayer.Seekable);
+        if (WidgetInput.Down && !_wasDown && onSeek && seekable) _scrubbing = true;
+        if (_scrubbing)
+        {
+            _scrubFrac = Math.Clamp((WidgetInput.Mouse.X - seek.X) / Math.Max(1f, seek.Width), 0f, 1f);
+            if (!WidgetInput.Down) { Seek(_scrubFrac); _scrubbing = false; _fracShown = _scrubFrac; }
+        }
+        _seekHover = Ease(_seekHover, _scrubbing ? 1f : 0f, dt, 0.07f);
+        float st = _seekHover;
+        if (_scrubbing) _fracShown = _scrubFrac;
+        const float barCy = 118.5f, bhRest = 5f;
+        float bh = bhRest * (1f + 2f * st);
+        float by = barCy - bh / 2f;
+        Fill(g, tx, by, tw, bh, Mul(Track, fade));
+        if (end > start)
+        {
+            if (_fracShown > 0) Fill(g, tx, by, tw * _fracShown, bh, Mul(White, fade));
+        }
+        else if (playing)
+        {
+
+            float ts2 = (Environment.TickCount64 % SweepMs) / (float)SweepMs;
+            float sw = tw * 0.24f;
+            float sx = tx - sw + (tw + sw) * ts2;
+            var sst = g.Save();
+            g.SetClip(new RectangleF(tx, by, tw, bh));
+            var sweep = new RectangleF(sx, by - 1f, sw, bh + 2f);
+            using (var lg = new LinearGradientBrush(sweep, Color.Transparent, Color.Transparent, LinearGradientMode.Horizontal))
+            {
+                var mid = Mul(Color.FromArgb(96, 255, 255, 255), fade);
+                lg.InterpolationColors = new ColorBlend
+                {
+                    Colors = new[] { Color.FromArgb(0, mid), mid, Color.FromArgb(0, mid) },
+                    Positions = new[] { 0f, 0.5f, 1f },
+                };
+                g.FillRectangle(lg, sweep);
+            }
+            g.Restore(sst);
+        }
+        if (end > TimeSpan.Zero)
+        {
+            using var eb = new SolidBrush(Mul(Dim, fade));
+            float ty = barCy + bh / 2f + 3f;
+
+            var span = end - start;
+            var shown = _scrubbing ? span * _scrubFrac : now - start;
+            g.DrawString(Fmt(shown), timeF, eb, tx, ty);
+            var ts = g.MeasureString(Fmt(span), timeF);
+            g.DrawString(Fmt(span), timeF, eb, tx + tw - ts.Width, ty);
+        }
+        else if (wall >= TimeSpan.Zero)
+        {
+
+            using var eb = new SolidBrush(Mul(Dim, fade));
+            g.DrawString(Fmt(wall), timeF, eb, tx, barCy + bh / 2f + 3f);
+        }
+
+        var (vbar, mute) = VolLayout(w);
+        bool muted = _meter.Muted();
+        float volNow = muted ? 0f : _meter.Volume();
+        _volShown = _volShown < 0 ? volNow : Ease(_volShown, volNow, dt, 0.06f);
+        if (Math.Abs(volNow - _volShown) < 0.002f) _volShown = volNow;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        var volHit = vbar; volHit.Inflate(8f, 10f);
+        bool onVol = WidgetInput.Over && volHit.Contains(WidgetInput.Mouse);
+        if (WidgetInput.Down && !_wasDown && onVol) _volScrubbing = true;
+        if (_volScrubbing)
+        {
+            float f = Math.Clamp((WidgetInput.Mouse.X - vbar.X) / Math.Max(1f, vbar.Width), 0f, 1f);
+            _volShown = f;
+
+            if (Math.Abs(f - _volSent) > 0.004f) { SetVol(f); _volSent = f; }
+            if (!WidgetInput.Down) { SetVol(f); _volScrubbing = false; }
+        }
+        float vol = _volShown;
+        _volHover = Ease(_volHover, _volScrubbing ? 1f : 0f, dt, 0.07f);
+        float vt = _volHover;
+        _wasDown = WidgetInput.Down;
+        using (var fb = new SolidBrush(Mul(Color.FromArgb((int)(13 + 16 * vt), 255, 255, 255), fade)))
+            g.FillEllipse(fb, mute);
+        using (var pen = new Pen(Mul(Color.FromArgb((int)(28 + 26 * vt), 255, 255, 255), fade), 1f))
+            g.DrawEllipse(pen, mute);
+        DrawGlyphSoft(g, mute, muted ? "\uE74F" : "\uE767", 16f, muted ? fade * 0.55f : fade * (0.8f + 0.2f * vt));
+        float vy = vbar.Y + vbar.Height / 2f, bh2 = 4f * (1f + 2f * vt);
+        Fill(g, vbar.X, vy - bh2 / 2f, vbar.Width, bh2, Mul(Color.FromArgb(34, 255, 255, 255), fade));
+        if (vol > 0)
+            Fill(g, vbar.X, vy - bh2 / 2f, vbar.Width * vol, bh2,
+                Mul(Color.FromArgb((int)(185 + 45 * vt), 255, 255, 255), fade));
+
+        var layout = Layout();
+        var rects = BtnRects(w, h, layout.Length);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        for (int i = 0; i < layout.Length; i++)
+        {
+            var r = rects[i];
+            var hit = r; hit.Inflate(4f, 4f);
+            bool hov = WidgetInput.Over && hit.Contains(WidgetInput.Mouse);
+            _btnHover[i] += ((hov ? 1f : 0f) - _btnHover[i]) * 0.35f;
+            if (Math.Abs((hov ? 1f : 0f) - _btnHover[i]) < 0.03f) _btnHover[i] = hov ? 1f : 0f;
+            float t = _btnHover[i], sc = 1f + 0.09f * t, d = r.Width * sc;
+            var rr = new RectangleF(r.X + (r.Width - d) / 2f, r.Y + (r.Height - d) / 2f, d, d);
+            var kind = layout[i];
+            bool bare = kind == Btn.Cc;
+            if (!bare)
+            {
+                using (var fb = new SolidBrush(Mul(Color.FromArgb((int)(15 + 19 * t), 255, 255, 255), fade)))
+                    g.FillEllipse(fb, rr);
+                using (var pen = new Pen(Mul(Color.FromArgb((int)(34 + 30 * t), 255, 255, 255), fade), 1f))
+                    g.DrawEllipse(pen, rr);
+            }
+            float a = fade * (0.8f + 0.2f * t);
+            if (kind == Btn.Cc) { Fx.DrawCcMark(g, rr, a); continue; }
+            if (kind == Btn.Back10) { Fx.DrawSeekArrow(g, rr, forward: false, a); continue; }
+            if (kind == Btn.Fwd10) { Fx.DrawSeekArrow(g, rr, forward: true, a); continue; }
+            bool isPlay = kind == Btn.Play;
+            string glyph = isPlay ? Glyph(playing ? 0xE769 : 0xE768)
+                : kind == Btn.Prev ? Glyph(0xE892) : Glyph(0xE893);
+            DrawGlyphSoft(g, rr, glyph, (isPlay ? 22f : 17f) * sc, a, isPlay && !playing ? 1.5f : 0f);
+        }
+
+        DrawSpeed(g, w, fade, dt, showSpeed);
+    }
+
+    private void DrawSpeed(Graphics g, int w, float fade, float dt, bool show)
+    {
+        if (!show)
+        {
+            _speedOpen = false;
+            _speedT = Ease(_speedT, 0f, dt, 0.13f);
+            if (_speedT < 0.01f) { _speedT = 0f; return; }
+        }
+        var label = SpeedRect(w);
+        var menu = MenuRect(w);
+        if (show)
+        {
+            var hot = label; hot.Inflate(10f, 8f);
+            bool over = WidgetInput.Over
+                && (hot.Contains(WidgetInput.Mouse) || (_speedOpen && menu.Contains(WidgetInput.Mouse)));
+            _speedOpen = over;
+            _speedT = Ease(_speedT, over ? 1f : 0f, dt, over ? 0.075f : 0.13f);
+        }
+
+        double rate; lock (_lock) rate = _rate;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        if (show)
+        {
+
+            using var lf = new Font("Segoe UI Semibold", 13f, GraphicsUnit.Pixel);
+            using var lb = new SolidBrush(Mul(White, fade * (0.62f + 0.38f * _speedT)));
+            using var sf = new StringFormat(StringFormat.GenericTypographic)
+            { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
+            var textBox = new RectangleF(label.X, label.Y, label.Width - 11f, label.Height);
+            g.DrawString(RateText(rate), lf, lb, textBox, sf);
+
+            float cx = label.Right - 5f, cy = label.Y + label.Height / 2f + 1f;
+            float armY = -1.6f + 3.2f * _speedT, tipY = 1.9f - 3.8f * _speedT;
+            using var cp = new Pen(Mul(White, fade * (0.45f + 0.4f * _speedT)), 1.4f)
+            { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            g.DrawLines(cp, new[] { new PointF(cx - 3.5f, cy + armY), new PointF(cx, cy + tipY),
+                                    new PointF(cx + 3.5f, cy + armY) });
+        }
+
+        if (_speedT <= 0.01f) return;
+
+        float a = fade * _speedT;
+        var m = menu;
+        m.Offset(0f, -9f * (1f - _speedT));
+
+        Fx.Glow(g, (int)(m.Right + 30f), (int)(m.Bottom + 30f), a * 0.5f,
+            m.X + m.Width / 2f, m.Y + m.Height * 0.35f, m.Width * 2.6f, m.Height * 1.5f, 26,
+            _accent == White ? Color.FromArgb(120, 150, 255) : _accent);
+
+        using (var shade = new SolidBrush(Color.FromArgb((int)(120 * a), 10, 10, 13)))
+        using (var sp = Fx.Rounded(m, 15f))
+            g.FillPath(shade, sp);
+        using (var wash = new SolidBrush(Color.FromArgb((int)(26 * a), 255, 255, 255)))
+        using (var wp = Fx.Rounded(m, 15f))
+            g.FillPath(wash, wp);
+
+        using (var edge = new LinearGradientBrush(
+                   new RectangleF(m.X, m.Y - 1f, m.Width, m.Height + 2f),
+                   Color.FromArgb((int)(74 * a), 255, 255, 255),
+                   Color.FromArgb((int)(10 * a), 255, 255, 255), 90f))
+        using (var pen = new Pen(edge, 1f))
+        using (var ep = Fx.Rounded(m, 15f))
+            g.DrawPath(pen, ep);
+
+        using var itemF = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
+        using var isf = new StringFormat(StringFormat.GenericTypographic)
+        { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        for (int i = 0; i < Rates.Length; i++)
+        {
+
+            float ti = Math.Clamp((_speedT - i * 0.05f) / 0.55f, 0f, 1f);
+            ti = 1f - MathF.Pow(1f - ti, 3);
+            if (ti <= 0.01f) continue;
+            var r = ItemRect(w, i);
+            r.Offset(0f, -9f * (1f - _speedT) + 5f * (1f - ti));
+
+            bool cur = Math.Abs(Rates[i] - rate) < 0.01;
+            bool hov = WidgetInput.Over && r.Contains(WidgetInput.Mouse);
+
+            _itemHover[i] = Ease(_itemHover[i], hov ? 1f : 0f, dt, 0.055f);
+            float ih = _itemHover[i];
+            float ia = a * ti;
+
+            var pill = new RectangleF(r.X + 4f, r.Y + 1f, r.Width - 8f, r.Height - 2f);
+            if (cur)
+                using (var cb = new SolidBrush(Fx.Alpha(_accent == White ? White : _accent, ia * 0.20f)))
+                using (var cp = Fx.Rounded(pill, pill.Height / 2f))
+                    g.FillPath(cb, cp);
+            if (ih > 0.01f)
+                using (var hb = new SolidBrush(Color.FromArgb((int)(30 * ia * ih), 255, 255, 255)))
+                using (var hp = Fx.Rounded(pill, pill.Height / 2f))
+                    g.FillPath(hb, hp);
+
+            using (var tb2 = new SolidBrush(Mul(White, ia * (0.58f + 0.40f * MathF.Max(cur ? 1f : 0f, ih)))))
+                g.DrawString(RateText(Rates[i]), itemF, tb2, r, isf);
+        }
+    }
+
+    private readonly float[] _itemHover = new float[8];
+
+    private static string Glyph(int codepoint) => ((char)codepoint).ToString();
+
+    private readonly float[] _btnHover = new float[8];
+    private float _volHover, _seekHover;
+    private bool _wasDown, _scrubbing, _volScrubbing;
+    private float _scrubFrac, _volSent = -1f;
+    private float _volShown = -1f, _fracShown = -1f;
+    private int _trackEpoch, _shownEpoch;
+
+    private long _lastTick;
+    private float Dt()
+    {
+        long now = Environment.TickCount64;
+        float dt = _lastTick == 0 ? 1f / 60f : (now - _lastTick) / 1000f;
+        _lastTick = now;
+        return Math.Clamp(dt, 1f / 240f, 0.1f);
+    }
+
+    private static float Ease(float shown, float target, float dt, float tau)
+        => shown + (target - shown) * (1f - MathF.Exp(-dt / tau));
+
+    private static readonly FontFamily FluentFamily = new("Segoe Fluent Icons");
+
+    private void DrawGlyphSoft(Graphics g, RectangleF r, string glyph, float px, float fade, float opticalDx = 0f)
+    {
+        using var path = new GraphicsPath();
+        using var sf = new StringFormat(StringFormat.GenericTypographic);
+        path.AddString(glyph, FluentFamily, (int)FontStyle.Regular, px, PointF.Empty, sf);
+        path.Flatten();
+        var b = path.GetBounds();
+        if (b.Width <= 0 || b.Height <= 0) return;
+        using var m = new Matrix();
+
+        m.Translate(MathF.Round(r.X + (r.Width - b.Width) / 2f - b.X + opticalDx),
+                    MathF.Round(r.Y + (r.Height - b.Height) / 2f - b.Y));
+        path.Transform(m);
+        using var br = new SolidBrush(Mul(White, fade * 0.92f));
+        g.FillPath(br, path);
+    }
+
+    private const float MorphFromH = 40f, MorphToH = 220f;
+    private const float MiniArtX = 9f, MiniArtY = 7f, MiniArtSize = MorphFromH - 14f;
+    private const float PanelArtX = 26f, PanelArtY = 26f, PanelArtSize = 132f;
+
+    internal static float MorphT(float h) => Math.Clamp((h - MorphFromH) / (MorphToH - MorphFromH), 0f, 1f);
+
+    internal static void ArtGlow(Graphics g, int w, int h, float fade, Color accent)
+    {
+        var a = ArtRect(h);
+        Fx.Glow(g, w, h, fade, a.X + a.Width / 2f, h / 2f, a.Width * 2.1f, h * 1.7f, 34, accent);
+    }
+
+    internal static RectangleF ArtRect(float h)
+    {
+        float t = MorphT(h);
+        float size = MiniArtSize + (PanelArtSize - MiniArtSize) * t;
+        return new RectangleF(
+            MiniArtX + (PanelArtX - MiniArtX) * t,
+            MiniArtY + (PanelArtY - MiniArtY) * t,
+            size, size);
+    }
+
+    internal static float ArtRadius(float h)
+    {
+        const float miniR = MiniArtSize * 0.28f;
+        return miniR + (14f - miniR) * MorphT(h);
+    }
+
+    internal const int FlipMs = 560;
+    internal const int SweepMs = 2800;
+    private Bitmap? _prevArt;
+    private long _artHash;
+
+    internal static long ThumbHash(byte[]? b)
+    {
+        if (b is not { Length: > 0 }) return 0;
+        unchecked
+        {
+            long h = -3750763034362895579L;
+            foreach (var x in b) { h ^= x; h *= 1099511628211L; }
+            return h == 0 ? 1 : h;
+        }
+    }
+
+    private long _flipAt = long.MinValue;
+
+    private bool Flipping => (Environment.TickCount64 - _flipAt) is >= 0 and < FlipMs;
+
+    internal static (float sx, bool front) FlipPose(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        float e = t * t * (3f - 2f * t);
+        return (Math.Max(MathF.Abs(MathF.Cos(e * MathF.PI)), 0.001f), t < 0.5f);
+    }
+
+    private void DrawArt(Graphics g, float x, float y, float size, float fade, float radius = 14f)
+    {
+        long el = Environment.TickCount64 - _flipAt;
+        if (el is >= 0 and < FlipMs)
+        {
+
+            var (sx, front) = FlipPose(el / (float)FlipMs);
+            var st = g.Save();
+            g.TranslateTransform(x + size / 2f, 0f);
+            g.ScaleTransform(sx, 1f);
+            g.TranslateTransform(-(x + size / 2f), 0f);
+            if (front)
+            {
+                if (_prevArt != null)
+                {
+                    using var path = Rounded(new RectangleF(x, y, size, size), radius);
+                    CoverFill(g, _prevArt, x, y, size, path, fade);
+                }
+            }
+            else DrawArtFace(g, x, y, size, fade, radius);
+            g.Restore(st);
+            return;
+        }
+        DrawArtFace(g, x, y, size, fade, radius);
+    }
+
+    private void DrawArtFace(Graphics g, float x, float y, float size, float fade, float radius)
+    {
+        using var path = Rounded(new RectangleF(x, y, size, size), radius);
+
+        Bitmap? img = CurArt();
+        if (img == null) { string? id; lock (_lock) { id = _appId; } img = AppIcon.ForSessionApp(id); }
+        if (img != null)
+        {
+            CoverFill(g, img, x, y, size, path, fade);
+        }
+        else
+        {
+            using var b = new SolidBrush(Mul(Color.FromArgb(40, 255, 255, 255), fade));
+            g.FillPath(b, path);
+            DrawGlyph(g, new RectangleF(x, y, size, size), "\uE8D6", size * 0.5f, fade * 0.7f);
+        }
+    }
+
+    private static void CoverFill(Graphics g, Bitmap img, float x, float y, float size, GraphicsPath path, float fade)
+    {
+        int s = Math.Max(1, (int)Math.Ceiling(size));
+        using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
+        using (var sg = Graphics.FromImage(scaled))
+        {
+            sg.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            sg.SmoothingMode = SmoothingMode.HighQuality;
+            using var ia = new ImageAttributes();
+            ia.SetWrapMode(WrapMode.TileFlipXY);
+            ia.SetColorMatrix(new ColorMatrix { Matrix33 = fade });
+            int side = Math.Min(img.Width, img.Height);
+            sg.DrawImage(img, new Rectangle(0, 0, s, s),
+                (img.Width - side) / 2, (img.Height - side) / 2, side, side, GraphicsUnit.Pixel, ia);
+        }
+        using var tb = new TextureBrush(scaled) { WrapMode = WrapMode.Clamp };
+        tb.TranslateTransform(x, y);
+        g.FillPath(tb, path);
+    }
+
+    private volatile bool _animatedArt;
+
+    private readonly Marquee _marquee = new();
+
+    public bool Animating
+    {
+
+        get { lock (_lock) { return _title != null && (_playing || _animatedArt || _marquee.Scrolling || Flipping); } }
+    }
+
+    public bool Sprinting => Flipping;
+
+    public Color? Ring
+    {
+        get
+        {
+            PokeTelegram();
+            lock (_lock) return _title != null && _end > TimeSpan.Zero ? _accent : (Color?)null;
+        }
+    }
+
+    private void PokeTelegram()
+    {
+        bool want;
+        lock (_lock)
+            want = _title != null && (_end <= _start || _tgTimeline)
+                && _appId?.Contains("telegram", StringComparison.OrdinalIgnoreCase) == true;
+        if (want) PollTimeline();
+    }
+
+    public float RingProgress
+    {
+        get
+        {
+            PokeTelegram();
+            TimeSpan pos, end, start; bool playing; DateTime at; string? t;
+            lock (_lock) { pos = _pos; end = _end; start = _start; playing = _playing; at = _posAt; t = _title; }
+            if (t == null || end <= start) return -1f;
+            var now = playing ? pos + (DateTime.UtcNow - at) : pos;
+            return (float)Math.Clamp((now - start) / (end - start), 0, 1);
+        }
+    }
+
+    private long _pillTick;
+    private float PillDt()
+    {
+        long now = Environment.TickCount64;
+        float dt = _pillTick == 0 ? 1f / 60f : Math.Clamp((now - _pillTick) / 1000f, 1f / 240f, 0.1f);
+        _pillTick = now;
+        return dt;
+    }
+
+    private static readonly Color NeutralBar = Color.FromArgb(255, 222, 226, 232);
+
+    private Color _accentShown = Fx.White;
+    private bool _accentInit;
+
+    private float _barIn;
+    private float _lastProg = -1f;
+
+    private static Color LerpColor(Color from, Color to, float dt, float tau)
+    {
+        float k = 1f - MathF.Exp(-dt / tau);
+        return Color.FromArgb(
+            (int)MathF.Round(from.A + (to.A - from.A) * k),
+            (int)MathF.Round(from.R + (to.R - from.R) * k),
+            (int)MathF.Round(from.G + (to.G - from.G) * k),
+            (int)MathF.Round(from.B + (to.B - from.B) * k));
+    }
+
+    private float _pillFrac = -1f;
+    private int _pillEpoch = -1;
+    private float PillFrac(float frac, float dt)
+    {
+        if (frac < 0f) { _pillFrac = -1f; return frac; }
+        int epoch; lock (_lock) epoch = _trackEpoch;
+
+        if (epoch != _pillEpoch || _pillFrac < 0f || Math.Abs(frac - _pillFrac) > 0.08f)
+        {
+            _pillEpoch = epoch;
+            return _pillFrac = frac;
+        }
+        _pillFrac = Ease(_pillFrac, frac, dt, 0.14f);
+        if (Math.Abs(frac - _pillFrac) < 0.0004f) _pillFrac = frac;
+        return _pillFrac;
+    }
+
+    public void DrawCollapsed(Graphics g, int w, int h, float fade)
+    {
+        PollTimeline();
+        string? title; bool playing;
+        lock (_lock) { title = _title; playing = _playing; }
+        if (title == null) return;
+
+        _marquee.Park();
+        EnsureArt();
+        var art = ArtRect(h);
+        float sz = art.Width, x = art.X, y = art.Y;
+        float dt = PillDt();
+
+        float prog = Halo.Settings.SettingsStore.On("media.progress")
+            ? PillFrac(RingProgress, dt) : -1f;
+
+        var accentTarget = _accent == Fx.White ? NeutralBar : _accent;
+        if (!_accentInit) { _accentShown = accentTarget; _accentInit = true; }
+        else _accentShown = LerpColor(_accentShown, accentTarget, dt, 0.30f);
+
+        if (prog >= 0f) _lastProg = prog;
+        _barIn = Ease(_barIn, prog >= 0f ? 1f : 0f, dt, 0.20f);
+        if (_barIn > 0.01f && _lastProg >= 0f)
+
+        Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f);
+        else if (playing && RingProgress < 0f && Halo.Settings.SettingsStore.On("media.progress"))
+        {
+
+            float ts3 = (Environment.TickCount64 % SweepMs) / (float)SweepMs;
+            float sw3 = w * 0.30f;
+            var sweep = new RectangleF(-sw3 + (w + sw3) * ts3, 0, sw3, h);
+            var sst = g.Save();
+            using (var pp = Fx.PillPath(w, h, h / 2f))
+                g.SetClip(pp);
+            using (var lg = new LinearGradientBrush(sweep, Color.Transparent, Color.Transparent, LinearGradientMode.Horizontal))
+            {
+                var mid = Mul(Color.FromArgb(64, _accentShown), fade);
+                lg.InterpolationColors = new ColorBlend
+                {
+                    Colors = new[] { Color.FromArgb(0, mid), mid, Color.FromArgb(0, mid) },
+                    Positions = new[] { 0f, 0.5f, 1f },
+                };
+                g.FillRectangle(lg, sweep);
+            }
+            g.Restore(sst);
+        }
+        ArtGlow(g, w, h, fade, _accent);
+        DrawArt(g, x, y, sz, fade, ArtRadius(h));
+
+        DrawEqualizer(g, w - 14f, h / 2f, fade, playing);
+    }
+
+    private const int EqBars = 9;
+    private readonly AudioMeter _meter = new();
+    private readonly float[] _eq = new float[EqBars];
+    private float _amp;
+
+    private void DrawEqualizer(Graphics g, float rightX, float cy, float fade, bool playing)
+    {
+        const float barW = 2.6f, gap = 2.6f, maxH = 22f, minH = 2.6f;
+        float totalW = EqBars * barW + (EqBars - 1) * gap;
+        float x0 = rightX - totalW;
+
+        float[]? bands = playing ? AudioSpectrum.Bands() : null;
+        bool live = bands != null && AudioSpectrum.Available;
+        float peak = playing ? _meter.Peak() : 0f;
+        _amp += (Math.Clamp((float)Math.Sqrt(peak) * 1.4f, 0f, 1f) - _amp) * 0.22f;
+        double t = Environment.TickCount / 1000.0;
+
+        for (int i = 0; i < EqBars; i++)
+        {
+            float target;
+            if (live)
+            {
+                target = minH + (maxH - minH) * bands![i];
+            }
+            else
+            {
+
+                float env = 0.25f + 0.75f * (float)Math.Sin(Math.PI * (i + 0.5) / EqBars);
+                float phase = 0.5f + 0.5f * (float)Math.Sin(t * (1.7 + i * 0.4) + i * 1.9);
+                target = minH + (maxH - minH) * _amp * env * (0.35f + 0.65f * phase);
+            }
+
+            float rise = live ? 0.80f : 0.35f, fall = live ? 0.32f : 0.12f;
+            _eq[i] += (target - _eq[i]) * (target > _eq[i] ? rise : fall);
+            float bh = Math.Max(minH, _eq[i]);
+            Color col = playing ? PaletteAt((float)i / (EqBars - 1)) : Color.FromArgb(120, 255, 255, 255);
+            Fill(g, x0 + i * (barW + gap), cy - bh / 2f, barW, bh, Mul(col, fade));
+        }
+    }
+
+    private Color[] _palette = { White, White, White };
+
+    private static Color[] Palette(Color accent)
+    {
+        Fx.RgbToHsv(accent, out float h, out float s, out float v);
+        return new[] { Fx.HsvToRgb((h - 22f + 360f) % 360f, s, v), accent, Fx.HsvToRgb((h + 22f) % 360f, s, v) };
+    }
+
+    private Color PaletteAt(float f)
+    {
+        f = Math.Clamp(f, 0f, 1f);
+        return f <= 0.5f ? LerpColor(_palette[0], _palette[1], f * 2f) : LerpColor(_palette[1], _palette[2], (f - 0.5f) * 2f);
+    }
+
+    private static Color LerpColor(Color a, Color b, float t)
+        => Color.FromArgb(255, (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
+
+    private void DrawGlyph(Graphics g, RectangleF r, string glyph, float px, float fade)
+    {
+        using var f = new Font("Segoe Fluent Icons", px, GraphicsUnit.Pixel);
+        using var b = new SolidBrush(Mul(White, fade));
+
+        Fx.GlyphCentred(g, r, glyph, f, b);
+    }
+
+    private static (Bitmap[]? frames, int[]? delays) DecodeFrames(byte[]? bytes)
+    {
+        if (bytes == null || bytes.Length == 0) return (null, null);
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            using var img = Image.FromStream(ms);
+            int n = 1;
+            try { n = img.GetFrameCount(FrameDimension.Time); } catch { }
+            if (n <= 1) return (new[] { new Bitmap(img) }, new[] { 0 });
+
+            var frames = new Bitmap[n];
+            var delays = new int[n];
+            byte[]? pd = null;
+            try { pd = img.GetPropertyItem(0x5100)?.Value; } catch { }
+            for (int i = 0; i < n; i++)
+            {
+                img.SelectActiveFrame(FrameDimension.Time, i);
+                frames[i] = new Bitmap(img);
+                int cs = pd != null && pd.Length >= (i + 1) * 4 ? BitConverter.ToInt32(pd, i * 4) : 10;
+                delays[i] = Math.Max(20, cs * 10);
+            }
+            return (frames, delays);
+        }
+        catch { return (null, null); }
+    }
+
+    private static void DrawLine(Graphics g, string text, Font f, Brush b, float x, float y, float w)
+    {
+        using var sf = new StringFormat(StringFormatFlags.NoWrap) { Trimming = StringTrimming.EllipsisCharacter };
+        if (IsRtl(text)) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
+        g.DrawString(text, f, b, new RectangleF(x, y, w, f.Height + 4), sf);
+    }
+
+    private static bool IsRtl(string s)
+    {
+        foreach (var c in s)
+            if (c >= 0x0590 && c <= 0x08FF) return true;
+        return false;
+    }
+
+    private static string Fmt(TimeSpan t)
+        => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+
+    private static void Fill(Graphics g, float x, float y, float w, float h, Color c)
+    {
+        if (w <= 0) return;
+        using var path = Rounded(new RectangleF(x, y, w, h), h / 2f);
+        using var b = new SolidBrush(c);
+        g.FillPath(b, path);
+    }
+
+    private static GraphicsPath Rounded(RectangleF r, float radius)
+    {
+        float d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
+        var p = new GraphicsPath();
+        if (d <= 0) { p.AddRectangle(r); return p; }
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
+    }
+
+    private static Color Mul(Color c, float a)
+        => Color.FromArgb((int)Math.Clamp(c.A * a, 0, 255), c.R, c.G, c.B);
+}
+
+internal static class MediaTiming
+{
+    internal const int BurstMs = 320;
+    internal const int FreshMs = 1200;
+    internal const int RetryMs = 700;
+    internal const int GiveUpMs = 2500;
+    internal const int MaxTries = 2;
+    internal const int LeftoverMs = 2000;
+
+    internal enum SeekStep { Wait, Send, GiveUp }
+
+    internal static SeekStep NextSeekStep(int tries, double msSinceAsked, double msSinceSent)
+    {
+
+        if (tries == 0)
+            return msSinceSent < FreshMs && msSinceAsked < BurstMs ? SeekStep.Wait : SeekStep.Send;
+
+        if (tries >= MaxTries || msSinceAsked > GiveUpMs) return SeekStep.GiveUp;
+        return msSinceSent < RetryMs ? SeekStep.Wait : SeekStep.Send;
+    }
+
+    internal static bool IsLeftover(TimeSpan incomingEnd, TimeSpan prevEnd, double msSinceTrack)
+        => prevEnd > TimeSpan.Zero && incomingEnd == prevEnd && msSinceTrack < LeftoverMs;
+
+    internal static bool IsBlank(TimeSpan inStart, TimeSpan inEnd, TimeSpan knownStart, TimeSpan knownEnd)
+        => inEnd <= inStart && knownEnd > knownStart;
+
+    internal static bool ShouldRestamp(bool repeated, bool playing, bool confirming)
+        => !repeated || !playing || confirming;
+}

@@ -1,0 +1,1152 @@
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
+using System.Runtime.InteropServices;
+using Halo.Interop;
+
+namespace Halo.Shell;
+
+internal struct MenuFrame
+{
+    public bool Show;
+    public float Appear;
+    public string[] RowIcons;
+    public Bitmap?[] RowImages;
+    public float[] RowImageOffsets;
+    public int[] RowCounts;
+    public Bitmap?[][] SessImages;
+    public string[][] SessIcons;
+    public Color?[] RowRings;
+    public float[] RowProgress;
+    public Color?[][] SessRings;
+    public float Open;
+    public int OpenRow;
+    public float RowOpen;
+    public bool Dropping;
+    public bool Outward;
+    public string DropIcon;
+    public Bitmap? DropImage;
+    public float Drop;
+    public float FromX, FromY, ToX, ToY;
+    public int CarryRow;
+    public float CarryDY;
+    public float[] RowShift;
+}
+
+internal sealed class LayeredNotch
+{
+    private const int CaptureW = 560, CaptureBaseH = 220;
+
+    internal static int CaptureH { get; private set; } = CaptureBaseH;
+
+    internal static void WantCaptureHeight(int logicalHeight)
+        => CaptureH = Math.Max(CaptureBaseH, Math.Min(720, logicalHeight + 8));
+
+    public const int CircleD = 40, CircleGap = 4, CircleY = 0;
+
+    private const int PrivacyGap = 10;
+    public static int PrivacyPad => Widgets.Privacy.Active ? PrivacyGap : 0;
+
+    private Win32.WndProc _wndProc = null!;
+    private int _workLeft, _workTop, _workWidth;
+
+    public float Scale = 1f;
+    public float OffsetX;
+    public float HandleAlpha;
+    private static readonly string ScalePath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "scale");
+
+    public float Dpi { get; private set; } = 1f;
+    public float Zoom => Scale * Dpi;
+    private bool _legacyScale;
+
+    public void SetDpi(float dpi)
+    {
+        if (dpi is < 0.5f or > 8f) return;
+        bool migrate = _legacyScale;
+        _legacyScale = false;
+        if (Math.Abs(dpi - Dpi) < 0.001f && !migrate) return;
+
+        if (migrate && Math.Abs(dpi - 1f) > 0.001f)
+        {
+            Scale = Math.Clamp(Scale / dpi, 0.7f, 1.6f);
+            SaveScale();
+        }
+        Dpi = dpi;
+    }
+
+    public void LoadScale()
+    {
+        try
+        {
+
+            string[] parts = System.IO.File.ReadAllText(ScalePath).Split(' ',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 0) return;
+            if (!float.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var s)) return;
+            Scale = Math.Clamp(s, 0.7f, 1.6f);
+            _legacyScale = parts.Length < 2 || parts[1] != ScaleMark;
+        }
+        catch { }
+    }
+
+    private const string ScaleMark = "v2";
+
+    public void SaveScale()
+    {
+        try
+        {
+            System.IO.File.WriteAllText(ScalePath,
+                Scale.ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + ScaleMark);
+        }
+        catch { }
+    }
+    private Bitmap? _bg;
+    private readonly object _bgLock = new();
+    private volatile bool _capturing;
+    private int _captureVersion;
+
+    public int CaptureVersion => _captureVersion;
+
+    public IntPtr Hwnd { get; private set; }
+    public int WorkLeft => _workLeft;
+    public int WorkTop => _workTop;
+    public int WorkWidth => _workWidth;
+
+    public event Action<Bitmap, bool>? ClipboardImage;
+    private uint _lastClipSeq;
+    private long _lastClipTick;
+
+    private static readonly string[] SnipHosts =
+        { "screenclippinghost", "snippingtool", "screensketch", "shellexperiencehost",
+          "greenshot", "sharex", "lightshot", "flameshot", "snagit32", "snagiteditor", "picpick" };
+
+    public void Show()
+    {
+        var hInstance = Win32.GetModuleHandle(null);
+        _wndProc = WndProc;
+
+        var wc = new Win32.WNDCLASSEX
+        {
+            cbSize = Marshal.SizeOf<Win32.WNDCLASSEX>(),
+            lpfnWndProc = _wndProc,
+            hInstance = hInstance,
+            hCursor = Win32.LoadCursor(IntPtr.Zero, Win32.IDC_ARROW),
+            lpszClassName = "HaloNotchWindow",
+        };
+        if (Win32.RegisterClassEx(ref wc) == 0)
+            throw new InvalidOperationException($"RegisterClassEx failed: {Marshal.GetLastWin32Error()}");
+
+        var work = default(Win32.RECT);
+        Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, ref work, 0);
+        _workLeft = work.left;
+        _workTop = work.top;
+        _workWidth = work.right - work.left;
+        LoadScale();
+
+        int exStyle = Win32.WS_EX_LAYERED | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE;
+        Hwnd = Win32.CreateWindowEx(exStyle, "HaloNotchWindow", "Halo", Win32.WS_POPUP,
+            _workLeft, _workTop, 10, 10, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
+        if (Hwnd == IntPtr.Zero)
+            throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastWin32Error()}");
+
+        Win32.ShowWindow(Hwnd, Win32.SW_SHOWNOACTIVATE);
+
+        SetCapturable(false);
+        Win32.AddClipboardFormatListener(Hwnd);
+
+        _dropTarget = new Halo.Interop.FileDropTarget();
+        Win32.RegisterDragDrop(Hwnd, _dropTarget);
+    }
+
+    private Halo.Interop.FileDropTarget? _dropTarget;
+
+    public void SetCapturable(bool on)
+    {
+        if (Environment.GetEnvironmentVariable("HALO_CAPTURABLE") == "1") on = true;
+        _capturable = on;
+        Win32.SetWindowDisplayAffinity(Hwnd, on ? 0u : Win32.WDA_EXCLUDEFROMCAPTURE);
+    }
+
+    private volatile bool _capturable;
+
+    public void SetVisible(bool visible)
+        => Win32.ShowWindow(Hwnd, visible ? Win32.SW_SHOWNOACTIVATE : Win32.SW_HIDE);
+
+    public void AssertTopmost()
+        => Win32.SetWindowPos(Hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+
+    public bool IsFullscreen(IntPtr fg)
+    {
+        if (fg == IntPtr.Zero || fg == Hwnd || IsDesktopWindow(fg)) return false;
+        if (!Win32.GetWindowRect(fg, out var r)) return false;
+        int cx = Win32.GetSystemMetrics(Win32.SM_CXSCREEN);
+        int cy = Win32.GetSystemMetrics(Win32.SM_CYSCREEN);
+        return r.left <= 0 && r.top <= 0 && r.right >= cx && r.bottom >= cy;
+    }
+
+    public bool ProbeBehind(out IntPtr behindRoot)
+    {
+        int cx = _workLeft + _workWidth / 2, cy = _workTop + 6;
+        var ex = Win32.GetWindowLongPtr(Hwnd, Win32.GWL_EXSTYLE);
+        IntPtr behind;
+        try
+        {
+            Win32.SetWindowLongPtr(Hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex.ToInt64() | Win32.WS_EX_TRANSPARENT));
+            behind = Win32.WindowFromPoint(new Win32.POINT { X = cx, Y = cy });
+        }
+        finally { Win32.SetWindowLongPtr(Hwnd, Win32.GWL_EXSTYLE, ex); }
+
+        var root = behind == IntPtr.Zero ? IntPtr.Zero : Win32.GetAncestor(behind, Win32.GA_ROOT);
+        bool isDesktop = IsDesktopWindow(behind) || IsDesktopWindow(root);
+        behindRoot = isDesktop ? IntPtr.Zero : root;
+        return isDesktop;
+    }
+
+    internal bool ProbeBehindByHiding(out IntPtr behindRoot)
+    {
+        int cx = _workLeft + _workWidth / 2, cy = _workTop + 6;
+        Win32.ShowWindow(Hwnd, Win32.SW_HIDE);
+        System.Threading.Thread.Sleep(12);
+        var behind = Win32.WindowFromPoint(new Win32.POINT { X = cx, Y = cy });
+        var root = behind == IntPtr.Zero ? IntPtr.Zero : Win32.GetAncestor(behind, Win32.GA_ROOT);
+        bool isDesktop = IsDesktopWindow(behind) || IsDesktopWindow(root);
+        Win32.ShowWindow(Hwnd, Win32.SW_SHOWNOACTIVATE);
+        AssertTopmost();
+        behindRoot = isDesktop ? IntPtr.Zero : root;
+        return isDesktop;
+    }
+
+    public void CaptureFrom(IntPtr behind)
+    {
+        if (behind == IntPtr.Zero || _capturing) return;
+        _capturing = true;
+        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try { DoCapture(behind); } catch { } finally { _capturing = false; }
+        });
+    }
+
+    private void DoCapture(IntPtr behind)
+    {
+        if (!Win32.GetWindowRect(behind, out var wr)) return;
+
+        int nx = _workLeft + (_workWidth - CaptureW) / 2 + (int)OffsetX, ny = _workTop;
+        int sx = nx - wr.left, sy = ny - wr.top;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        string how;
+
+        Bitmap? raw = _capturable ? null : GrabScreen(nx, ny);
+        how = raw != null ? "screen" : "";
+
+        if (raw == null && _capturable)
+        {
+            var direct = CaptureViaPrintWindow(behind, wr, sx, sy);
+            if (direct != null) { raw = direct; how = "printwindow"; }
+        }
+
+        if (raw == null)
+        {
+            raw = new Bitmap(CaptureW, CaptureH, PixelFormat.Format24bppRgb);
+            IntPtr src = Win32.GetWindowDC(behind);
+            using (var g = Graphics.FromImage(raw))
+            {
+                g.Clear(Color.FromArgb(24, 24, 24));
+                IntPtr dhdc = g.GetHdc();
+                Win32.BitBlt(dhdc, 0, 0, CaptureW, CaptureH, src, sx, sy, Win32.SRCCOPY);
+                g.ReleaseHdc(dhdc);
+            }
+            Win32.ReleaseDC(behind, src);
+            how = "window";
+
+            if (IsMostlyBlack(raw))
+            {
+                var pw = CaptureViaPrintWindow(behind, wr, sx, sy);
+                if (pw != null) { raw.Dispose(); raw = pw; how = "printwindow"; }
+            }
+        }
+
+        var blurred = BlurPyramid(raw);
+
+        if (GlassDump)
+        {
+            long nowMs = Environment.TickCount64;
+            if (nowMs - _lastDump > 2000)
+            {
+                _lastDump = nowMs;
+                try
+                {
+                    string dir = System.IO.Path.GetTempPath();
+                    raw.Save(System.IO.Path.Combine(dir, "halo-glass-raw.png"), ImageFormat.Png);
+                    blurred.Save(System.IO.Path.Combine(dir, "halo-glass-blur.png"), ImageFormat.Png);
+                }
+                catch { }
+            }
+        }
+
+        raw.Dispose();
+
+        ulong hash = PlateHash(blurred);
+        if (hash == _bgHash && _bg != null)
+        {
+            if (_staleStreak < 1000) _staleStreak++;
+            blurred.Dispose();
+            GlassTrace(how + " same", (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0
+                / System.Diagnostics.Stopwatch.Frequency);
+            return;
+        }
+        _bgHash = hash;
+        _staleStreak = 0;
+        lock (_bgLock) { var old = _bg; _bg = blurred; old?.Dispose(); }
+        System.Threading.Interlocked.Increment(ref _captureVersion);
+        GlassTrace(how, (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+    }
+
+    private ulong _bgHash;
+    private int _staleStreak;
+
+    internal int StaleStreak => _staleStreak;
+
+    private static ulong PlateHash(Bitmap b)
+    {
+        var data = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly,
+                              PixelFormat.Format32bppPArgb);
+        try
+        {
+            ulong h = 14695981039346656037UL;
+            int stepX = Math.Max(1, b.Width / 48), stepY = Math.Max(1, b.Height / 24);
+            for (int y = 0; y < b.Height; y += stepY)
+                for (int x = 0; x < b.Width; x += stepX)
+                {
+                    int px = System.Runtime.InteropServices.Marshal.ReadInt32(data.Scan0, y * data.Stride + x * 4);
+                    h = (h ^ (uint)px) * 1099511628211UL;
+                }
+            return h;
+        }
+        finally { b.UnlockBits(data); }
+    }
+
+    private static Bitmap? GrabScreen(int x, int y)
+    {
+        IntPtr screen = IntPtr.Zero;
+        try
+        {
+            screen = Win32.GetDC(IntPtr.Zero);
+            if (screen == IntPtr.Zero) return null;
+            var bmp = new Bitmap(CaptureW, CaptureH, PixelFormat.Format24bppRgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(24, 24, 24));
+                IntPtr dhdc = g.GetHdc();
+                bool ok = Win32.BitBlt(dhdc, 0, 0, CaptureW, CaptureH, screen, x, y, Win32.SRCCOPY);
+                g.ReleaseHdc(dhdc);
+                if (!ok) { bmp.Dispose(); return null; }
+            }
+            return bmp;
+        }
+        catch { return null; }
+        finally { if (screen != IntPtr.Zero) Win32.ReleaseDC(IntPtr.Zero, screen); }
+    }
+
+    private static readonly bool GlassDebug =
+        Environment.GetEnvironmentVariable("HALO_GLASS_DEBUG") == "1";
+    private static int _traceCount;
+
+    private static readonly bool GlassDump =
+        Environment.GetEnvironmentVariable("HALO_DUMP_GLASS") == "1";
+    private static long _lastDump;
+
+    private static void GlassTrace(string how, double ms)
+    {
+        if (!GlassDebug) return;
+        try
+        {
+            if (++_traceCount > 600) return;
+            string path = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "glass-debug.txt");
+            System.IO.File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {how} {ms:0.0}ms\n");
+        }
+        catch { }
+    }
+
+    private static bool IsMostlyBlack(Bitmap bmp)
+    {
+        int dark = 0, total = 0;
+        for (int y = 4; y < bmp.Height; y += 16)
+            for (int x = 4; x < bmp.Width; x += 16)
+            {
+                var p = bmp.GetPixel(x, y);
+                if (p.R < 12 && p.G < 12 && p.B < 12) dark++;
+                total++;
+            }
+        return total > 0 && dark >= total * 0.97f;
+    }
+
+    private Bitmap? CaptureViaPrintWindow(IntPtr behind, Win32.RECT wr, int sx, int sy)
+    {
+        try
+        {
+            int ww = wr.right - wr.left, wh = wr.bottom - wr.top;
+            if (ww <= 0 || wh <= 0 || ww > 10000 || wh > 10000) return null;
+            using var full = new Bitmap(ww, wh, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(full))
+            {
+                IntPtr hdc = g.GetHdc();
+                bool ok = Win32.PrintWindow(behind, hdc, Win32.PW_RENDERFULLCONTENT);
+                g.ReleaseHdc(hdc);
+                if (!ok) return null;
+            }
+            var region = new Bitmap(CaptureW, CaptureH, PixelFormat.Format24bppRgb);
+            using (var g = Graphics.FromImage(region))
+            {
+                g.Clear(Color.FromArgb(24, 24, 24));
+                g.DrawImage(full, new Rectangle(0, 0, CaptureW, CaptureH),
+                    new Rectangle(sx, sy, CaptureW, CaptureH), GraphicsUnit.Pixel);
+            }
+            return region;
+        }
+        catch { return null; }
+    }
+
+    private static bool IsDesktopWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return true;
+        var buf = new char[80];
+        int n = Win32.GetClassName(hwnd, buf, buf.Length);
+        var cls = new string(buf, 0, n);
+        return cls is "Progman" or "WorkerW" or "SysListView32" or "Shell_TrayWnd";
+    }
+
+    public void Render(int w, int h, int radius, int tintAlpha, float contentFade, float collapsedFade, bool glass,
+        MenuFrame menu, Action<Graphics, int, int, float> drawContent, Action<Graphics, int, int, float> drawCollapsed,
+        float glassFade = 1f, float clarity = 0f)
+    {
+        int menuX = w + CircleGap + PrivacyPad;
+
+        int maxFan = 0;
+        if (menu.Show)
+            foreach (var k in menu.RowCounts) maxFan = Math.Max(maxFan, k);
+        int totalW = menu.Show ? menuX + CircleD * (1 + maxFan) : w;
+        int totalH = Math.Max(h, menu.Show ? Math.Max(1, menu.RowIcons.Length) * CircleD : 0);
+
+        bool privacy = Widgets.Privacy.Active;
+        if (privacy)
+        {
+            totalW = Math.Max(totalW, w + CircleGap + PrivacyGap);
+            int nDots = (Widgets.Privacy.Mic ? 1 : 0) + (Widgets.Privacy.Cam ? 1 : 0);
+            totalH = Math.Max(totalH, (int)Math.Ceiling(DotTop + (nDots - 1) * DotStep + DotR + 2f));
+        }
+
+        float S = Zoom;
+        int pw = (int)MathF.Ceiling(totalW * S), ph = (int)MathF.Ceiling(totalH * S);
+
+        var bmi = new Win32.BITMAPINFOHEADER
+        {
+            biSize = Marshal.SizeOf<Win32.BITMAPINFOHEADER>(),
+            biWidth = pw,
+            biHeight = -ph,
+            biPlanes = 1,
+            biBitCount = 32,
+            biCompression = 0,
+        };
+        IntPtr screenDc = Win32.GetDC(IntPtr.Zero);
+        IntPtr dib = Win32.CreateDIBSection(screenDc, ref bmi, 0, out var bits, IntPtr.Zero, 0);
+        IntPtr memDc = Win32.CreateCompatibleDC(screenDc);
+        IntPtr oldObj = Win32.SelectObject(memDc, dib);
+
+        using (var bmp = new Bitmap(pw, ph, pw * 4, PixelFormat.Format32bppPArgb, bits))
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Transparent);
+            g.ScaleTransform(S, S);
+            DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            if (collapsedFade > 0.01f) drawCollapsed(g, w, h, collapsedFade);
+            drawContent(g, w, h, contentFade);
+            if (HandleAlpha > 0.01f && contentFade > 0.5f)
+            {
+
+                using var hp = new Pen(Color.FromArgb((int)(160 * HandleAlpha * contentFade), 255, 255, 255), 3f)
+                { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                int m = 3;
+                g.DrawArc(hp, w - 2 * radius + m, h - 2 * radius + m, 2 * (radius - m), 2 * (radius - m), 25, 40);
+            }
+            float ca = 1f - contentFade;
+            if (menu.Show && ca > 0.01f && !menu.Dropping) DrawMenu(g, menuX, w, tintAlpha, glass, menu, ca);
+            if (menu.Dropping) DrawDrop(g, menu, tintAlpha, w, h);
+            if (privacy) DrawPrivacyDots(g, w);
+        }
+
+        var size = new Win32.SIZE { cx = pw, cy = ph };
+        var src = new Win32.POINT { X = 0, Y = 0 };
+        var dst = new Win32.POINT { X = _workLeft + (_workWidth - (int)(w * S)) / 2 + (int)OffsetX, Y = _workTop };
+        var blend = new Win32.BLENDFUNCTION
+        {
+            BlendOp = Win32.AC_SRC_OVER,
+            BlendFlags = 0,
+            SourceConstantAlpha = 255,
+            AlphaFormat = Win32.AC_SRC_ALPHA,
+        };
+        Win32.UpdateLayeredWindow(Hwnd, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, Win32.ULW_ALPHA);
+
+        Win32.SelectObject(memDc, oldObj);
+        Win32.DeleteObject(dib);
+        Win32.DeleteDC(memDc);
+        Win32.ReleaseDC(IntPtr.Zero, screenDc);
+    }
+
+    private const float DotR = 3.3f, DotRing = 0.9f, DotStep = 8.5f, DotTop = 9f;
+    private static readonly Color MicColor = Color.FromArgb(255, 159, 10);
+    private static readonly Color CamColor = Color.FromArgb(48, 209, 88);
+    private static void DrawPrivacyDots(Graphics g, int pillW)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        float cx = pillW + (CircleGap + PrivacyGap) / 2f;
+        float y = DotTop;
+        if (Widgets.Privacy.Mic) { Dot(g, cx, y, MicColor); y += DotStep; }
+        if (Widgets.Privacy.Cam) { Dot(g, cx, y, CamColor); }
+    }
+
+    private static void Dot(Graphics g, float cx, float cy, Color c)
+    {
+        using (var kb = new SolidBrush(Color.FromArgb(230, 0, 0, 0)))
+            g.FillEllipse(kb, cx - DotR, cy - DotR, DotR * 2, DotR * 2);
+        float ri = DotR - DotRing;
+        using var cb = new SolidBrush(c);
+        g.FillEllipse(cb, cx - ri, cy - ri, ri * 2, ri * 2);
+    }
+
+    internal void DrawShape(Graphics g, int w, int h, int radius, int tintAlpha, bool glass,
+        float glassFade = 1f, float clarity = 0f)
+    {
+        lock (_bgLock) ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
+    }
+
+    private static readonly object _scratchLock = new();
+    private static Bitmap? _scratchA, _scratchB;
+
+    private static Bitmap Scratch(ref Bitmap? slot, int w, int h)
+    {
+        if (slot is { } b && b.Width == w && b.Height == h) return b;
+        slot?.Dispose();
+        slot = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+        return slot;
+    }
+
+    private static Bitmap ScratchA(int w, int h) { lock (_scratchLock) return Scratch(ref _scratchA, w, h); }
+    private static Bitmap ScratchB(int w, int h) { lock (_scratchLock) return Scratch(ref _scratchB, w, h); }
+
+    private const float FrostDesat = 0.40f, FrostContrast = 0.34f, FrostFloor = 0.05f;
+
+    private static ColorMatrix Frost(float alpha, float clarity)
+    {
+        const float lr = 0.2126f, lg = 0.7152f, lb = 0.0722f;
+        float k = Math.Clamp(clarity, 0f, 1f);
+        float d = FrostDesat * (1f - k), c = FrostContrast + (1f - FrostContrast) * k;
+        return new ColorMatrix(new[]
+        {
+            new[] { ((1 - d) + lr * d) * c, lr * d * c,             lr * d * c,             0f, 0f },
+            new[] { lg * d * c,             ((1 - d) + lg * d) * c, lg * d * c,             0f, 0f },
+            new[] { lb * d * c,             lb * d * c,             ((1 - d) + lb * d) * c, 0f, 0f },
+            new[] { 0f,                     0f,                     0f,                     alpha, 0f },
+            new[] { FrostFloor * (1 - k),   FrostFloor * (1 - k),   FrostFloor * (1 - k),   0f, 1f },
+        });
+    }
+
+    internal static void ShapeInto(Graphics g, int w, int h, int radius, int tintAlpha,
+                                   Bitmap? backdrop, float glassFade, float clarity = 0f)
+    {
+        const int ss = 2;
+
+        var content = ScratchA(w * ss, h * ss);
+        using (var cg = Graphics.FromImage(content))
+        {
+            cg.CompositingMode = CompositingMode.SourceCopy;
+            cg.Clear(Color.Transparent);
+            cg.CompositingMode = CompositingMode.SourceOver;
+            if (backdrop != null && glassFade > 0.004f)
+            {
+                int sx = (CaptureW - w) / 2;
+
+                int srcW = Math.Min(w, backdrop.Width - Math.Max(0, sx));
+                int srcH = Math.Min(h, backdrop.Height);
+                cg.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                cg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                using var ia = new ImageAttributes();
+                ia.SetColorMatrix(Frost(Math.Clamp(glassFade, 0f, 1f), clarity));
+                if (srcW > 0 && srcH > 0)
+                    cg.DrawImage(backdrop, new Rectangle(0, 0, w * ss, h * ss),
+                        Math.Max(0, sx), 0, srcW, srcH, GraphicsUnit.Pixel, ia);
+            }
+            using var tint = new SolidBrush(Color.FromArgb(tintAlpha, 8, 8, 8));
+            cg.FillRectangle(tint, 0, 0, w * ss, h * ss);
+
+            if (Sheen > 0.004f)
+            {
+                using var lg = new LinearGradientBrush(new Rectangle(0, -1, w * ss, h * ss + 2),
+                    Color.FromArgb((int)(255 * Sheen), 255, 255, 255), Color.FromArgb(0, 255, 255, 255),
+                    LinearGradientMode.Vertical)
+                { Blend = new Blend { Factors = new[] { 0f, 0.55f, 1f }, Positions = new[] { 0f, 0.30f, 1f } } };
+                cg.FillRectangle(lg, 0, 0, w * ss, h * ss);
+            }
+
+            if (Grain > 0.004f)
+            {
+                using var noise = new TextureBrush(GrainTile(), WrapMode.Tile);
+                cg.FillRectangle(noise, 0, 0, w * ss, h * ss);
+            }
+        }
+
+        var big = ScratchB(w * ss, h * ss);
+        using (var bg = Graphics.FromImage(big))
+        {
+            bg.SmoothingMode = SmoothingMode.AntiAlias;
+            bg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            bg.CompositingMode = CompositingMode.SourceCopy;
+            bg.Clear(Color.Transparent);
+            bg.CompositingMode = CompositingMode.SourceOver;
+            using var path = PillPath(w * ss, h * ss, radius * ss);
+            using var mask = new TextureBrush(content) { WrapMode = WrapMode.Clamp };
+            bg.FillPath(mask, path);
+
+            if (RimLight > 0.004f)
+            {
+                using var rim = new Pen(Color.FromArgb((int)(255 * RimLight), 255, 255, 255), ss)
+                { Alignment = PenAlignment.Inset };
+                bg.DrawPath(rim, path);
+            }
+        }
+
+        g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.DrawImage(big, new Rectangle(0, 0, w, h), new Rectangle(0, 0, w * ss, h * ss), GraphicsUnit.Pixel);
+    }
+
+    private void DrawMenu(Graphics g, int x, int pillW, int tintAlpha, bool glass, MenuFrame menu, float alpha)
+    {
+        alpha *= menu.Appear;
+        if (alpha <= 0.01f) return;
+        int rows = menu.RowIcons.Length;
+        float openV = Math.Max(0f, menu.Open);
+        float hf = CircleD + (rows - 1) * CircleD * openV;
+        int or_ = menu.OpenRow;
+        float rowEase = Math.Max(0f, menu.RowOpen);
+        float extf = or_ >= 0 && or_ < rows ? menu.RowCounts[or_] * CircleD * rowEase : 0f;
+        if (or_ > 0 && CircleD + or_ * CircleD > hf + 0.5f) extf = 0f;
+        int mw = (int)Math.Ceiling(CircleD + extf);
+        int mh = (int)Math.Ceiling(hf);
+        const int ss = 2;
+        int D = CircleD * ss;
+
+        using var c = new Bitmap(mw * ss, mh * ss, PixelFormat.Format32bppPArgb);
+        using (var cg = Graphics.FromImage(c))
+        {
+            cg.SmoothingMode = SmoothingMode.AntiAlias;
+            cg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            cg.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            cg.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            cg.Clear(Color.Transparent);
+
+            using var path = new GraphicsPath(FillMode.Winding);
+            using (var v = PillPath(D, mh * ss, D / 2))
+                path.AddPath(v, false);
+            if (extf > 0.5f)
+                using (var hp = PillPath((int)((CircleD + extf) * ss), D, D / 2))
+                {
+                    using var m = new Matrix(1, 0, 0, 1, 0, or_ * D);
+                    hp.Transform(m);
+                    path.AddPath(hp, false);
+                }
+
+            int srcX = (CaptureW - pillW) / 2 + x;
+            lock (_bgLock)
+            {
+                if (glass && _bg != null && srcX >= 0 && srcX + mw <= _bg.Width && CircleY + mh <= _bg.Height)
+                {
+                    var clip = cg.Clip;
+                    cg.SetClip(path);
+                    cg.DrawImage(_bg, new Rectangle(0, 0, mw * ss, mh * ss),
+                        new Rectangle(srcX, CircleY, mw, mh), GraphicsUnit.Pixel);
+                    cg.Clip = clip;
+                }
+            }
+            using (var b = new SolidBrush(Color.FromArgb(tintAlpha, 8, 8, 8)))
+                cg.FillPath(b, path);
+
+            void Cell(string icon, Bitmap? img, float cx, float cy, float ia, Color? ring,
+                float progress = -1f, float imageOffsetX = 0f)
+            {
+                if (ia <= 0.01f) return;
+                if (img != null)
+                {
+
+                    var accent = Widgets.Fx.AccentOf(img);
+                    if (accent != Widgets.Fx.White)
+                    {
+                        using var wash = new System.Drawing.Drawing2D.GraphicsPath();
+                        wash.AddEllipse(cx - D * 0.1f, cy - D * 0.1f, D * 1.2f, D * 1.2f);
+                        using var pgb = new System.Drawing.Drawing2D.PathGradientBrush(wash)
+                        {
+                            CenterColor = Color.FromArgb((int)(34 * ia), accent),
+                            SurroundColors = new[] { Color.FromArgb(0, accent) },
+                        };
+                        cg.FillPath(pgb, wash);
+                    }
+                    DrawCircleImage(cg, img, cx + imageOffsetX * ss, cy, D, ia);
+                }
+                else
+                    DrawGlyphCentered(cg, icon, cx, cy, D, D * 0.45f, (int)(235 * ia));
+                if (ring is { } rc)
+                {
+                    float inset = D * 0.19f - 2.5f * ss, dd = D - inset * 2;
+                    var rr = new RectangleF(cx + inset, cy + inset, dd, dd);
+                    if (progress >= 0f)
+                    {
+
+                        cg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                        using var track = new Pen(Color.FromArgb((int)(55 * ia), rc), 1.9f * ss);
+                        cg.DrawEllipse(track, rr);
+                        if (progress > 0.001f)
+                            using (var arc = new Pen(Color.FromArgb((int)(230 * ia), rc), 2.2f * ss)
+                            { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
+                                cg.DrawArc(arc, rr, -90f, 360f * Math.Clamp(progress, 0f, 1f));
+                    }
+                    else
+                    {
+                        using var pen = new Pen(Color.FromArgb((int)(140 * ia), rc), 1.9f * ss);
+                        cg.DrawEllipse(pen, rr);
+                    }
+                }
+            }
+
+            int carry = menu.CarryRow;
+            bool carrying = carry >= 0 && carry < rows && menu.Drop <= 0f;
+            for (int i = 0; i < rows; i++)
+            {
+                if (carrying && i == carry) continue;
+
+                float slide = menu.RowShift is { } sh && i < sh.Length ? sh[i] : 0f;
+                Cell(menu.RowIcons[i], menu.RowImages[i], 0, i * D + slide * ss,
+                    Math.Clamp((hf - i * CircleD) / CircleD, 0f, 1f), menu.RowRings[i], menu.RowProgress[i],
+                    menu.RowImageOffsets[i]);
+            }
+            if (carrying)
+                Cell(menu.RowIcons[carry], menu.RowImages[carry], 0, (carry * CircleD + menu.CarryDY) * ss,
+                    1f, menu.RowRings[carry], menu.RowProgress[carry], menu.RowImageOffsets[carry]);
+            if (extf > 0.5f)
+                for (int j = 0; j < menu.RowCounts[or_]; j++)
+                    Cell(menu.SessIcons[or_][j], menu.SessImages[or_][j], (j + 1) * D, or_ * D,
+                        Math.Clamp((extf - j * CircleD) / CircleD, 0f, 1f), menu.SessRings[or_][j]);
+        }
+
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var dst = new Rectangle(x, CircleY, mw, mh);
+        if (alpha >= 0.999f) { g.DrawImage(c, dst, 0, 0, c.Width, c.Height, GraphicsUnit.Pixel); return; }
+
+        var stt = g.Save();
+        float ax = x, ay = CircleY + CircleD / 2f;
+        g.TranslateTransform(ax, ay);
+        g.ScaleTransform(alpha, alpha);
+        g.TranslateTransform(-ax, -ay);
+        using (var attr = new ImageAttributes())
+        {
+            attr.SetColorMatrix(new ColorMatrix { Matrix33 = alpha });
+            g.DrawImage(c, dst, 0, 0, c.Width, c.Height, GraphicsUnit.Pixel, attr);
+        }
+        g.Restore(stt);
+    }
+
+    private void DrawDrop(Graphics g, MenuFrame menu, int tintAlpha, int w, int h)
+    {
+
+        float p = menu.Drop - 1f;
+        const float k1 = 1.9f, k3 = k1 + 1f;
+        float e = 1f + k3 * p * p * p + k1 * p * p;
+        float bx = menu.FromX + (menu.ToX - menu.FromX) * e;
+        float by = menu.FromY + (menu.ToY - menu.FromY) * e;
+
+        float r2 = CircleD / 2f * (menu.Outward ? 0.8f + 0.2f * e : 1f - 0.2f * e);
+        var blob = new PointF(bx, by);
+        var c1 = new PointF(w - h / 2f, h / 2f);
+        float r1 = h / 2f;
+
+        var fill = Color.FromArgb(Math.Min(tintAlpha + 50, 255), 8, 8, 8);
+        using (var b = new SolidBrush(fill))
+        {
+            Metaball(g, b, c1, r1, blob, r2);
+            g.FillEllipse(b, blob.X - r2, blob.Y - r2, r2 * 2, r2 * 2);
+        }
+
+        float a = menu.Outward
+            ? Math.Clamp(menu.Drop / 0.25f, 0f, 1f)
+            : menu.Drop < 0.8f ? 1f : 1f - (menu.Drop - 0.8f) / 0.2f;
+        if (menu.DropImage != null)
+        {
+            DrawCircleImage(g, menu.DropImage, blob.X - r2, blob.Y - r2, r2 * 2, a);
+            return;
+        }
+
+        DrawGlyphCentered(g, menu.DropIcon, blob.X - r2, blob.Y - r2, r2 * 2, r2 * 1.8f, (int)(235 * a));
+    }
+
+    private static void Metaball(Graphics g, Brush brush, PointF c1, float r1, PointF c2, float r2)
+    {
+        float dx = c2.X - c1.X, dy = c2.Y - c1.Y;
+        float d = MathF.Sqrt(dx * dx + dy * dy);
+        if (d <= 0.001f || d >= r1 + r2 || d <= MathF.Abs(r1 - r2)) return;
+
+        const float handle = 2.4f, v = 0.5f;
+        float u1 = MathF.Acos((r1 * r1 + d * d - r2 * r2) / (2 * r1 * d));
+        float u2 = MathF.Acos((r2 * r2 + d * d - r1 * r1) / (2 * r2 * d));
+        float ab = MathF.Atan2(dy, dx);
+        float maxSpread = MathF.Acos((r1 - r2) / d);
+
+        float a1 = ab + u1 + (maxSpread - u1) * v;
+        float a2 = ab - u1 - (maxSpread - u1) * v;
+        float a3 = ab + MathF.PI - u2 - (MathF.PI - u2 - maxSpread) * v;
+        float a4 = ab - MathF.PI + u2 + (MathF.PI - u2 - maxSpread) * v;
+
+        var p1 = Pt(c1, r1, a1); var p2 = Pt(c1, r1, a2);
+        var p3 = Pt(c2, r2, a3); var p4 = Pt(c2, r2, a4);
+
+        float total = r1 + r2;
+        float d2 = Math.Min(v * handle, Dist(p1, p3) / total) * Math.Min(1f, d * 2f / total);
+        float h1 = r1 * d2, h2 = r2 * d2;
+
+        using var path = new GraphicsPath();
+        path.AddBezier(p1, Pt(p1, h1, a1 - MathF.PI / 2), Pt(p3, h2, a3 + MathF.PI / 2), p3);
+        path.AddLine(p3, p4);
+        path.AddBezier(p4, Pt(p4, h2, a4 - MathF.PI / 2), Pt(p2, h1, a2 + MathF.PI / 2), p2);
+        path.CloseFigure();
+        g.FillPath(brush, path);
+    }
+
+    private static PointF Pt(PointF c, float r, float a) => new(c.X + r * MathF.Cos(a), c.Y + r * MathF.Sin(a));
+    private static float Dist(PointF a, PointF b) { float dx = a.X - b.X, dy = a.Y - b.Y; return MathF.Sqrt(dx * dx + dy * dy); }
+
+    private static readonly FontFamily _cellGlyphFont = new("Segoe MDL2 Assets");
+    private static void DrawGlyphCentered(Graphics g, string glyph, float x, float y, float box, float px, int alpha)
+    {
+        if (string.IsNullOrEmpty(glyph)) return;
+        using var path = new GraphicsPath();
+        using var sf = new StringFormat(StringFormat.GenericTypographic);
+        path.AddString(glyph, _cellGlyphFont, (int)FontStyle.Regular, px, PointF.Empty, sf);
+        path.Flatten();
+        var b = path.GetBounds();
+        if (b.Width <= 0 || b.Height <= 0) return;
+        using var m = new Matrix();
+        m.Translate(MathF.Round(x + (box - b.Width) / 2f - b.X), MathF.Round(y + (box - b.Height) / 2f - b.Y));
+        path.Transform(m);
+        using var br = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255));
+        var old = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.FillPath(br, path);
+        g.SmoothingMode = old;
+    }
+
+    private static void DrawCircleImage(Graphics g, Bitmap img, float x, float y, float box, float alpha)
+    {
+        img = CenteredSquare(img);
+        float inset = box * 0.19f, d = box - inset * 2;
+        var circle = new RectangleF(x + inset, y + inset, d, d);
+        int s = Math.Max(1, (int)Math.Ceiling(d));
+
+        using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
+        using (var sg = Graphics.FromImage(scaled))
+        {
+            sg.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            sg.SmoothingMode = SmoothingMode.HighQuality;
+            using var ia = new ImageAttributes();
+            ia.SetWrapMode(WrapMode.TileFlipXY);
+            ia.SetColorMatrix(new ColorMatrix { Matrix33 = alpha });
+            int side = Math.Min(img.Width, img.Height);
+            sg.DrawImage(img, new Rectangle(0, 0, s, s),
+                (img.Width - side) / 2, (img.Height - side) / 2, side, side, GraphicsUnit.Pixel, ia);
+        }
+
+        using var tb = new TextureBrush(scaled) { WrapMode = WrapMode.Clamp };
+        tb.TranslateTransform(circle.X, circle.Y);
+        var old = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var p = new GraphicsPath()) { p.AddEllipse(circle); g.FillPath(tb, p); }
+        g.SmoothingMode = old;
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<Bitmap, Bitmap> _centered = new();
+    private static Bitmap CenteredSquare(Bitmap src)
+    {
+        lock (_centered)
+        {
+            if (_centered.TryGetValue(src, out var c)) return c;
+            var made = MakeCenteredSquare(src);
+            _centered[src] = made;
+            return made;
+        }
+    }
+
+    private static Bitmap MakeCenteredSquare(Bitmap src)
+    {
+        try
+        {
+            var data = src.LockBits(new Rectangle(0, 0, src.Width, src.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            int minX = src.Width, minY = src.Height, maxX = -1, maxY = -1;
+            try
+            {
+                int stride = data.Stride;
+                var buf = new byte[stride * src.Height];
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+                for (int yy = 0; yy < src.Height; yy++)
+                    for (int xx = 0; xx < src.Width; xx++)
+                        if (buf[yy * stride + xx * 4 + 3] > 24)
+                        {
+                            if (xx < minX) minX = xx; if (xx > maxX) maxX = xx;
+                            if (yy < minY) minY = yy; if (yy > maxY) maxY = yy;
+                        }
+            }
+            finally { src.UnlockBits(data); }
+            if (maxX < minX) return src;
+
+            int edge = Math.Max(1, Math.Min(src.Width, src.Height) / 64);
+            if (minX <= edge && maxX >= src.Width - 1 - edge) return src;
+            if (minY <= edge && maxY >= src.Height - 1 - edge) return src;
+
+            float dx = (src.Width - 1) / 2f - (minX + maxX) / 2f;
+            float dy = (src.Height - 1) / 2f - (minY + maxY) / 2f;
+            if (Math.Abs(dx) < 1.5f && Math.Abs(dy) < 1.5f) return src;
+
+            var shifted = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+            using (var g = Graphics.FromImage(shifted))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(src, (int)Math.Round(dx), (int)Math.Round(dy), src.Width, src.Height);
+            }
+            return shifted;
+        }
+        catch { return src; }
+    }
+
+    internal static Bitmap BlurPyramid(Bitmap src)
+    {
+        int w = src.Width, h = src.Height;
+        using var s1 = new Bitmap(Math.Max(1, w / 14), Math.Max(1, h / 14), PixelFormat.Format32bppPArgb);
+        using (var g = Graphics.FromImage(s1))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.DrawImage(src, new Rectangle(0, 0, s1.Width, s1.Height), new Rectangle(0, 0, w, h), GraphicsUnit.Pixel);
+        }
+
+        using var s2 = new Bitmap(Math.Max(1, w / 5), Math.Max(1, h / 5), PixelFormat.Format32bppPArgb);
+        using (var g = Graphics.FromImage(s2))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(s1, new Rectangle(0, 0, s2.Width, s2.Height), new Rectangle(0, 0, s1.Width, s1.Height), GraphicsUnit.Pixel);
+        }
+        var big = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+        using (var g = Graphics.FromImage(big))
+        {
+
+            if (FrostMix > 0.004f)
+            {
+                using var wash = new SolidBrush(Mean(s1));
+                g.FillRectangle(wash, 0, 0, w, h);
+            }
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            using var ia = new ImageAttributes();
+            var m = new ColorMatrix { Matrix33 = 1f - FrostMix };
+            ia.SetColorMatrix(m);
+            g.DrawImage(s2, new Rectangle(0, 0, w, h),
+                0, 0, s2.Width, s2.Height, GraphicsUnit.Pixel, ia);
+        }
+        return big;
+    }
+
+    internal static float FrostMix = 0.55f;
+
+    internal static float Sheen = 0f, Grain = 0f, RimLight = 0f;
+
+    private static Bitmap? _grain;
+
+    private static Bitmap GrainTile()
+    {
+        if (_grain is { } g0 && Math.Abs(_grainFor - Grain) < 0.0005f) return g0;
+        _grain?.Dispose();
+        const int n = 128;
+        var bmp = new Bitmap(n, n, PixelFormat.Format32bppPArgb);
+        var data = bmp.LockBits(new Rectangle(0, 0, n, n), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
+        try
+        {
+            var rnd = new Random(20260728);
+            int peak = (int)Math.Clamp(Grain * 255f, 0f, 255f);
+            unsafe
+            {
+                for (int y = 0; y < n; y++)
+                {
+                    byte* row = (byte*)data.Scan0 + y * data.Stride;
+                    for (int x = 0; x < n; x++)
+                    {
+
+                        byte a = (byte)rnd.Next(peak + 1);
+                        row[x * 4] = a; row[x * 4 + 1] = a; row[x * 4 + 2] = a; row[x * 4 + 3] = a;
+                    }
+                }
+            }
+        }
+        finally { bmp.UnlockBits(data); }
+        _grainFor = Grain;
+        return _grain = bmp;
+    }
+
+    private static float _grainFor = -1f;
+
+    private static Color Mean(Bitmap b)
+    {
+        var data = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly,
+                              PixelFormat.Format32bppPArgb);
+        try
+        {
+            long r = 0, g = 0, bl = 0;
+            int n = b.Width * b.Height;
+            unsafe
+            {
+                for (int y = 0; y < b.Height; y++)
+                {
+                    byte* row = (byte*)data.Scan0 + y * data.Stride;
+                    for (int x = 0; x < b.Width; x++)
+                    {
+                        bl += row[x * 4]; g += row[x * 4 + 1]; r += row[x * 4 + 2];
+                    }
+                }
+            }
+            return Color.FromArgb(255, (int)(r / n), (int)(g / n), (int)(bl / n));
+        }
+        finally { b.UnlockBits(data); }
+    }
+
+    private static Bitmap Blur(Bitmap src, int factor)
+    {
+        int sw = Math.Max(1, src.Width / factor), sh = Math.Max(1, src.Height / factor);
+        var small = new Bitmap(sw, sh, PixelFormat.Format32bppPArgb);
+        using (var g = Graphics.FromImage(small))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.DrawImage(src, new Rectangle(0, 0, sw, sh), new Rectangle(0, 0, src.Width, src.Height), GraphicsUnit.Pixel);
+        }
+        var big = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+        using (var g = Graphics.FromImage(big))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(small, new Rectangle(0, 0, src.Width, src.Height), new Rectangle(0, 0, sw, sh), GraphicsUnit.Pixel);
+        }
+        small.Dispose();
+        return big;
+    }
+
+    private static GraphicsPath PillPath(int w, int h, int r)
+    {
+        int d = r * 2;
+        var p = new GraphicsPath();
+        p.AddLine(0, 0, w, 0);
+        p.AddArc(w - d, h - d, d, d, 0, 90);
+        p.AddArc(0, h - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
+    }
+
+    private void HandleClipboard()
+    {
+        uint seq = Win32.GetClipboardSequenceNumber();
+        if (seq == _lastClipSeq) return;
+        _lastClipSeq = seq;
+        long now = Environment.TickCount64;
+        if (now - _lastClipTick < 800) return;
+        if (!Win32.IsClipboardFormatAvailable(Win32.CF_BITMAP)) return;
+        bool shot = OwnerIsCapture();
+        var bmp = ReadClipboardBitmap();
+        if (bmp != null) { _lastClipTick = now; ClipboardImage?.Invoke(bmp, shot); }
+    }
+
+    private static bool OwnerIsCapture()
+    {
+        try
+        {
+            IntPtr owner = Win32.GetClipboardOwner();
+            if (owner == IntPtr.Zero) return true;
+            Win32.GetWindowThreadProcessId(owner, out uint pid);
+            if (pid == 0) return true;
+            using var p = System.Diagnostics.Process.GetProcessById((int)pid);
+            string pn = p.ProcessName.ToLowerInvariant();
+            foreach (var s in SnipHosts) if (pn.Contains(s)) return true;
+            return false;
+        }
+        catch { return true; }
+    }
+
+    private Bitmap? ReadClipboardBitmap()
+    {
+        if (!Win32.OpenClipboard(Hwnd)) return null;
+        try
+        {
+            IntPtr h = Win32.GetClipboardData(Win32.CF_BITMAP);
+            if (h == IntPtr.Zero) return null;
+            using var tmp = Image.FromHbitmap(h);
+            return new Bitmap(tmp);
+        }
+        catch { return null; }
+        finally { Win32.CloseClipboard(); }
+    }
+
+    public Func<Point, bool>? WantsHandCursor;
+    private static IntPtr _handCursor;
+
+    private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+
+        if (msg == Win32.WM_SETCURSOR && WantsHandCursor is { } wantsHand)
+        {
+            try
+            {
+                if (Win32.GetCursorPos(out var cp) && wantsHand(new Point(cp.X, cp.Y)))
+                {
+                    if (_handCursor == IntPtr.Zero) _handCursor = Win32.LoadCursor(IntPtr.Zero, Win32.IDC_HAND);
+                    Win32.SetCursor(_handCursor);
+                    return new IntPtr(1);
+                }
+            }
+            catch { }
+        }
+
+        if (msg == Win32.WM_TIMECHANGE)
+        {
+            try { Almanac.TimeZoneChanged(); } catch { }
+            return IntPtr.Zero;
+        }
+        if (msg == Win32.WM_DESTROY)
+        {
+            Win32.PostQuitMessage(0);
+            return IntPtr.Zero;
+        }
+        if (msg == Win32.WM_CLIPBOARDUPDATE)
+        {
+            HandleClipboard();
+            return IntPtr.Zero;
+        }
+        if (msg is Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE)
+        {
+
+            var work = default(Win32.RECT);
+            Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, ref work, 0);
+            _workLeft = work.left;
+            _workTop = work.top;
+            _workWidth = work.right - work.left;
+            lock (_bgLock) { _bg?.Dispose(); _bg = null; }
+        }
+        return Win32.DefWindowProc(hwnd, msg, wParam, lParam);
+    }
+}

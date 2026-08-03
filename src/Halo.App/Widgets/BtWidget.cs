@@ -8,7 +8,7 @@ namespace Halo.Widgets;
 
 internal sealed class BtWidget : IWidget
 {
-    private const int HoldMs = 6000;
+    private const int HoldMs = 7000;
     private static readonly Color White = Color.FromArgb(238, 255, 255, 255);
     private static readonly Color Dim = Color.FromArgb(150, 255, 255, 255);
     private static readonly Color Track = Color.FromArgb(46, 255, 255, 255);
@@ -22,13 +22,14 @@ internal sealed class BtWidget : IWidget
     private int _version;
     private float _fillShown = -1f;
 
-    public void Show(string name, int pct)
+    public void Show(string name, int pct, int major = -1, int minor = -1)
     {
         lock (_lock)
         {
             _name = name;
             _pct = Math.Clamp(pct, 0, 100);
-            _glyph = GlyphFor(name);
+
+            _glyph = major > 0 ? GlyphForCod(major, minor) : GlyphFor(name);
             _fillShown = 0f;
             _until = Environment.TickCount64 + HoldMs;
             _version++;
@@ -40,6 +41,30 @@ internal sealed class BtWidget : IWidget
     public bool Animating => IsActive;
 
     public string Icon => ((char)0xE702).ToString();
+
+    internal const int GlyphBluetooth = 0xE702, GlyphPhone = 0xE8EA, GlyphHeadphone = 0xE7F6,
+        GlyphSpeaker = 0xE7F5, GlyphController = 0xE7FC, GlyphKeyboard = 0xE765, GlyphMouse = 0xE962,
+        GlyphWatch = 0xEC92, GlyphComputer = 0xE7F8;
+
+    internal static int GlyphForCod(int major, int minor) => major switch
+    {
+        1 => GlyphComputer,
+        2 => GlyphPhone,
+        4 => minor switch
+        {
+            1 or 2 or 6 => GlyphHeadphone,
+            5 or 7 or 10 or 8 => GlyphSpeaker,
+            18 => GlyphController,
+            _ => GlyphSpeaker,
+        },
+
+        5 => (minor & 0x10) != 0 ? GlyphKeyboard
+           : (minor & 0x20) != 0 ? GlyphMouse
+           : (minor & 0x0F) is 1 or 2 ? GlyphController
+           : GlyphBluetooth,
+        7 => minor == 1 ? GlyphWatch : GlyphBluetooth,
+        _ => GlyphBluetooth,
+    };
 
     private static int GlyphFor(string name)
     {
@@ -57,6 +82,14 @@ internal sealed class BtWidget : IWidget
         return 0xE8EA;
     }
 
+    private const float ColH = 40f, ExpH = 220f;
+    internal static (float cx, float cy, float ring, float disc, float track, float arc) Metrics(int h)
+    {
+        float t = Math.Clamp((h - ColH) / (ExpH - ColH), 0f, 1f);
+        float L(float a, float b) => a + (b - a) * t;
+        return (L(23f, 70f), h / 2f, L(13f, 44f), L(9.5f, 36f), L(2.4f, 4f), L(2.8f, 4.6f));
+    }
+
     public void DrawCollapsed(Graphics g, int w, int h, float fade)
     {
         int pct; int glyph;
@@ -72,26 +105,53 @@ internal sealed class BtWidget : IWidget
         float fill = Math.Clamp(_fillShown, 0f, 1f);
         Color ringCol = Charge(fill);
 
-        float sz = h - 12f, x = 9f, cy = h / 2f, cx = x + sz / 2f;
+        var (cx, cy, rr, ir, tw, aw) = Metrics(h);
         Fx.Glow(g, w, h, fade, cx, cy, w * 0.6f, h * 2.0f, 34, ringCol);
+        EdgeBand(g, w, h, fade);
 
-        float ir = sz / 2f - 4.5f;
         using (var disc = new SolidBrush(Mul(Color.FromArgb(20, 255, 255, 255), fade)))
             g.FillEllipse(disc, cx - ir, cy - ir, ir * 2, ir * 2);
         DrawGlyph(g, new RectangleF(cx - ir, cy - ir, ir * 2, ir * 2), glyph, fade, White);
 
-        float rr = sz / 2f - 1f;
-        using (var tp = new Pen(Mul(Track, fade), 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+        using (var tp = new Pen(Mul(Track, fade), tw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
             g.DrawArc(tp, cx - rr, cy - rr, rr * 2, rr * 2, 0, 360);
         if (fill > 0.001f)
-            using (var fp = new Pen(Mul(ringCol, fade), 2.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            using (var fp = new Pen(Mul(ringCol, fade), aw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 g.DrawArc(fp, cx - rr, cy - rr, rr * 2, rr * 2, -90, 360f * fill);
 
+        float sz = rr * 2f;
         using var pf = new Font("Segoe UI Semibold", h * 0.42f, GraphicsUnit.Pixel);
         using var pb = new SolidBrush(Mul(White, fade));
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
         g.DrawString($"{pct}%", pf, pb, new RectangleF(cx + sz, 0, w - (cx + sz) - 14, h), sf);
+    }
+
+    private const float BandPen = 1.6f;
+    private static readonly Color Band = Color.FromArgb(150, 46, 176, 96);
+    private static GraphicsPath BandPath(int w, int h, float r, float inset)
+    {
+        float x0 = inset, y0 = inset, x1 = w - inset, y1 = h - inset;
+        float d = Math.Min(r, Math.Min(x1 - x0, y1 - y0) / 2f) * 2f;
+        var p = new GraphicsPath();
+        p.AddLine(x1, y0, x1, y1 - d / 2f);
+        p.AddArc(x1 - d, y1 - d, d, d, 0, 90);
+        p.AddArc(x0, y1 - d, d, d, 90, 90);
+        p.AddLine(x0, y1 - d / 2f, x0, y0);
+        return p;
+    }
+
+    private void EdgeBand(Graphics g, int w, int h, float fade)
+    {
+
+        long left = 0;
+        lock (_lock) left = _until - Environment.TickCount64;
+        float age = (HoldMs - left) / 380f;
+        float a = fade * Math.Clamp(age, 0f, 1f);
+        if (a <= 0.01f) return;
+        using var path = BandPath(w, h, Math.Min(h / 2f, 20f), BandPen / 2f);
+        using var pen = new Pen(Mul(Band, a), BandPen) { LineJoin = LineJoin.Round, EndCap = LineCap.Flat };
+        g.DrawPath(pen, path);
     }
 
     private static Color Charge(float fill)
@@ -106,14 +166,14 @@ internal sealed class BtWidget : IWidget
         float fill = pct / 100f;
         Color ringCol = Charge(fill);
 
-        float cx = 70, cy = h / 2f, rr = 44;
+        var (cx, cy, rr, ir, tw, aw) = Metrics(h);
         Fx.Glow(g, w, h, fade, cx, cy, w * 0.7f, h * 1.2f, 36, ringCol);
         using (var disc = new SolidBrush(Mul(Color.FromArgb(20, 255, 255, 255), fade)))
-            g.FillEllipse(disc, cx - rr + 8, cy - rr + 8, (rr - 8) * 2, (rr - 8) * 2);
-        DrawGlyph(g, new RectangleF(cx - rr + 8, cy - rr + 8, (rr - 8) * 2, (rr - 8) * 2), glyph, fade, White);
-        using (var tp = new Pen(Mul(Track, fade), 4f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            g.FillEllipse(disc, cx - ir, cy - ir, ir * 2, ir * 2);
+        DrawGlyph(g, new RectangleF(cx - ir, cy - ir, ir * 2, ir * 2), glyph, fade, White);
+        using (var tp = new Pen(Mul(Track, fade), tw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
             g.DrawArc(tp, cx - rr, cy - rr, rr * 2, rr * 2, 0, 360);
-        using (var fp = new Pen(Mul(ringCol, fade), 4.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+        using (var fp = new Pen(Mul(ringCol, fade), aw) { StartCap = LineCap.Round, EndCap = LineCap.Round })
             g.DrawArc(fp, cx - rr, cy - rr, rr * 2, rr * 2, -90, 360f * fill);
 
         float tx = cx + rr + 22;
@@ -188,9 +248,12 @@ internal sealed class BtWidget : IWidget
         var gb = GlyphBitmap(cp);
         float target = r.Height * 0.58f;
         float scale = target / Math.Max(gb.Width, gb.Height);
+
         float dw = gb.Width * scale, dh = gb.Height * scale;
-        var dst = new RectangleF(r.X + (r.Width - dw) / 2f, r.Y + (r.Height - dh) / 2f, dw, dh);
+        var dst = new RectangleF(r.X + r.Width / 2f - dw / 2f, r.Y + r.Height / 2f - dh / 2f, dw, dh);
         using var ia = new ImageAttributes();
+
+        ia.SetWrapMode(WrapMode.TileFlipXY);
         ia.SetColorMatrix(new ColorMatrix(new[]
         {
             new float[] { 0, 0, 0, 0, 0 },
@@ -199,9 +262,12 @@ internal sealed class BtWidget : IWidget
             new float[] { 0, 0, 0, fade * 0.95f, 0 },
             new float[] { tint.R / 255f, tint.G / 255f, tint.B / 255f, 0, 1 },
         }));
+
+        var oldInterp = g.InterpolationMode;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.DrawImage(gb, new[] { dst.Location, new PointF(dst.Right, dst.Y), new PointF(dst.X, dst.Bottom) },
             new RectangleF(0, 0, gb.Width, gb.Height), GraphicsUnit.Pixel, ia);
+        g.InterpolationMode = oldInterp;
     }
 
     private static Color Mul(Color c, float a)

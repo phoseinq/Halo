@@ -990,7 +990,9 @@ internal sealed class MediaWidget : IWidget
             g.FillEllipse(fb, mute);
         using (var pen = new Pen(Mul(Color.FromArgb((int)(28 + 26 * vt), 255, 255, 255), fade), 1f))
             g.DrawEllipse(pen, mute);
-        DrawGlyphSoft(g, mute, muted ? "\uE74F" : "\uE767", 16f, muted ? fade * 0.55f : fade * (0.8f + 0.2f * vt));
+
+        string vg = VolumeGlyph(_volShown, muted);
+        DrawGlyphSoft(g, mute, vg, 16f, vg == "\uE74F" ? fade * 0.55f : fade * (0.8f + 0.2f * vt));
         float vy = vbar.Y + vbar.Height / 2f, bh2 = 4f * (1f + 2f * vt);
         Fill(g, vbar.X, vy - bh2 / 2f, vbar.Width, bh2, Mul(Color.FromArgb(34, 255, 255, 255), fade));
         if (vol > 0)
@@ -1154,6 +1156,12 @@ internal sealed class MediaWidget : IWidget
         => shown + (target - shown) * (1f - MathF.Exp(-dt / tau));
 
     private static readonly FontFamily FluentFamily = new("Segoe Fluent Icons");
+
+    internal static string VolumeGlyph(float vol, bool muted)
+        => muted || vol <= 0.001f ? ""
+        : vol < 1f / 3f ? ""
+        : vol < 2f / 3f ? ""
+        : "";
 
     private void DrawGlyphSoft(Graphics g, RectangleF r, string glyph, float px, float fade, float opticalDx = 0f)
     {

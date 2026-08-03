@@ -52,6 +52,10 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-pin") { RenderPin(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--render-vol") { RenderVol(args[1]); return; }
+
+        if (args.Length >= 2 && args[0] == "--render-bt") { RenderBt(args[1]); return; }
+
         if (args.Length >= 2 && args[0] == "--render-notif") { RenderNotif(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-badges") { RenderBadges(args[1]); return; }
@@ -182,6 +186,8 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "--cancel-download") { CancelDownload(); return; }
 
         if (args.Length >= 2 && args[0] == "--probe-icon") { ProbeIcon(args[1]); return; }
+
+        if (args.Length >= 1 && args[0] == "--probe-bt") { ProbeBt(); return; }
 
         if (args.Length >= 2 && args[0] == "--probe-tree") { ProbeTree(int.Parse(args[1])); return; }
 
@@ -401,6 +407,63 @@ internal static class Program
         System.IO.File.WriteAllText(outPath, sb.ToString());
     }
 
+    private static void ProbeBt()
+    {
+
+        string[] want =
+        [
+            "System.ItemNameDisplay",
+            "System.Devices.Aep.Bluetooth.Cod.Major",
+            "System.Devices.Aep.Bluetooth.Cod.Minor",
+            "System.Devices.Aep.Bluetooth.Cod.ServiceCapabilities",
+            "System.Devices.Aep.DeviceAddress",
+            "System.Devices.Aep.Manufacturer",
+            "System.Devices.Aep.Bluetooth.LastSeenTime",
+            "System.Devices.Aep.SignalStrength",
+            "System.Devices.Aep.IsConnected",
+        ];
+        try
+        {
+            string sel = Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromConnectionStatus(
+                Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected);
+
+            var good = new System.Collections.Generic.List<string>();
+            foreach (var k in want)
+            {
+                try
+                {
+                    Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(sel, new[] { k },
+                        Windows.Devices.Enumeration.DeviceInformationKind.AssociationEndpoint)
+                        .AsTask().GetAwaiter().GetResult();
+                    good.Add(k);
+                }
+                catch (Exception ex) { Console.WriteLine($"  rejected {k}: {ex.Message.Split('\r', '\n')[0]}"); }
+            }
+            want = [.. good];
+            var found = Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(
+                sel, want, Windows.Devices.Enumeration.DeviceInformationKind.AssociationEndpoint)
+                .AsTask().GetAwaiter().GetResult();
+            Console.WriteLine($"{found.Count} connected endpoint(s)");
+            foreach (var d in found)
+            {
+                Console.WriteLine($"\n  {d.Name}");
+                Console.WriteLine($"    id  {d.Id}");
+                foreach (var k in want)
+                    Console.WriteLine($"    {k,-58} {(d.Properties.TryGetValue(k, out var v) && v != null ? v : "(absent)")}");
+
+                static int Num(object? v) => v is null ? -1
+                    : int.TryParse(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
+                        out var n) ? n : -1;
+                d.Properties.TryGetValue("System.Devices.Aep.Bluetooth.Cod.Major", out var mj);
+                d.Properties.TryGetValue("System.Devices.Aep.Bluetooth.Cod.Minor", out var mn);
+                int major = Num(mj), minor = Num(mn);
+                Console.WriteLine($"    -> major={major} minor={minor} ({mj?.GetType().Name ?? "null"})"
+                    + $"  glyph U+{Halo.Widgets.BtWidget.GlyphForCod(major, minor):X4}");
+            }
+        }
+        catch (Exception ex) { Console.WriteLine("probe failed: " + ex.Message); }
+    }
+
     private static void ProbeIcon(string aumid)
     {
         var tmp = System.IO.Path.GetTempPath();
@@ -603,6 +666,211 @@ internal static class Program
             Cell(500, false, 1f, "mid-hold", hold: 1f);
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    private static void RenderVol(string outPath)
+    {
+        (float vol, bool muted, string label)[] cases =
+        [
+            (0f, false, "0 - silent"), (0.5f, true, "muted at 50"),
+            (0.15f, false, "15 - low"), (0.5f, false, "50 - mid"), (0.9f, false, "90 - high"),
+        ];
+        using var bmp = new System.Drawing.Bitmap(cases.Length * 116 + 20, 190);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(24, 24, 28));
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var fam = new System.Drawing.FontFamily("Segoe Fluent Icons");
+            using var lf = new System.Drawing.Font("Segoe UI", 10f);
+            using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(160, 235, 235, 235));
+            using var ink = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 255, 255, 255));
+
+            for (int i = 0; i < cases.Length; i++)
+            {
+                var (vol, muted, label) = cases[i];
+                string glyph = Halo.Widgets.MediaWidget.VolumeGlyph(vol, muted);
+                float ox = 20 + i * 116;
+
+                foreach (var (size, dy) in new[] { (16f, 26f), (80f, 70f) })
+                {
+                    using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                    using var sf = new System.Drawing.StringFormat(System.Drawing.StringFormat.GenericTypographic);
+                    path.AddString(glyph, fam, 0, size, System.Drawing.PointF.Empty, sf);
+                    path.Flatten();
+                    var b = path.GetBounds();
+                    if (b.Width <= 0) continue;
+                    using var m = new System.Drawing.Drawing2D.Matrix();
+                    m.Translate(ox + (96 - b.Width) / 2f - b.X, dy - b.Y);
+                    path.Transform(m);
+                    g.FillPath(ink, path);
+                }
+                g.DrawString(label, lf, lb, ox, 160);
+                g.DrawString("U+" + ((int)glyph[0]).ToString("X4"), lf, lb, ox, 4);
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine("wrote " + outPath);
+    }
+
+    private static void RenderBt(string outPath)
+    {
+        const int W = 220, H = 40;
+
+        (string name, int pct, int major, int minor)[] cases =
+        [
+            ("Boy", 43, 2, 3),
+            ("Boy", 8, 2, 3),
+            ("WH-1000XM4", 62, 4, 6),
+            ("SRS-XB33", 71, 4, 5),
+            ("DualSense", 25, 5, 0x02),
+            ("MX Master", 80, 5, 0x20),
+            ("MX Keys", 55, 5, 0x10),
+            ("Watch", 90, 7, 1),
+            ("ThinkPad", 34, 1, 3),
+            ("Nameless", 47, -1, -1),
+        ];
+
+        using var bmp = new System.Drawing.Bitmap(700, cases.Length * 76 + 30);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(24, 24, 28));
+            using var lf = new System.Drawing.Font("Segoe UI", 11f);
+            using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 235, 235, 235));
+
+            var built = new Halo.Widgets.BtWidget[cases.Length];
+            for (int i = 0; i < cases.Length; i++)
+            {
+                built[i] = new Halo.Widgets.BtWidget();
+                built[i].Show(cases[i].name, cases[i].pct, cases[i].major, cases[i].minor);
+            }
+            System.Threading.Thread.Sleep(450);
+
+            for (int i = 0; i < cases.Length; i++)
+            {
+                var (name, pct, major, minor) = cases[i];
+                var wdg = built[i];
+
+                using var cell = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var cg = System.Drawing.Graphics.FromImage(cell))
+                    for (int f = 0; f < 90; f++)
+                    {
+                        cg.Clear(System.Drawing.Color.FromArgb(255, 12, 12, 14));
+                        wdg.DrawCollapsed(cg, W, H, 1f);
+                    }
+
+                float y = 20 + i * 76;
+                g.DrawImage(cell, 24f, y);
+                g.DrawString($"{name} - {pct}% - cod {major}/{minor}", lf, lb, 24f, y + H + 6);
+
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                g.DrawImage(cell, new System.Drawing.RectangleF(280f, y - 14, W * 4f / 2.6f, H * 4f / 2.6f));
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+                const int BH = 200, BW = 1100;
+                using var big = new System.Drawing.Bitmap(BW, BH, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var bg = System.Drawing.Graphics.FromImage(big))
+                    for (int f = 0; f < 90; f++)
+                    {
+                        bg.Clear(System.Drawing.Color.FromArgb(255, 0, 0, 0));
+                        wdg.DrawCollapsed(bg, BW, BH, 1f);
+                    }
+
+                var (bcx, bcy, _, bir, _, _) = Halo.Widgets.BtWidget.Metrics(BH);
+                var (dx, dy, ok) = InkOffset(big, bcx, bcy, bir * 0.94f);
+
+                using var real = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var rg = System.Drawing.Graphics.FromImage(real))
+                    for (int f = 0; f < 90; f++)
+                    {
+                        rg.Clear(System.Drawing.Color.FromArgb(255, 0, 0, 0));
+                        wdg.DrawCollapsed(rg, W, H, 1f);
+                    }
+                var (rcx, rcy, _, rir, _, _) = Halo.Widgets.BtWidget.Metrics(H);
+                var (rdx, rdy, rok) = InkOffset(real, rcx, rcy, rir * 0.94f);
+
+                string note = ok && rok
+                    ? $"at 40px dx={rdx:+0.00;-0.00} dy={rdy:+0.00;-0.00} ({rdx / rir * 100f,5:+0.0;-0.0}% of r)"
+                      + $"   |  at 200px dx={dx / bir * 100f,5:+0.0;-0.0}% of r"
+                    : "glyph ink not found";
+                Console.WriteLine($"{name,-16} {pct,3}%  {note}");
+
+                const float Crop = 210f;
+                float ox = 700f, oy = y - 14;
+                g.DrawImage(big, new System.Drawing.RectangleF(ox, oy, Crop, BH),
+                    new System.Drawing.RectangleF(0, 0, Crop, BH), System.Drawing.GraphicsUnit.Pixel);
+                using (var cp = new System.Drawing.Pen(System.Drawing.Color.FromArgb(210, 255, 70, 70), 1f))
+                {
+                    g.DrawLine(cp, ox + bcx, oy, ox + bcx, oy + BH);
+                    g.DrawLine(cp, ox, oy + bcy, ox + Crop, oy + bcy);
+                }
+                g.DrawString($"dx={dx:+0.0;-0.0} dy={dy:+0.0;-0.0}", lf, lb, ox, oy + BH + 4);
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine("wrote " + outPath);
+
+        string morphPath = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(outPath) ?? ".",
+            System.IO.Path.GetFileNameWithoutExtension(outPath) + "-morph.png");
+        float[] steps = [0f, 0.15f, 0.3f, 0.45f, 0.6f, 0.8f, 1f];
+        using (var strip = new System.Drawing.Bitmap(620, steps.Length * 92 + 20))
+        using (var sg = System.Drawing.Graphics.FromImage(strip))
+        {
+            sg.Clear(System.Drawing.Color.FromArgb(24, 24, 28));
+            using var lf = new System.Drawing.Font("Segoe UI", 10f);
+            using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 235, 235, 235));
+            var wdg = new Halo.Widgets.BtWidget();
+            wdg.Show("Boy", 43);
+            System.Threading.Thread.Sleep(450);
+
+            for (int i = 0; i < steps.Length; i++)
+            {
+                float t = steps[i];
+                int mw = (int)(220 + (560 - 220) * t), mh = (int)(40 + (220 - 40) * t);
+                float cf = Halo.Shell.NotchController.ContentFade(t);
+                float mf = Halo.Shell.NotchController.MiniFade(t);
+                using var frame = new System.Drawing.Bitmap(mw, mh, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var fg = System.Drawing.Graphics.FromImage(frame))
+                    for (int f = 0; f < 60; f++)
+                    {
+                        fg.Clear(System.Drawing.Color.FromArgb(255, 12, 12, 14));
+                        if (mf > 0.01f) wdg.DrawCollapsed(fg, mw, mh, mf);
+                        wdg.DrawContent(fg, mw, mh, cf);
+                    }
+                float s = 420f / 560f, dy = 12 + i * 92;
+                sg.DrawImage(frame, new System.Drawing.RectangleF(24, dy, mw * s, mh * s));
+                sg.DrawString($"t={t:0.00}  {mw}x{mh}  content={cf:0.00} mini={mf:0.00}", lf, lb, 470, dy + 8);
+            }
+            strip.Save(morphPath, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        Console.WriteLine("wrote " + morphPath);
+    }
+
+    private static (float dx, float dy, bool ok) InkOffset(System.Drawing.Bitmap b, float cx, float cy, float r)
+    {
+        var data = b.LockBits(new System.Drawing.Rectangle(0, 0, b.Width, b.Height),
+            System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        try
+        {
+            var buf = new byte[data.Stride * b.Height];
+            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            double sw = 0, sx = 0, sy = 0;
+            int y0 = (int)Math.Max(0, cy - r), y1 = (int)Math.Min(b.Height - 1, cy + r);
+            int x0 = (int)Math.Max(0, cx - r), x1 = (int)Math.Min(b.Width - 1, cx + r);
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
+                    int o = y * data.Stride + x * 4;
+
+                    double lum = (buf[o] + buf[o + 1] + buf[o + 2]) / 3.0;
+                    if (lum < 60) continue;
+                    sw += lum; sx += lum * x; sy += lum * y;
+                }
+            return sw <= 0 ? (0, 0, false) : ((float)(sx / sw - cx), (float)(sy / sw - cy), true);
+        }
+        finally { b.UnlockBits(data); }
     }
 
     private static void ProbeDisplay()

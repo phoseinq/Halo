@@ -11,7 +11,10 @@ internal sealed class BtBattery
     private const string BatteryKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
     private const string NameKey = "System.ItemNameDisplay";
 
-    private readonly Action<string, int> _onConnect;
+    private const string CodMajorKey = "System.Devices.Aep.Bluetooth.Cod.Major";
+    private const string CodMinorKey = "System.Devices.Aep.Bluetooth.Cod.Minor";
+
+    private readonly Action<string, int, int, int> _onConnect;
     private DeviceWatcher? _watcher;
     private volatile bool _live;
     private System.Threading.Timer? _trigger;
@@ -23,13 +26,14 @@ internal sealed class BtBattery
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "bt-debug.txt");
     private static void Log(string m) { try { System.IO.File.AppendAllText(DebugPath, $"{DateTime.Now:HH:mm:ss} {m}\r\n"); } catch { } }
 
-    public BtBattery(Action<string, int> onConnect)
+    public BtBattery(Action<string, int, int, int> onConnect)
     {
         _onConnect = onConnect;
         try
         {
             string sel = BluetoothDevice.GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus.Connected);
-            _watcher = DeviceInformation.CreateWatcher(sel, new[] { NameKey }, DeviceInformationKind.AssociationEndpoint);
+            _watcher = DeviceInformation.CreateWatcher(sel, new[] { NameKey, CodMajorKey, CodMinorKey },
+                DeviceInformationKind.AssociationEndpoint);
             _watcher.Added += OnAdded;
             _watcher.Removed += (_, u) => Log($"removed (disconnected): {u.Id}");
             _watcher.Updated += (_, u) => Log($"updated: {u.Id}");
@@ -52,7 +56,10 @@ internal sealed class BtBattery
             var parts = line.Split('|');
             string name = parts[0].Trim();
             int pct = parts.Length > 1 && int.TryParse(parts[1].Trim(), out var p) ? p : 80;
-            if (name.Length > 0) { Log($"trigger: {name} {pct}%"); _onConnect(name, pct); }
+
+            int major = parts.Length > 2 && int.TryParse(parts[2].Trim(), out var mj) ? mj : -1;
+            int minor = parts.Length > 3 && int.TryParse(parts[3].Trim(), out var mn) ? mn : -1;
+            if (name.Length > 0) { Log($"trigger: {name} {pct}% cod={major}/{minor}"); _onConnect(name, pct, major, minor); }
         }
         catch { }
     }
@@ -63,13 +70,25 @@ internal sealed class BtBattery
         {
             if (!_live) { Log($"seed (already connected): {info.Name}"); return; }
             string name = info.Name?.Length > 0 ? info.Name : "Bluetooth device";
-            Log($"connected: {name}");
+            int major = Cod(info, CodMajorKey), minor = Cod(info, CodMinorKey);
+            Log($"connected: {name} cod={major}/{minor}");
             int pct = await Battery(name);
             if (pct < 0) { await Task.Delay(2500); pct = await Battery(name); }
             Log($"banner: {name} pct={pct}");
-            if (pct >= 0) _onConnect(name, pct);
+            if (pct >= 0) _onConnect(name, pct, major, minor);
         }
         catch (Exception ex) { Log("added failed: " + ex.Message); }
+    }
+
+    private static int Cod(DeviceInformation info, string key)
+    {
+        try
+        {
+            return info.Properties.TryGetValue(key, out var v) && v is not null
+                ? v switch { uint u => (int)u, int i => i, ushort s => s, byte b => b, _ => -1 }
+                : -1;
+        }
+        catch { return -1; }
     }
 
     private static async Task<int> Battery(string name)

@@ -352,7 +352,7 @@ internal sealed partial class NotchController
         Apply(0f);
         _agentNotices = new AgentNoticeCoordinator(_primary);
 
-        _bt = new Halo.Notifications.BtBattery((name, pct) => _btWidget.Show(name, pct));
+        _bt = new Halo.Notifications.BtBattery((name, pct, major, minor) => _btWidget.Show(name, pct, major, minor));
         _testTrigger = new System.Threading.Timer(_ => PollTestNotif(), null, 1000, 1000);
 
         Dispatcher.Ensure();

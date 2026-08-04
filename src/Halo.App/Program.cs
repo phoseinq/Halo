@@ -419,7 +419,7 @@ internal static class Program
                 string json = Halo.Reports.ReportPayload.Json(
                     Halo.Reports.ReportPayload.Collect("crash", ex, ""));
                 Halo.Reports.ReportStore.Write(json, "crash");
-                Halo.Reports.Intake.TrySend(json);
+                if (Halo.Reports.Intake.AutoCrash()) Halo.Reports.Intake.TrySend(json);
             }
             catch { }
             throw;

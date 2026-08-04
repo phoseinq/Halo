@@ -184,7 +184,7 @@ internal sealed class ReportWindow : Window
         var crash = preview ? null : NewestReport();
 
         if (crash != null)
-            Load(crash, "Halo crashed last time and reported it automatically. "
+            Load(crash, "Halo crashed last time. This is the report, and it has NOT been sent. "
                         + "Anything you add here is sent as its own report.");
     }
 

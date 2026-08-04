@@ -1,14 +1,20 @@
 # Privacy
 
-**Halo 3.4.0** · Last updated 3 August 2026
+**Halo 3.8.1** · Last updated 5 August 2026
 
-Halo runs entirely on your machine. There is no Halo account, no Halo server, no analytics and no
-telemetry. Nothing that appears in the pill is uploaded anywhere, and nothing is ever sent in the
-background.
+Halo runs entirely on your machine. There is no Halo account, no analytics and no telemetry. Nothing
+that appears in the pill — no notification, no track title, no file name, no coding-session text — is
+uploaded anywhere, ever.
 
-There is exactly one way data can leave your machine at your request: a **bug report** that you write,
-read in full, and press send on yourself. It is described line by line below, including every field it
-can contain and every field it never contains.
+There is exactly one way data can leave your machine: a **bug report** that you read in full and press
+send on yourself. It is described line by line below, including every field it can contain and every
+field it never contains.
+
+Halo does have a place to send those reports to: an intake run by the author at `halo.pvboy.dev`. That
+is new in 3.8.0 and it is a change from earlier versions, which had a blank box for an address of your
+own and no default. **It changes nothing about when a report is sent** — that is still your press, and
+only your press. There is one switch, off by default, that lets a *crash* report send itself; if you
+never turn it on, nothing is ever sent without you pressing something.
 
 This page exists so you can check those claims rather than take them. It lists every kind of data Halo
 reads, everything it writes to disk, every network request it is capable of making, and what a report
@@ -16,9 +22,11 @@ holds.
 
 **The short version**
 
-- Halo collects nothing for its own purposes and has no server to collect it to.
-- Nothing is transmitted without you pressing something, and there is no background upload, no retry
-  queue and no scheduled task that sends anything.
+- Halo collects nothing for its own purposes. It has one server, it receives only bug reports, and it
+  receives them only when you send one.
+- Nothing is transmitted without you pressing something, unless you switch on **Send crashes without
+  asking** — which is off until you turn it on, and covers crash reports only.
+- There is no retry queue and no scheduled task that sends anything.
 - Uninstalling removes everything Halo stored, and puts back the one Windows setting it changes.
 
 ---
@@ -73,11 +81,17 @@ None of these files are ever transmitted anywhere on their own.
 
 ## Bug reports and crash reports
 
-Halo has **no automatic crash reporting**. When Halo crashes it writes a report to
-`%LOCALAPPDATA%\Halo\reports\` and stops there. It does not send it, then or on the next launch — the
-next time you open the settings window, it offers it to you.
+When Halo crashes it writes a report to `%LOCALAPPDATA%\Halo\reports\` and stops there. It does not
+send it, then or on the next launch. The next time you open the settings window it shows you that
+report, says in as many words that it has **not** been sent, and leaves the decision to you.
 
-You can also write one yourself from the settings window at any time.
+That is the default and it is what you get unless you change it. Settings → Access → Problems has one
+switch, **Send crashes without asking**, which is **off**. Turning it on means a crash may post itself
+on its way out — the same report, the same fields, the same address, without the trip through the
+window. Nothing else is affected by that switch: a report you write yourself still needs your press,
+and no other data is sent under any setting.
+
+You can also write a report yourself from the settings window at any time.
 
 ### What a report contains — the complete list
 
@@ -116,17 +130,25 @@ be a claim about the report rather than the report.
 Then it is your press, and only your press:
 
 - **Copy report**, **Save as file…** and **Open a GitHub issue** (which opens your browser with the text
-  filled in). These involve no server at all, and they are the whole feature unless you set one up.
-- **Send to your own endpoint** — an HTTPS address *you* put in settings, if you have one. Halo ships
-  with none configured and no default address to fall back on.
+  filled in). These involve no server at all.
+- **Send report** — an HTTPS POST to `halo.pvboy.dev:2053`, the intake the author runs. It receives the
+  bytes you were just shown and nothing else.
 
 If the send fails, Halo tells you so and leaves the report on disk. There is no silent retry, because a
 retry queue is a background upload wearing a different hat.
 
-Halo holds no shared secret for this — anyone who downloads the installer could read one out of it. If
-your endpoint wants authentication, you paste the key it gave you into settings; it is stored in your
-settings file and sent as an `Authorization` header, never inside the report body, so a report you
-forward to somebody else does not carry it.
+**About the key.** Requests carry a token that is compiled into Halo, and it is not a secret: the source
+is public, so the token is printed in it, and anyone who downloads the installer could read it out
+anyway. It identifies the build, not you — every copy of Halo carries the same one, so it cannot tell
+one user from another. It is sent as an `Authorization` header, never inside the report body, so a
+report you forward to somebody else does not carry it. What stops the address being abused is the
+intake's own limits, not the token's secrecy.
+
+**What the intake stores.** The report as shown, the time it arrived, and the source IP address — which
+any HTTPS request discloses, and which is what per-address rate limiting is done against. Reports are
+kept on that server, for reading and fixing bugs, and for nothing else: they are not analysed in
+aggregate, not shared, not sold, and not joined to anything. There is no account, no cookie and no
+identifier that would let two reports be recognised as coming from the same machine.
 
 ### How long reports are kept
 
@@ -179,7 +201,7 @@ Halo makes no request that is not on this list.
 | `flagcdn.com` | the flag image for that country | the two-letter country code |
 | `geocoding-api.open-meteo.com` and `api.open-meteo.com` | the weather on the hourly banner, refreshed every half hour | **coordinates.** If Windows location is on and Halo is allowed, those are **your device's own coordinates**, to about 11 m. Otherwise they are the coordinates of the city from your timezone — "Asia/Tehran" becomes "Tehran" — which is a whole city wide. The city name is also sent once, to look it up |
 | `displaycatalog.mp.microsoft.com` | the name and art of a Microsoft Store install in progress | the Store product id |
-| **An address you configure yourself** | only when you press send on a bug report you have read | the report shown above, and nothing else. Empty unless you fill it in |
+| `halo.pvboy.dev:2053` — the author's bug-report intake | when you press send on a report you have read, and — only if you switch it on — when Halo crashes | the report shown above, and nothing else. Your IP address, as any HTTPS request does |
 | `127.0.0.1` | VLC playback controls, and Halo's own local API when you enable it | nothing — it never leaves your machine |
 
 **`ipwho.is`, `api.ipapi.is` and `bash.ws` are the only requests that tell a third party anything about
@@ -219,15 +241,18 @@ switch.
 ## What Halo never does
 
 - No account and no sign-in — there is nothing to sign in to.
-- No analytics, telemetry or usage statistics, in any build.
-- **No automatic crash reporting.** A crash is written to a file on your machine and goes nowhere else
-  until you read it and press send.
+- No analytics, telemetry or usage statistics, in any build. The intake receives bug reports and
+  nothing else — there is no event, no ping and no "app started" anywhere in Halo.
+- **No automatic crash reporting unless you ask for it.** A crash is written to a file on your machine
+  and goes nowhere else until you read it and press send. One switch, off by default, changes that for
+  crash reports only.
 - Notification text, media titles, file names, download names and clipboard contents **never leave
   your machine**.
 - **No update checks and no background downloads.** Halo does not phone home for new versions; it has
   no updater at all. You update it the way you installed it.
 - Nothing is sold, rented or shared for advertising. There is no advertising in Halo.
-- Nothing is sent to the author or to `pvboy.dev`. There is no server behind Halo at all.
+- Nothing is sent to the author or to `pvboy.dev` **except a bug report you sent**. There is no other
+  traffic to that host, at any time, under any setting.
 
 ---
 
@@ -239,19 +264,23 @@ switch.
 | Keep your location out of it | Windows Settings → Privacy & security → Location. The weather falls back to your timezone's city |
 | Stop the exit-IP and DNS lookups | don't hover the exit block; `ipwho.is` stops with the coding-session panels |
 | Stop other programs driving the pill | the local API is off by default; leave it off, or turn it off |
-| Send no reports | send none. Nothing is sent unless you press send, and leaving the endpoint blank removes the option entirely |
+| Send no reports | send none. Nothing is sent unless you press send. Leave **Send crashes without asking** off — it ships off — and that stays true of crashes too |
+| Have a crash reported without being asked each time | Settings → Access → Problems → **Send crashes without asking** |
+| Have a report deleted after you sent it | [open an issue](https://github.com/phoseinq/Halo/issues) or ask, quoting roughly when you sent it. There is no account to look you up by, so the time is what finds it |
 | Delete everything Halo knows | delete `%LOCALAPPDATA%\Halo\`, or uninstall |
 
 ## Keeping data, and getting rid of it
 
 Everything Halo stores is a file on your own disk, in one folder, and you can delete any of it at any
-time. Halo has no copy of it anywhere else, because there is nowhere else. Bug reports are capped at ten
-files or 2 MB; the rest is small bookkeeping that is overwritten as it changes.
+time. Bug reports are capped at ten files or 2 MB; the rest is small bookkeeping that is overwritten as
+it changes.
 
 **Uninstalling** deletes `%LOCALAPPDATA%\Halo\`, including any reports you never sent, and restores the
 Windows notification setting described above for every app Halo changed.
 
-If you sent a report to an endpoint of your own, that copy is on your server and is yours to delete.
+**A report you actually sent** also exists on the intake, and deleting your local copy does not remove
+that one. It holds no name, account or device identifier, so there is nothing to look you up by — ask
+and quote roughly when you sent it, and it will be deleted.
 
 ## Children
 
@@ -261,10 +290,13 @@ knowingly collect anything from anyone — there is no collection to speak of.
 ## Security
 
 What protects your data here is mostly that it never moves: it lives in your own user profile, under the
-permissions Windows already gives it. Beyond that — the local API binds to loopback and requires a token;
-report uploads go over HTTPS to an address only you can set; Halo ships with no embedded credentials of
-any kind, and any key your endpoint issues is stored in your settings file and sent as a header rather
-than written into the report.
+permissions Windows already gives it. Beyond that — the local API binds to loopback and requires a token
+generated on your machine; report uploads go over HTTPS and nothing is ever sent over plain HTTP.
+
+The one credential Halo ships with is the intake token described above, and it is deliberately not a
+secret: it identifies the build, is identical in every copy, and is printed in the public source. The
+intake is protected by rate limits per source address rather than by that token being hidden, and it can
+be revoked without a restart if it is abused.
 
 ## Changes to this statement
 

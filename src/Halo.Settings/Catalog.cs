@@ -180,8 +180,11 @@ internal static class Catalog
 
             new("PROBLEMS", "\uE730", [
                 Action("report.problem", "Report a problem",
-                    "Write it, read exactly what it contains, then press send. Crashes report themselves; nothing else leaves without the button.",
+                    "Write it, read exactly what it contains, then press send. Nothing leaves without the button.",
                     "Write a report"),
+                Toggle("report.autoCrash", "Send crashes without asking",
+                    "Only the crash report itself, only when Halo has actually crashed, and only the fields the report window shows you",
+                    false),
             ]),
             new("PROJECT", "\uE943", [
                 new("about.repo", "Repository", "github.com/phoseinq/Halo", RowKind.Status, "", [], "Open"),

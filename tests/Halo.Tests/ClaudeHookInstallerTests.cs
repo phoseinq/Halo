@@ -141,4 +141,29 @@ public class ClaudeHookInstallerTests : IDisposable
         File.WriteAllText(Settings, "{ this is not json");
         Assert.False(ClaudeHookInstaller.IsInstalled(Settings));
     }
+
+    // The bug that made auto-connect fail forever on a live machine, and it took a debugging session to
+    // find because running the helper by hand is what clears the flag. BOTH files: File.Copy and File.Move
+    // each refuse a read-only destination, so clearing it on the backup alone just moved the failure down
+    // a line. Neither is a file the user ever touches - .halo-bak inherits the attribute from a
+    // settings.json that a sync client or a policy marked read-only.
+    [Fact]
+    public void A_read_only_backup_or_settings_file_does_not_stop_the_install()
+    {
+        ClaudeHookInstaller.Install(Settings, _exe);
+        string backup = Settings + ".halo-bak";
+        File.WriteAllText(backup, "{}");
+        File.SetAttributes(backup, File.GetAttributes(backup) | FileAttributes.ReadOnly);
+        File.SetAttributes(Settings, File.GetAttributes(Settings) | FileAttributes.ReadOnly);
+
+        ClaudeHookInstaller.Install(Settings, _exe);   // must not throw
+        Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
+
+        // And again, because the backup takes its attributes from the file it was copied FROM: a read-only
+        // settings.json produces a read-only .halo-bak every time, so the fix only holds if the clearing
+        // happens on each pass rather than once. That is the loop that wedged the live machine.
+        Assert.True(File.GetAttributes(backup).HasFlag(FileAttributes.ReadOnly));
+        ClaudeHookInstaller.Install(Settings, _exe);
+        Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
+    }
 }

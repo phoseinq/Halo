@@ -68,6 +68,15 @@ public class IntakeContractTests
         Assert.Contains(Halo.Settings.SettingsKeys.AutoCrashReport, keys);
     }
 
+    // The .sent suffix is spelled independently in ReportStore (the pill) and ReportWindow (the panel),
+    // two executables that deliberately share no code. Change one and the pill marks reports the window
+    // cannot see: the window goes back to announcing "it has NOT been sent" over a delivered crash and
+    // offering a duplicate, with the build green. Same duplication, same pin.
+    [Fact]
+    public void Both_executables_agree_on_the_sent_marker()
+        => Assert.Equal(Halo.Reports.ReportStore.SentMarker("x.json"),
+                        settingsasm::Halo.Settings.ReportWindow.SentMarkerFor("x.json"));
+
     // And the DEFAULT, not only the key. Pinning the literal alone leaves the same drift open one step
     // along: flip Catalog's default to true and a user with no settings.json sees the switch drawn ON over
     // a crash handler still reading false - the switch says crashes are being sent and none are.

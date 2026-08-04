@@ -237,16 +237,18 @@ internal sealed class ReportWindow : Window
     private static string ReportsDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "reports");
 
+    internal static string SentMarkerFor(string reportPath) => reportPath + ".sent";
+
     private static bool WasSent(string reportPath)
     {
-        try { return File.Exists(reportPath + ".sent"); }
+        try { return File.Exists(SentMarkerFor(reportPath)); }
         catch { return false; }
     }
 
     private static void MarkSent(string? reportPath)
     {
         if (string.IsNullOrEmpty(reportPath)) return;
-        try { File.WriteAllText(reportPath + ".sent", DateTime.UtcNow.ToString("o")); }
+        try { File.WriteAllText(SentMarkerFor(reportPath), DateTime.UtcNow.ToString("o")); }
         catch { }
     }
 

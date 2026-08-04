@@ -46,12 +46,15 @@ internal static class HookConnect
          $"{agent} connected",
          $"Hooks added to {Short(settingsPath)}. Your previous file is saved as .halo-bak.");
 
-    internal static (string App, string Title, string Body) Failed(string agent, string why) =>
-        (agent,
-         $"Could not connect {agent}",
-         string.IsNullOrWhiteSpace(why)
-             ? "Halo could not write the hook settings. Nothing was changed."
-             : $"Halo could not write the hook settings: {why}. Nothing was changed.");
+    internal static (string App, string Title, string Body) Failed(string agent, string why, bool wrote = true)
+    {
+        string what = wrote ? "Halo could not write the hook settings" : "Halo could not run its hook helper";
+        return (agent,
+                $"Could not connect {agent}",
+                string.IsNullOrWhiteSpace(why)
+                    ? $"{what}. Nothing was changed."
+                    : $"{what}: {why}. Nothing was changed.");
+    }
 
     private static readonly (string Agent, string[] Processes)[] Agents =
     [
@@ -70,15 +73,28 @@ internal static class HookConnect
 
     private static bool IsSettled(string agent) { lock (Gate) return Settled.Contains(agent); }
 
-    private static string _lastLine = "";
-    private static void Log(string line)
+    private static readonly Dictionary<string, string> LastLine = [];
+
+    private static bool _on;
+    private static long _onAt;
+
+    private static void Log(string agent, string line)
     {
         try
         {
+            long now = Environment.TickCount64;
             lock (Gate)
             {
-                if (line == _lastLine) return;
-                _lastLine = line;
+                if (LastLine.TryGetValue(agent, out var previous) && previous == line) return;
+                LastLine[agent] = line;
+                if (now - _onAt >= 5000)
+                {
+                    _onAt = now;
+                    _on = File.Exists(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Halo", "hooks-debug.on"));
+                }
+                if (!_on) return;
             }
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo");
@@ -92,7 +108,8 @@ internal static class HookConnect
         catch { }
     }
 
-    private static void NoteFailure(string agent, string why, Action<string, string, string> notify)
+    private static void NoteFailure(string agent, string why, Action<string, string, string> notify,
+        bool wrote = true)
     {
         int attempt;
         lock (Gate)
@@ -103,7 +120,7 @@ internal static class HookConnect
             else RetryAt[agent] = Environment.TickCount64 + RetryDelayMs(attempt);
         }
         if (!ShouldReport(attempt)) return;
-        var (a, t, b) = Failed(agent, why);
+        var (a, t, b) = Failed(agent, why, wrote);
         notify(a, t, b);
     }
 
@@ -155,38 +172,45 @@ internal static class HookConnect
                 try
                 {
 
+                    int waiting = -1;
                     lock (Gate)
                     {
                         if (Busy.Contains(agent)) continue;
 
-                        if (RetryAt.TryGetValue(agent, out long at) && Environment.TickCount64 < at) continue;
+                        if (RetryAt.TryGetValue(agent, out long at) && Environment.TickCount64 < at)
+                            waiting = (int)((at - Environment.TickCount64) / 1000);
+                    }
+                    if (waiting >= 0)
+                    {
+
+                        Log(agent, $"{agent}: backing off, {waiting}s to go");
+                        continue;
                     }
                     string mark = HookMarks.Of(agent);
 
-                    bool installed = false, probed = false;
+                    bool probed = false;
                     bool? answer = null;
                     var step = Next(
                         busy: false,
 
                         alreadyTried: IsSettled(agent),
                         undone: string.Equals(mark, HookMarks.Undone, StringComparison.OrdinalIgnoreCase),
-                        agentSeen: () => { bool up = Running(processes); if (!up) Log($"{agent}: not running"); return up; },
+                        agentSeen: () => { bool up = Running(processes); if (!up) Log(agent, $"{agent}: not running"); return up; },
 
                         hooksInstalled: () =>
                         {
                             probed = true;
                             int code = Query(agent);
-                            installed = code == 0;
                             return answer = code switch { 0 => true, 2 => false, _ => (bool?)null };
                         });
 
-                    Log($"{agent}: mark={mark ?? "-"} settled={IsSettled(agent)} probed={probed} "
+                    Log(agent, $"{agent}: mark={(mark.Length == 0 ? "-" : mark)} settled={IsSettled(agent)} probed={probed} "
                         + $"answer={answer?.ToString() ?? "-"} step={step}");
-                    if (installed) NoteSuccess(agent);
+                    if (answer == true) NoteSuccess(agent);
                     if (step != Step.Install)
                     {
                         if (probed && answer is null)
-                            NoteFailure(agent, "the hook helper did not answer", notify);
+                            NoteFailure(agent, "the hook helper did not answer", notify, wrote: false);
                         continue;
                     }
 
@@ -197,7 +221,7 @@ internal static class HookConnect
                     {
                         var (ok, why, path) = Install(agent);
                         if (MarkFor(ok) is string mark2) HookMarks.Write(agent, mark2);
-                        Log($"{agent}: install ok={ok} why={(why.Length == 0 ? "-" : why)}");
+                        Log(agent, $"{agent}: install ok={ok} why={(why.Length == 0 ? "-" : why)}");
                         if (ok)
                         {
                             NoteSuccess(agent);
@@ -209,7 +233,7 @@ internal static class HookConnect
                     finally { lock (Gate) Busy.Remove(agent); }
                 }
 
-                catch (Exception e) { Log($"{agent}: threw {e.GetType().Name}: {e.Message}"); }
+                catch (Exception e) { Log(agent, $"{agent}: threw {e.GetType().Name}: {e.Message}"); }
             }
         });
     }

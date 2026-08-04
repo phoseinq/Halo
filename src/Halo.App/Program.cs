@@ -427,7 +427,8 @@ internal static class Program
                 {
 
                     Halo.Reports.ReportStore.MarkSent(path);
-                    Halo.Reports.Intake.RememberSent(ex);
+
+                    if (!_probeCrash) Halo.Reports.Intake.RememberSent(ex);
                 }
             }
             catch { }

@@ -509,9 +509,18 @@ internal sealed partial class NotchController
         RateReport.Write(_morphRate.Measured, _displayHz);
     }
 
-    private bool _timerRaised;
+    private bool _timerRaised, _timerCapped;
+    private long _timerRaisedAt;
+    internal const long TimerRaiseCapMs = 600_000;
+
     private void RaiseTimer(bool want)
     {
+        long now = Environment.TickCount64;
+
+        if (!want) _timerCapped = false;
+        else if (_timerRaised && now - _timerRaisedAt >= TimerRaiseCapMs) _timerCapped = true;
+        if (_timerCapped) want = false;
+        else if (want && !_timerRaised) _timerRaisedAt = now;
         if (want == _timerRaised) return;
         try
         {
@@ -1444,7 +1453,8 @@ internal sealed partial class NotchController
         bool morphing = next != _progress || _notifT != prevNotifT || _askT != prevAskT || _shrink != prevShrink
             || sprint;
 
-        RaiseTimer(morphing || (next > 0.5f && animating && hovered));
+        bool watched = hovered || _notif != null || _ask != null || _greet != GreetingKind.None;
+        RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)));
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 
         if (_morphRate.Step(morphing, _dt)) RateReport.Write(_morphRate.Measured, _displayHz);

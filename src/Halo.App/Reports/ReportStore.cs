@@ -71,5 +71,10 @@ internal static class ReportStore
     internal static void Clear()
     {
         try { Directory.Delete(Dir, recursive: true); } catch { }
+
+        foreach (var name in new[] { "crash-sent", "hooks-debug.txt", "hooks-debug.on" })
+        {
+            try { File.Delete(Path.Combine(Path.GetDirectoryName(Dir)!, name)); } catch { }
+        }
     }
 }

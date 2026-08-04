@@ -25,6 +25,20 @@ internal static class ReportStore
         return path;
     }
 
+    internal static string SentMarker(string reportPath) => reportPath + ".sent";
+
+    internal static bool WasSent(string reportPath)
+    {
+        try { return File.Exists(SentMarker(reportPath)); }
+        catch { return false; }
+    }
+
+    internal static void MarkSent(string reportPath)
+    {
+        try { File.WriteAllText(SentMarker(reportPath), DateTime.UtcNow.ToString("o")); }
+        catch { }
+    }
+
     internal static IReadOnlyList<FileInfo> List()
     {
         try
@@ -46,6 +60,8 @@ internal static class ReportStore
             {
                 total += files[i].Length;
                 if (i < MaxFiles && total <= MaxBytes) continue;
+
+                try { File.Delete(SentMarker(files[i].FullName)); } catch { }
                 try { files[i].Delete(); } catch { }
             }
         }

@@ -68,9 +68,10 @@ internal sealed class ClaudeCodeWidget : IWidget
         ? AgentActivity.Rank(Shown(st), ParseTime(st.StartedAt), DateTimeOffset.UtcNow) : 0;
 
     public IEnumerable<int> OwnerPids => Live is { } st
-        ? new[] { st.Pid, st.ConsolePid, st.HostPid } : Array.Empty<int>();
+        ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+    public int RevealPid => Live?.HostPid ?? 0;
 
-    public string? RevealProcess => "claude";
+    public string? RevealProcess => Live is { ConsolePid: 0, HostPid: 0 } ? "claude" : null;
 
     public bool Animating => _appear < 1f || Compacting(Live)
         || (_wasOpen && (WidgetInput.Over || RingsSettling));

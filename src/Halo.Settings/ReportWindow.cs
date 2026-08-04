@@ -184,7 +184,9 @@ internal sealed class ReportWindow : Window
         var crash = preview ? null : NewestReport();
 
         if (crash != null)
-            Load(crash, "Halo crashed last time. This is the report, and it has NOT been sent. "
+            Load(crash, (WasSent(crash)
+                            ? "Halo crashed last time and reported it automatically, because you asked it to. "
+                            : "Halo crashed last time. This is the report, and it has NOT been sent. ")
                         + "Anything you add here is sent as its own report.");
     }
 
@@ -234,6 +236,12 @@ internal sealed class ReportWindow : Window
 
     private static string ReportsDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "reports");
+
+    private static bool WasSent(string reportPath)
+    {
+        try { return File.Exists(reportPath + ".sent"); }
+        catch { return false; }
+    }
 
     private static string? NewestReport()
     {

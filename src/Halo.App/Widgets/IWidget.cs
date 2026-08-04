@@ -55,6 +55,8 @@ internal interface IWidget
 
     IEnumerable<int> OwnerPids => Array.Empty<int>();
 
+    int RevealPid => 0;
+
     string? RevealProcess => null;
 
     void DrawContent(Graphics g, int w, int h, float expandFade);

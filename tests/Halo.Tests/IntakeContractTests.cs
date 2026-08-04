@@ -52,4 +52,19 @@ public class IntakeContractTests
     [Fact]
     public void The_key_is_a_v1_token()
         => Assert.StartsWith("halo1.", Halo.Reports.Intake.Key, System.StringComparison.Ordinal);
+
+    // The panel WRITES this key and the crash guard READS it, from two separate executables, and the
+    // fallback on the read side is false. So a typo does not fail loudly: it shows a switch that is on
+    // over a crash handler that silently never sends, which is the exact failure SettingsKeys exists to
+    // make impossible. Catalog carries the literal because it carries all of them; this pins it.
+    [Fact]
+    public void Both_executables_agree_on_the_auto_crash_key()
+    {
+        var keys = new List<string>();
+        foreach (var page in settingsasm::Halo.Settings.Catalog.Pages)
+            foreach (var section in page.Sections)
+                foreach (var row in section.Rows)
+                    keys.Add(row.Key);
+        Assert.Contains(Halo.Settings.SettingsKeys.AutoCrashReport, keys);
+    }
 }

@@ -608,10 +608,14 @@ internal static class Program
                 GetWindowThreadProcessId(con, out uint conPid);
                 if (conPid > 4) from = conPid;
             }
+
+            uint env = EnvHostPid(owners, map);
+            if (env != 0) return env;
+
             uint found = WalkToWindow(map, owners, from);
 
             if (found == 0 && from != start) found = WalkToWindow(map, owners, start);
-            return found != 0 ? found : EnvHostPid(owners, map);
+            return found;
         }
         catch { }
         return 0;
@@ -619,12 +623,13 @@ internal static class Program
 
     private static uint EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map)
     {
+
         string? want = null;
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))
-            want = "windowsterminal.exe";
-        else if (string.Equals(Environment.GetEnvironmentVariable("TERM_PROGRAM"), "vscode",
-                     StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Environment.GetEnvironmentVariable("TERM_PROGRAM"), "vscode",
+                StringComparison.OrdinalIgnoreCase))
             want = "code.exe";
+        else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))
+            want = "windowsterminal.exe";
         if (want == null) return 0;
 
         uint only = 0;

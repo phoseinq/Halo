@@ -105,5 +105,7 @@ internal static class SettingsKeys
     internal const string Motion = "appearance.motion";
     internal const string FrameRate = "appearance.fps";
 
+    internal const string AutoCrashReport = "report.autoCrash";
+
     internal static string Feature(FeatureId id) => "feature." + FeatureCatalog.For(id).Key;
 }

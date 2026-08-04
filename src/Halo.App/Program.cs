@@ -418,8 +418,11 @@ internal static class Program
             {
                 string json = Halo.Reports.ReportPayload.Json(
                     Halo.Reports.ReportPayload.Collect("crash", ex, ""));
-                Halo.Reports.ReportStore.Write(json, "crash");
-                if (Halo.Reports.Intake.AutoCrash()) Halo.Reports.Intake.TrySend(json);
+                string path = Halo.Reports.ReportStore.Write(json, "crash");
+                if (Halo.Reports.Intake.AutoCrash()
+                    && Halo.Reports.Intake.CrashIsNew(ex)
+                    && Halo.Reports.Intake.TrySend(json))
+                    Halo.Reports.ReportStore.MarkSent(path);
             }
             catch { }
             throw;

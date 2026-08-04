@@ -468,8 +468,9 @@ internal sealed partial class NotchController
 
     internal static int Tier(float busy, bool watching, int current)
     {
-        if (busy > 0.90f) return 30;
+
         if (watching) return 60;
+        if (busy > 0.90f) return 30;
         if (busy > 0.55f) return 60;
         if (busy < 0.45f) return MaxFps;
         return current;
@@ -508,9 +509,18 @@ internal sealed partial class NotchController
         RateReport.Write(_morphRate.Measured, _displayHz);
     }
 
+    private long _timerRaisedAt;
+    private bool _timerCapped;
+    internal const long TimerRaiseCapMs = 120_000;
     private bool _timerRaised;
     private void RaiseTimer(bool want)
     {
+        long now = Environment.TickCount64;
+
+        if (!want) _timerCapped = false;
+        else if (_timerRaised && now - _timerRaisedAt >= TimerRaiseCapMs) _timerCapped = true;
+        if (_timerCapped) want = false;
+        else if (want && !_timerRaised) _timerRaisedAt = now;
         if (want == _timerRaised) return;
         try
         {
@@ -1052,7 +1062,8 @@ internal sealed partial class NotchController
         _lastFrameAt = frameNow;
         PollDisplay();
 
-        foreach (var w in _widgets) { try { w.Tick(); } catch { } }
+        for (int i = 0; i < _widgets.Length; i++)
+            if (Live(i)) { try { _widgets[i].Tick(); } catch { } }
         AdaptFrameRate();
         EaseRings();
         CheckAlerts();
@@ -2161,7 +2172,8 @@ internal sealed partial class NotchController
             if (_empty || _primary < 0 || _primary >= _widgets.Length) return;
             var widget = _widgets[_primary];
 
-            var hwnd = AppFront.TopLevelFor(widget.OwnerPids);
+            var hwnd = AppFront.TopLevelForPid(widget.RevealPid);
+            if (hwnd == IntPtr.Zero) hwnd = AppFront.TopLevelFor(widget.OwnerPids);
             if (hwnd == IntPtr.Zero) hwnd = AncestorWindow(widget);
             if (hwnd == IntPtr.Zero && widget is MediaWidget media)
                 hwnd = AppFront.TopLevelForProcess(media.App);

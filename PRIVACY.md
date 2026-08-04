@@ -85,7 +85,7 @@ When Halo crashes it writes a report to `%LOCALAPPDATA%\Halo\reports\` and stops
 send it, then or on the next launch. The next time you open the settings window it shows you that
 report, says in as many words that it has **not** been sent, and leaves the decision to you.
 
-That is the default and it is what you get unless you change it. Settings → Access → Problems has one
+That is the default and it is what you get unless you change it. Settings → Docs & About → Problems has one
 switch, **Send crashes without asking**, which is **off**. Turning it on means a crash may post itself
 on its way out — the same report, the same fields, the same address, without the trip through the
 window. Nothing else is affected by that switch: a report you write yourself still needs your press,
@@ -265,7 +265,7 @@ switch.
 | Stop the exit-IP and DNS lookups | don't hover the exit block; `ipwho.is` stops with the coding-session panels |
 | Stop other programs driving the pill | the local API is off by default; leave it off, or turn it off |
 | Send no reports | send none. Nothing is sent unless you press send. Leave **Send crashes without asking** off — it ships off — and that stays true of crashes too |
-| Have a crash reported without being asked each time | Settings → Access → Problems → **Send crashes without asking** |
+| Have a crash reported without being asked each time | Settings → Docs & About → Problems → **Send crashes without asking** |
 | Have a report deleted after you sent it | [open an issue](https://github.com/phoseinq/Halo/issues) or ask, quoting roughly when you sent it. There is no account to look you up by, so the time is what finds it |
 | Delete everything Halo knows | delete `%LOCALAPPDATA%\Halo\`, or uninstall |
 

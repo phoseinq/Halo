@@ -110,11 +110,18 @@ public class CadenceTests
     public void A_refresh_rate_that_cannot_be_true_falls_back(int hz)
         => Assert.Equal(NotchController.MaxFps, NotchController.AutoCeiling(hz));
 
-    // The point of the whole ladder, and it was the wrong way round: watching was checked FIRST, so an
-    // open panel held 60 even at 95% CPU - exactly the moment a game wants its cores back.
+    // The ordering here has been both ways round and the argument is worth keeping. Slammed used to win,
+    // so that a game at 95% got its cores back - but Halo hides entirely over a fullscreen window, so that
+    // mostly protected a case where Halo is not on screen, while costing the panel the user was looking at:
+    // a scrolling title steps 1.4px a frame at 30 and 0.7px at 60, and 1.4px reads as unevenness. Watching
+    // wins now, and these two are the pair that pins it.
     [Fact]
-    public void A_slammed_machine_wins_over_an_open_panel()
-        => Assert.Equal(30, NotchController.Tier(0.95f, watching: true, current: NotchController.MaxFps));
+    public void An_open_panel_wins_over_a_slammed_machine()
+        => Assert.Equal(60, NotchController.Tier(0.95f, watching: true, current: NotchController.MaxFps));
+
+    [Fact]
+    public void A_slammed_machine_still_yields_when_nobody_is_looking()
+        => Assert.Equal(30, NotchController.Tier(0.95f, watching: false, current: NotchController.MaxFps));
 
     [Fact]
     public void An_open_panel_still_pins_sixty_when_there_is_room()

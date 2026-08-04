@@ -397,9 +397,12 @@ internal static class Program
         {
 
             if (args.Length >= 1 && args[0] == "--probe-crash")
+            {
+                _probeCrash = true;
                 throw new InvalidOperationException(
                     "probe-crash: deliberate, raised by the dev hook",
                     new System.IO.IOException("probe-crash inner: pretend the notch surface was locked"));
+            }
 
             Win32.OleInitialize(IntPtr.Zero);
             var notch = new LayeredNotch();
@@ -419,10 +422,13 @@ internal static class Program
                 string json = Halo.Reports.ReportPayload.Json(
                     Halo.Reports.ReportPayload.Collect("crash", ex, ""));
                 string path = Halo.Reports.ReportStore.Write(json, "crash");
-                if (Halo.Reports.Intake.AutoCrash()
-                    && Halo.Reports.Intake.CrashIsNew(ex)
+                if (Halo.Reports.Intake.AutoCrash() && (_probeCrash || Halo.Reports.Intake.CrashIsNew(ex))
                     && Halo.Reports.Intake.TrySend(json))
+                {
+
                     Halo.Reports.ReportStore.MarkSent(path);
+                    Halo.Reports.Intake.RememberSent(ex);
+                }
             }
             catch { }
             throw;
@@ -1873,6 +1879,8 @@ internal static class Program
 
     private static System.Threading.Mutex? _instance;
     private static Halo.Shell.TrayIcon? _tray;
+
+    private static bool _probeCrash;
 
     private static void OpenSettingsPanel()
     {

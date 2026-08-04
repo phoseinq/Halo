@@ -22,6 +22,17 @@ internal static class HookConnect
 
     internal static string? MarkFor(bool installed) => installed ? HookMarks.Done : null;
 
+    internal const int MaxAttempts = 4;
+
+    internal static int RetryDelayMs(int attempt) => attempt switch
+    {
+        <= 1 => 15_000,
+        2 => 60_000,
+        _ => 240_000,
+    };
+
+    internal static bool ShouldReport(int attempt) => attempt >= MaxAttempts;
+
     internal static string Short(string path)
     {
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -54,7 +65,57 @@ internal static class HookConnect
 
     private static readonly HashSet<string> Settled = [];
 
+    private static readonly Dictionary<string, int> Attempts = [];
+    private static readonly Dictionary<string, long> RetryAt = [];
+
     private static bool IsSettled(string agent) { lock (Gate) return Settled.Contains(agent); }
+
+    private static string _lastLine = "";
+    private static void Log(string line)
+    {
+        try
+        {
+            lock (Gate)
+            {
+                if (line == _lastLine) return;
+                _lastLine = line;
+            }
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, "hooks-debug.txt");
+            var f = new FileInfo(path);
+            if (f.Exists && f.Length > 200_000) f.Delete();
+            File.AppendAllText(path, DateTime.Now.ToString("HH:mm:ss",
+                System.Globalization.CultureInfo.InvariantCulture) + "  " + line + Environment.NewLine);
+        }
+        catch { }
+    }
+
+    private static void NoteFailure(string agent, string why, Action<string, string, string> notify)
+    {
+        int attempt;
+        lock (Gate)
+        {
+            Attempts.TryGetValue(agent, out attempt);
+            Attempts[agent] = ++attempt;
+            if (attempt >= MaxAttempts) Settled.Add(agent);
+            else RetryAt[agent] = Environment.TickCount64 + RetryDelayMs(attempt);
+        }
+        if (!ShouldReport(attempt)) return;
+        var (a, t, b) = Failed(agent, why);
+        notify(a, t, b);
+    }
+
+    private static void NoteSuccess(string agent)
+    {
+        lock (Gate)
+        {
+            Settled.Add(agent);
+            Attempts.Remove(agent);
+            RetryAt.Remove(agent);
+        }
+    }
 
     internal static string HookExe()
     {
@@ -94,27 +155,41 @@ internal static class HookConnect
                 try
                 {
 
-                    lock (Gate) if (Busy.Contains(agent)) continue;
+                    lock (Gate)
+                    {
+                        if (Busy.Contains(agent)) continue;
+
+                        if (RetryAt.TryGetValue(agent, out long at) && Environment.TickCount64 < at) continue;
+                    }
                     string mark = HookMarks.Of(agent);
 
-                    bool installed = false;
+                    bool installed = false, probed = false;
+                    bool? answer = null;
                     var step = Next(
                         busy: false,
 
                         alreadyTried: string.Equals(mark, HookMarks.Done, StringComparison.OrdinalIgnoreCase)
                                       || IsSettled(agent),
                         undone: string.Equals(mark, HookMarks.Undone, StringComparison.OrdinalIgnoreCase),
-                        agentSeen: () => Running(processes),
+                        agentSeen: () => { bool up = Running(processes); if (!up) Log($"{agent}: not running"); return up; },
 
                         hooksInstalled: () =>
                         {
+                            probed = true;
                             int code = Query(agent);
                             installed = code == 0;
-                            return code switch { 0 => true, 2 => false, _ => (bool?)null };
+                            return answer = code switch { 0 => true, 2 => false, _ => (bool?)null };
                         });
 
-                    if (installed) lock (Gate) Settled.Add(agent);
-                    if (step != Step.Install) continue;
+                    Log($"{agent}: mark={mark ?? "-"} settled={IsSettled(agent)} probed={probed} "
+                        + $"answer={answer?.ToString() ?? "-"} step={step}");
+                    if (installed) NoteSuccess(agent);
+                    if (step != Step.Install)
+                    {
+                        if (probed && answer is null)
+                            NoteFailure(agent, "the hook helper did not answer", notify);
+                        continue;
+                    }
 
                     bool mine;
                     lock (Gate) mine = Busy.Add(agent);
@@ -123,13 +198,19 @@ internal static class HookConnect
                     {
                         var (ok, why, path) = Install(agent);
                         if (MarkFor(ok) is string mark2) HookMarks.Write(agent, mark2);
-                        lock (Gate) Settled.Add(agent);
-                        var (a, t, b) = ok ? Notice(agent, path) : Failed(agent, why);
-                        notify(a, t, b);
+                        Log($"{agent}: install ok={ok} why={(why.Length == 0 ? "-" : why)}");
+                        if (ok)
+                        {
+                            NoteSuccess(agent);
+                            var (a, t, b) = Notice(agent, path);
+                            notify(a, t, b);
+                        }
+                        else NoteFailure(agent, why, notify);
                     }
                     finally { lock (Gate) Busy.Remove(agent); }
                 }
-                catch { }
+
+                catch (Exception e) { Log($"{agent}: threw {e.GetType().Name}: {e.Message}"); }
             }
         });
     }

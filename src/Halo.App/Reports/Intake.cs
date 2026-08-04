@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 
@@ -32,32 +33,55 @@ internal static class Intake
     private static string FingerprintPath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "crash-sent");
 
+    private const int RememberedCrashes = 8;
+
+    internal static string Fingerprint(Exception? ex)
+    {
+        string top = (ex?.StackTrace ?? "").Split('\n', 2)[0].Trim();
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes((ex?.GetType().FullName ?? "none") + "|" + top)))[..16];
+    }
+
     internal static bool CrashIsNew(Exception? ex)
     {
         try
         {
-            string top = (ex?.StackTrace ?? "").Split('\n', 2)[0].Trim();
-            string print = (ex?.GetType().FullName ?? "none") + "|" + top;
-
-            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                Encoding.UTF8.GetBytes(print)))[..16];
-
-            string path = FingerprintPath;
-            if (System.IO.File.Exists(path))
+            string hash = Fingerprint(ex);
+            foreach (var line in Recent())
             {
-                var parts = System.IO.File.ReadAllText(path).Split('\t');
-                if (parts.Length == 2 && parts[0] == hash
-                    && DateTimeOffset.TryParse(parts[1], null,
+                var parts = line.Split('\t');
+                if (parts.Length != 2 || parts[0] != hash) continue;
+                if (DateTimeOffset.TryParse(parts[1], null,
                         System.Globalization.DateTimeStyles.RoundtripKind, out var when)
                     && DateTimeOffset.UtcNow - when < Remember)
                     return false;
             }
-            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-            System.IO.File.WriteAllText(path, hash + "\t" + DateTimeOffset.UtcNow.ToString("o"));
             return true;
         }
 
         catch { return true; }
+    }
+
+    internal static void RememberSent(Exception? ex)
+    {
+        try
+        {
+            string path = FingerprintPath;
+            string hash = Fingerprint(ex);
+            var kept = new List<string> { hash + "\t" + DateTimeOffset.UtcNow.ToString("o") };
+            foreach (var line in Recent())
+                if (line.Split('\t') is { Length: 2 } p && p[0] != hash && kept.Count < RememberedCrashes)
+                    kept.Add(line);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+            System.IO.File.WriteAllLines(path, kept);
+        }
+        catch { }
+    }
+
+    private static string[] Recent()
+    {
+        try { return System.IO.File.Exists(FingerprintPath) ? System.IO.File.ReadAllLines(FingerprintPath) : []; }
+        catch { return []; }
     }
 
     internal static bool TrySend(string json)

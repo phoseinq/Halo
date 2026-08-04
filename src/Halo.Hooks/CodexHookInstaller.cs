@@ -154,7 +154,7 @@ internal static class CodexHookInstaller
         Directory.CreateDirectory(directory);
 
         if (createBackup && File.Exists(settingsPath))
-            File.Copy(settingsPath, settingsPath + ".halo-bak", overwrite: true);
+            ClaudeHookInstaller.Backup(settingsPath);
 
         var temporaryPath = settingsPath + ".tmp";
         try

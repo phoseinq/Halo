@@ -67,4 +67,21 @@ public class IntakeContractTests
                     keys.Add(row.Key);
         Assert.Contains(Halo.Settings.SettingsKeys.AutoCrashReport, keys);
     }
+
+    // And the DEFAULT, not only the key. Pinning the literal alone leaves the same drift open one step
+    // along: flip Catalog's default to true and a user with no settings.json sees the switch drawn ON over
+    // a crash handler still reading false - the switch says crashes are being sent and none are.
+    [Fact]
+    public void Both_executables_agree_that_auto_crash_starts_off()
+    {
+        foreach (var page in settingsasm::Halo.Settings.Catalog.Pages)
+            foreach (var section in page.Sections)
+                foreach (var row in section.Rows)
+                    if (row.Key == Halo.Settings.SettingsKeys.AutoCrashReport)
+                        Assert.Equal("off", row.Fallback);
+
+        // and the reader's fallback, which is the other half of the same promise
+        Assert.False(new Halo.Settings.SettingsFile().Bool(
+            Halo.Settings.SettingsKeys.AutoCrashReport, false));
+    }
 }

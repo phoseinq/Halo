@@ -243,6 +243,13 @@ internal sealed class ReportWindow : Window
         catch { return false; }
     }
 
+    private static void MarkSent(string? reportPath)
+    {
+        if (string.IsNullOrEmpty(reportPath)) return;
+        try { File.WriteAllText(reportPath + ".sent", DateTime.UtcNow.ToString("o")); }
+        catch { }
+    }
+
     private static string? NewestReport()
     {
         try
@@ -391,7 +398,11 @@ internal sealed class ReportWindow : Window
             request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Intake.Key);
             using var response = await client.SendAsync(request);
             if (response.IsSuccessStatusCode)
+            {
+
+                MarkSent(_path);
                 Say($"Sent. The report is still on disk at {_path}", Mint);
+            }
             else
                 Say($"The endpoint answered {(int)response.StatusCode} {response.ReasonPhrase}. "
                     + "The report is still on disk.", Coral);

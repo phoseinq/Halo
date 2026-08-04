@@ -152,4 +152,40 @@ public class HookConnectTests
         var (_, _, bare) = HookConnect.Failed("Codex", "");
         Assert.Contains("Nothing was changed", bare);
     }
+
+    // One failed attempt used to settle the agent for the whole session, so the commonest cause - the agent
+    // holding its own settings.json open while we read it - cost the user every session until they restarted
+    // Halo. The retry has to be bounded and it has to back off, or it is the tight loop the scan interval
+    // exists to prevent: each attempt is two child processes.
+    [Fact]
+    public void The_retry_backs_off_and_never_shortens()
+    {
+        int previous = 0;
+        for (int attempt = 1; attempt <= HookConnect.MaxAttempts; attempt++)
+        {
+            int delay = HookConnect.RetryDelayMs(attempt);
+            Assert.True(delay >= previous, $"attempt {attempt} waited less than attempt {attempt - 1}");
+            Assert.True(delay > 0);
+            previous = delay;
+        }
+    }
+
+    // Four banners about one problem is worse than one, and the retry is likely to fix it - so only the
+    // attempt that gives up is allowed to speak.
+    [Fact]
+    public void Only_the_attempt_that_gives_up_reports()
+    {
+        for (int attempt = 1; attempt < HookConnect.MaxAttempts; attempt++)
+            Assert.False(HookConnect.ShouldReport(attempt), $"attempt {attempt} should stay quiet");
+        Assert.True(HookConnect.ShouldReport(HookConnect.MaxAttempts));
+    }
+
+    // A failure must never write a mark: the mark is what stops the NEXT launch from trying, and the whole
+    // point of retrying is that a machine which failed today can succeed tomorrow.
+    [Fact]
+    public void A_failure_writes_no_mark_so_the_next_launch_tries_again()
+    {
+        Assert.Null(HookConnect.MarkFor(installed: false));
+        Assert.Equal(HookMarks.Done, HookConnect.MarkFor(installed: true));
+    }
 }

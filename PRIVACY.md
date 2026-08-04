@@ -64,7 +64,10 @@ Everything lives in `%LOCALAPPDATA%\Halo\`. Deleting that folder resets Halo com
 - `fps`, `shape` — two small files the pill writes so the settings window, which is a separate program,
   can say what the pill measured and which panel was in front. `shape` holds class names and true/false —
   `MediaWidget`, `expanded=0` — never what a panel was showing
-- `reports\` — bug reports you or a crash have produced, waiting for you to decide what to do with them
+- `reports\` — bug reports you or a crash have produced, waiting for you to decide what to do with them,
+  each with a `.sent` file beside it if that one was actually sent
+- `crash-sent` — a short hash of the last few crashes that were sent, so the same fault is not reported
+  again on every relaunch. It holds hashes and timestamps, never the text it was made from
 - `*-debug.txt` — local diagnostics
 
 The diagnostics are worth being specific about, because they concern your notifications:

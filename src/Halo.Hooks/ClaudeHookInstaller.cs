@@ -157,7 +157,7 @@ internal static class ClaudeHookInstaller
         Directory.CreateDirectory(directory);
 
         if (createBackup && File.Exists(settingsPath))
-            File.Copy(settingsPath, settingsPath + ".halo-bak", overwrite: true);
+            Backup(settingsPath);
 
         var temporaryPath = settingsPath + ".tmp";
         try
@@ -170,5 +170,21 @@ internal static class ClaudeHookInstaller
         {
             try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
         }
+    }
+
+    internal static void Backup(string settingsPath)
+    {
+        string backupPath = settingsPath + ".halo-bak";
+        try
+        {
+            if (File.Exists(backupPath))
+            {
+                var attributes = File.GetAttributes(backupPath);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(backupPath, attributes & ~FileAttributes.ReadOnly);
+            }
+        }
+        catch { }
+        File.Copy(settingsPath, backupPath, overwrite: true);
     }
 }

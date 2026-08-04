@@ -54,8 +54,9 @@ internal static class BannerGate
 
     private static bool SeedKnownApps()
     {
-        bool changed = false;
         int seeded = 0;
+
+        var edits = new List<BannerEdit>();
         try
         {
             using var root = Registry.CurrentUser.OpenSubKey(SettingsPath);
@@ -67,14 +68,19 @@ internal static class BannerGate
                     if (_orig.ContainsKey(aumid)) continue;
                     try { using var k = root.OpenSubKey(aumid); _orig[aumid] = k?.GetValue("ShowBanner") as int?; }
                     catch { _orig[aumid] = null; }
+
                     AppendState(aumid, _orig[aumid]);
-                    if (WriteZero(aumid)) { changed = true; seeded++; }
+                    var app = ZeroEdits(aumid);
+                    if (app.Count > 0) { edits.AddRange(app); seeded++; }
                 }
             }
         }
         catch (Exception ex) { Log("seed failed: " + ex.Message); }
-        if (seeded > 0) Log($"seeded {seeded} already-known app(s) from the registry");
-        return changed;
+
+        if (edits.Count == 0) return false;
+        int ok = BannerWriter.Commit(edits);
+        Log($"seeded {seeded} already-known app(s) from the registry ({ok}/{edits.Count} verified)");
+        return ok > 0;
     }
 
     private static IEnumerable<string> Walk(RegistryKey root, string prefix, int depth)
@@ -121,17 +127,27 @@ internal static class BannerGate
     }
 
     private static readonly string[] SilenceKeys = { "ShowBanner", "Sound", "AllowUrgentNotifications" };
+
+    private static List<BannerEdit> ZeroEdits(string aumid)
+    {
+        var edits = new List<BannerEdit>();
+        foreach (var name in SilenceKeys)
+            if (BannerApply.Read(aumid, name) != 0) edits.Add(new BannerEdit(aumid, name, 0));
+        return edits;
+    }
+
     private static bool WriteZero(string aumid)
     {
         try
         {
-            using var k = Registry.CurrentUser.CreateSubKey(SettingsPath + "\\" + aumid, writable: true);
-            if (k == null) return false;
-            bool changed = false;
-            foreach (var name in SilenceKeys)
-                if ((k.GetValue(name) as int?) != 0) { k.SetValue(name, 0, RegistryValueKind.DWord); changed = true; }
-            if (changed) Log($"silenced (banner+sound+urgent) → {aumid}");
-            return changed;
+            var edits = ZeroEdits(aumid);
+            if (edits.Count == 0) return false;
+
+            int ok = BannerWriter.Commit(edits);
+            if (ok == edits.Count) { Log($"silenced (banner+sound+urgent) -> {aumid}"); return true; }
+
+            Log($"suppress {aumid}: only {ok}/{edits.Count} verified");
+            return ok > 0;
         }
         catch (Exception ex) { Log($"suppress {aumid} failed: {ex.Message}"); return false; }
     }
@@ -143,34 +159,24 @@ internal static class BannerGate
     {
         try
         {
-            using var k = Registry.CurrentUser.CreateSubKey(SettingsPath, writable: true);
-            if (k == null) return false;
-            var now = k.GetValue(GlobalSoundValue) as int?;
+
+            var now = BannerApply.Read("", GlobalSoundValue);
             if (now == 0) return false;
+
             if (!_orig.ContainsKey(GlobalKey))
             {
                 _orig[GlobalKey] = now;
                 AppendState(GlobalKey, now);
             }
-            k.SetValue(GlobalSoundValue, 0, RegistryValueKind.DWord);
+            if (BannerWriter.Commit([new BannerEdit("", GlobalSoundValue, 0)]) != 1)
+            {
+                Log("global sound off did not verify");
+                return false;
+            }
             Log($"silenced global notification sound (was {now?.ToString() ?? "unset"})");
             return true;
         }
         catch (Exception ex) { Log("global sound off failed: " + ex.Message); return false; }
-    }
-
-    private static void RestoreGlobalSound()
-    {
-        if (!_orig.TryGetValue(GlobalKey, out var prior)) return;
-        try
-        {
-            using var k = Registry.CurrentUser.OpenSubKey(SettingsPath, writable: true);
-            if (k == null) return;
-            if (prior is int p) k.SetValue(GlobalSoundValue, p, RegistryValueKind.DWord);
-            else k.DeleteValue(GlobalSoundValue, throwOnMissingValue: false);
-            Log("restored global notification sound");
-        }
-        catch { }
     }
 
     private static void ScheduleApply()
@@ -221,23 +227,21 @@ internal static class BannerGate
     {
         lock (_lock)
         {
-            RestoreGlobalSound();
+
+            var edits = new List<BannerEdit>();
+
+            if (_orig.TryGetValue(GlobalKey, out var globalPrior))
+                edits.Add(new BannerEdit("", GlobalSoundValue, globalPrior));
             foreach (var (aumid, prior) in _orig)
             {
                 if (aumid == GlobalKey) continue;
-                try
-                {
-                    using var k = Registry.CurrentUser.OpenSubKey(SettingsPath + "\\" + aumid, writable: true);
-                    if (k == null) continue;
-                    if (prior is int p) k.SetValue("ShowBanner", p, RegistryValueKind.DWord);
-                    else k.DeleteValue("ShowBanner", throwOnMissingValue: false);
+                edits.Add(new BannerEdit(aumid, "ShowBanner", prior));
 
-                    k.DeleteValue("Sound", throwOnMissingValue: false);
-                    k.DeleteValue("AllowUrgentNotifications", throwOnMissingValue: false);
-                }
-                catch { }
+                edits.Add(new BannerEdit(aumid, "Sound", null));
+                edits.Add(new BannerEdit(aumid, "AllowUrgentNotifications", null));
             }
-            Log("restored native banners");
+            int ok = BannerWriter.Commit(edits);
+            Log($"restored native banners ({ok}/{edits.Count} verified)");
         }
     }
 
@@ -266,9 +270,14 @@ internal static class BannerGate
         catch (Exception ex) { Log("load state failed: " + ex.Message); }
     }
 
-    private static void AppendState(string aumid, int? orig)
+    private static void AppendState(string aumid, int? orig) => AppendState([Line(aumid, orig)]);
+
+    private static string Line(string aumid, int? orig) => $"{aumid}\t{orig?.ToString() ?? ""}";
+
+    private static void AppendState(IReadOnlyList<string> lines)
     {
-        try { Directory.CreateDirectory(HaloDir); File.AppendAllText(StatePath, $"{aumid}\t{orig?.ToString() ?? ""}\r\n"); }
+        if (lines.Count == 0) return;
+        try { Directory.CreateDirectory(HaloDir); File.AppendAllLines(StatePath, lines); }
         catch { }
     }
 }

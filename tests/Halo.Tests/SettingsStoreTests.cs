@@ -1,6 +1,8 @@
+extern alias settingsasm;
 using System;
 using System.IO;
 using Halo.Settings;
+using settingsasm::Halo.Settings;
 using Xunit;
 
 namespace Halo.Tests;

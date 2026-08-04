@@ -63,6 +63,7 @@ internal static class Catalog
                     RowKind.Status, "", []),
             ]),
             new("STARTUP", "\uE7E8", [
+
                 Toggle("general.startup", "Start with Windows", "Launch Halo after you sign in"),
                 Toggle("general.fullscreen", "Stay visible over fullscreen", "Keep the pill above games and video", true),
             ]),
@@ -109,6 +110,16 @@ internal static class Catalog
                 Toggle("feature.codex", "Codex", "Codex Desktop and CLI sessions"),
                 Toggle("feature.genericAgents", "Other agents", "Any tool writing ~/.halo/agents"),
             ]),
+
+            new("CONNECTION", "\uE703", [
+
+                new("hooks.claude", "Claude Code hooks",
+                    "Halo's hooks in ~/.claude/settings.json, which is what makes sessions appear",
+                    RowKind.Status, "", [], "Disconnect"),
+                new("hooks.codex", "Codex hooks",
+                    "Halo's hooks in ~/.codex/hooks.json, which is what makes sessions appear",
+                    RowKind.Status, "", [], "Disconnect"),
+            ]),
             new("QUESTIONS", "\uE9CE", [
                 Toggle("claude.ask", "Answer from the pill",
                     "Mirror Claude's question box and answer it by clicking a row"),
@@ -144,8 +155,19 @@ internal static class Catalog
             new("PERMISSIONS", "\uE890", [
                 new("access.notifications", "Notification access", "Required to mirror Windows toasts",
                     RowKind.Status, "", [], "Open settings"),
-                new("access.startup", "Startup entry", "The scheduled task that launches Halo when you sign in",
-                    RowKind.Status, "", [], "Open Task Scheduler"),
+
+                new("access.startup", "Startup entry",
+                    Halo.Interop.AppModel.IsPackaged
+                        ? "Windows decides whether Halo starts when you sign in"
+                        : "The scheduled task that launches Halo when you sign in",
+                    RowKind.Status, "", [],
+                    Halo.Interop.AppModel.IsPackaged ? "Open Startup settings" : "Open Task Scheduler"),
+            ]),
+
+            new("REMOVAL", "\uE74D", [
+                new("reset.everything", "Reset everything",
+                    "Put every app's notification banner back, disconnect both agents, and delete Halo's stored state",
+                    RowKind.Status, "", [], "Reset"),
             ]),
         ]),
         new(PageId.DocsAbout, "Docs & About", "Where things are written down",

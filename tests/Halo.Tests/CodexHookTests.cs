@@ -63,7 +63,7 @@ public sealed class CodexHookTests
         Directory.CreateDirectory(Path.GetDirectoryName(installed)!);
         CopyHookHost(Path.GetDirectoryName(installed)!);
 
-        var result = await RunInstaller(root.Path);
+        var result = await RunInstaller(root.Path, useInstalled: true);
 
         var settings = JsonNode.Parse(File.ReadAllText(Path.Combine(codexDirectory, "hooks.json")))!.AsObject();
         var command = settings["hooks"]!["SessionStart"]![0]!["hooks"]![0]!["command"]!.GetValue<string>();
@@ -78,6 +78,12 @@ public sealed class CodexHookTests
         var codexDirectory = Path.Combine(root.Path, ".codex");
         Directory.CreateDirectory(codexDirectory);
         var settingsPath = Path.Combine(codexDirectory, "hooks.json");
+        // Staged so the installer has something to point at. Without it the script falls through to
+        // `dotnet publish` against the real src\Halo.Hooks\obj - the same directory the outer test build
+        // is using - and two MSBuilds on one obj is a race, not a test.
+        var installed = Path.Combine(root.Path, "AppData", "Local", "Programs", "Halo", "Halo.Hooks.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(installed)!);
+        CopyHookHost(Path.GetDirectoryName(installed)!);
         const string existing = """
             {
               "hooks": {
@@ -92,7 +98,7 @@ public sealed class CodexHookTests
             """;
         File.WriteAllText(settingsPath, existing);
 
-        var result = await RunInstaller(root.Path);
+        var result = await RunInstaller(root.Path, useInstalled: true);
 
         var settings = JsonNode.Parse(File.ReadAllText(settingsPath))!.AsObject();
         var commands = settings["hooks"]!["SessionStart"]!.AsArray()
@@ -258,12 +264,16 @@ public sealed class CodexHookTests
     }
 
 #if HALO_PRIVATE_ASSETS
-    private static async Task<ProcessResult> RunInstaller(string userProfile)
+    private static async Task<ProcessResult> RunInstaller(string userProfile, bool useInstalled = false)
     {
         var repository = FindRepositoryRoot();
         var script = Path.Combine(repository, "hooks", "install-codex-hooks.ps1");
+        // -UseInstalled is now opt-in: by default the script publishes from source, because publishing is
+        // what it is FOR and silently reusing an installed copy hands back a stale binary. The tests that
+        // assert the installed binary is preferred therefore have to ask for it.
         var start = new ProcessStartInfo("pwsh",
-            $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Repo \"{repository}\"")
+            $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -Repo \"{repository}\""
+            + (useInstalled ? " -UseInstalled" : ""))
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -273,10 +283,14 @@ public sealed class CodexHookTests
         start.Environment["LOCALAPPDATA"] = Path.Combine(userProfile, "AppData", "Local");
 
         using var process = Process.Start(start)!;
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
+        // Both pipes drained at once. Reading stdout to the end and only then stderr deadlocks whenever the
+        // child fills the stderr buffer first - it blocks writing while the parent blocks reading, and the
+        // test hangs until its timeout rather than failing with something readable.
+        var outTask = process.StandardOutput.ReadToEndAsync();
+        var errTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(outTask, errTask);
         await process.WaitForExitAsync();
-        return new ProcessResult(process.ExitCode, output, error);
+        return new ProcessResult(process.ExitCode, outTask.Result, errTask.Result);
     }
 
     private static string FindRepositoryRoot()

@@ -20,4 +20,12 @@
     <Resource Include="..\Halo.App\Assets\halo.ico" Link="halo.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- shared with Halo.App rather than duplicated, like halo.ico above: the startup row has to know
+         whether it is describing a scheduled task or a package-declared one -->
+    <Compile Include="..\Halo.App\Interop\AppModel.cs" Link="AppModel.cs" />
+    <!-- the panel writes "undone" here and the pill reads it; one definition of the format, not two -->
+    <Compile Include="..\Halo.App\ClaudeCode\HookMarks.cs" Link="HookMarks.cs" />
+  </ItemGroup>
+
 </Project>

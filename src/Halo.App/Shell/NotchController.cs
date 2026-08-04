@@ -712,7 +712,11 @@ internal sealed partial class NotchController
                 { UseShellExecute = false, CreateNoWindow = true };
                 psi.ArgumentList.Add("query-autostart");
                 using var p = System.Diagnostics.Process.Start(psi);
-                if (p == null || !p.WaitForExit(20_000)) return;
+                if (p == null) return;
+
+                if (!p.WaitForExit(20_000)) { try { p.Kill(entireProcessTree: true); } catch { } return; }
+
+                if (p.ExitCode == 3) return;
                 if ((p.ExitCode == 0) != want) Autostart(want);
             }
             catch { }
@@ -735,7 +739,7 @@ internal sealed partial class NotchController
                 psi.ArgumentList.Add(on ? "install-autostart" : "uninstall-autostart");
                 if (on) psi.ArgumentList.Add(Environment.ProcessPath ?? "");
                 using var p = System.Diagnostics.Process.Start(psi);
-                p?.WaitForExit(20_000);
+                if (p != null && !p.WaitForExit(20_000)) { try { p.Kill(entireProcessTree: true); } catch { } }
             }
             catch { }
         });
@@ -873,6 +877,25 @@ internal sealed partial class NotchController
                 case "ram": case "mem": case "memory":
                     QueueLoadNotice("memory", int.TryParse(arg, out var rp) ? rp : 88,
                         () => proc.Length > 0 ? proc : TopRamProcess() ?? "Chrome", null);
+                    break;
+
+                case "hooks": case "hook":
+                    {
+                        bool codex = arg.StartsWith("codex", StringComparison.OrdinalIgnoreCase);
+                        string agent = codex ? "Codex" : "Claude Code";
+                        string path = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                            codex ? ".codex" : ".claude", codex ? "hooks.json" : "settings.json");
+                        bool fail = proc.StartsWith("fail", StringComparison.OrdinalIgnoreCase);
+                        var (napp, ntitle, nbody) = fail
+                            ? Halo.ClaudeCode.HookConnect.Failed(agent, "access denied")
+                            : Halo.ClaudeCode.HookConnect.Notice(agent, path);
+                        _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+                        {
+                            App = napp, Title = ntitle, Body = nbody, Kind = "hooks", Duration = 8,
+                            Icon = fail ? Badges.HookFailed() : Badges.Hooked(),
+                        });
+                    }
                     break;
                 case "clock": case "hour": case "hourly":
                     var t = int.TryParse(arg, out var hr) && hr is >= 0 and <= 23 ? DateTime.Today.AddHours(hr) : DateTime.Now;
@@ -1031,6 +1054,13 @@ internal sealed partial class NotchController
         AdaptFrameRate();
         EaseRings();
         CheckAlerts();
+
+        Halo.ClaudeCode.HookConnect.Tick((app, title, body) => _notifSrc.EnqueueLocal(
+            new Halo.Notifications.NotifItem
+            {
+                App = app, Title = title, Body = body,
+                Kind = "hooks", Duration = 8,
+            }));
         var notifStart = _notif;
         var fg = Win32.GetForegroundWindow();
         DetectAgentCancel(fg);
@@ -2675,6 +2705,9 @@ internal sealed partial class NotchController
         _notifSrc.EnqueueLocal(item);
     }
 
+    private static Halo.Notifications.NotifItem Sample((string App, string Title, string Body) n, Bitmap icon)
+        => new() { App = n.App, Title = n.Title, Body = n.Body, Icon = icon };
+
     internal static Halo.Notifications.NotifItem[] SampleLocalNotices(Bitmap shot) => new[]
     {
         new Halo.Notifications.NotifItem
@@ -2683,6 +2716,14 @@ internal sealed partial class NotchController
             Title = Halo.Notifications.NotifItem.ScreenshotTitle,
             Preview = shot, Icon = Badges.Shot(),
         },
+
+        Sample(Halo.ClaudeCode.HookConnect.Notice("Claude Code",
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".claude", "settings.json")), Badges.Hooked()),
+        Sample(Halo.ClaudeCode.HookConnect.Notice("Codex",
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".codex", "hooks.json")), Badges.Hooked()),
+        Sample(Halo.ClaudeCode.HookConnect.Failed("Claude Code", "access denied"), Badges.HookFailed()),
         new Halo.Notifications.NotifItem { App = "Network", Title = "Bad internet", Icon = Badges.NetSlow() },
         new Halo.Notifications.NotifItem
         {

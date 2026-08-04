@@ -1,4 +1,5 @@
-using Halo.Hooks;
+extern alias hooksasm;
+using hooksasm::Halo.Hooks;
 
 namespace Halo.Tests;
 

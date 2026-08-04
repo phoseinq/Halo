@@ -45,6 +45,14 @@ internal sealed class AudioMeter
         catch { _vol = null; }
     }
 
+    public void Unmute()
+    {
+        DropIfDeviceChanged();
+        if (_vol == null) { TryAcquire(); if (_vol == null) return; }
+        try { _vol!.GetMute(out bool m); if (m) _vol.SetMute(false, ref _ctx); }
+        catch { _vol = null; }
+    }
+
     public void ToggleMute()
     {
         DropIfDeviceChanged();

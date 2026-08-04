@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Halo.Settings;
 
@@ -7,21 +9,122 @@ internal static class Live
 {
     internal enum State { Neutral, Enabled, Attention }
 
-    internal static string Value(Row row) => row.Key switch
+    internal static bool Costly(string key) => key is "hooks.claude" or "hooks.codex" or "access.startup";
+
+    private static readonly object CacheGate = new();
+    private static readonly Dictionary<string, (string Value, long At)> Cache = new(StringComparer.Ordinal);
+    internal const int FreshMs = 3000;
+
+    private static int _generation;
+
+    internal static string? Peek(string key)
+    {
+        lock (CacheGate)
+            return Cache.TryGetValue(key, out var hit) && (_primed || Environment.TickCount64 - hit.At < FreshMs)
+                ? hit.Value : null;
+    }
+
+    internal static void Warm(IEnumerable<string> keys, Action done)
+    {
+        var wanted = keys.Where(Costly).Where(k => Peek(k) is null).Distinct().ToArray();
+        if (wanted.Length == 0) return;
+        int generation;
+        lock (CacheGate) generation = _generation;
+
+        System.Threading.Tasks.Task.Run(async () =>
+        {
+            try
+            {
+                var read = await System.Threading.Tasks.Task.WhenAll(wanted.Select(key =>
+                    System.Threading.Tasks.Task.Run(() => (Key: key, Value: Guarded(key)))));
+
+                long at = Environment.TickCount64;
+                lock (CacheGate)
+                {
+
+                    if (_generation != generation) return;
+                    foreach (var (key, value) in read) Cache[key] = (value, at);
+                }
+                done();
+            }
+
+            catch { }
+        });
+    }
+
+    private static string Guarded(string key)
+    {
+        try { return Read(new Row(key, "", "", RowKind.Status, "", [])); }
+        catch { return "Unavailable"; }
+    }
+
+    internal static void Forget()
+    {
+        lock (CacheGate) { Cache.Clear(); _primed = false; _generation++; }
+    }
+
+    private static bool _primed;
+
+    internal static void Prime(IEnumerable<string> keys)
+    {
+        foreach (var key in keys.Where(Costly).Distinct())
+        {
+            string value = Guarded(key);
+            lock (CacheGate) Cache[key] = (value, Environment.TickCount64);
+        }
+        lock (CacheGate) _primed = true;
+    }
+
+    internal static string Value(Row row)
+    {
+        if (!Costly(row.Key)) return Read(row);
+        if (Peek(row.Key) is string cached) return cached;
+        string value = Read(row);
+        lock (CacheGate) Cache[row.Key] = (value, Environment.TickCount64);
+        return value;
+    }
+
+    private static string Read(Row row) => row.Key switch
     {
 
         "api.token" => Token,
         "about.version" => Version,
         "appearance.fpsMeasured" => Rate,
-        "access.startup" => StartupTask ? "On" : "Missing",
+
+        "access.startup" => StartupAnswer switch
+        {
+            0 => "On",
+            3 => "Turned off in Windows",
+            _ => Halo.Interop.AppModel.IsPackaged ? "Off" : "Missing",
+        },
+
+        "hooks.claude" => HookState("claude"),
+        "hooks.codex" => HookState("codex"),
+
+        "reset.everything" => "Reverses everything",
         "access.notifications" => "Managed by Windows",
         _ => row.Fallback,
     };
 
+    internal const string Checking = "Checking...";
+
+    internal static string ActionLabel(Row row) => row.Key switch
+    {
+        "hooks.claude" or "hooks.codex" => Peek(row.Key) switch
+        {
+            "Connected" => "Disconnect",
+            "Not connected" or "Disconnected" => "Connect",
+            _ => Checking,
+        },
+        _ => row.ActionLabel,
+    };
+
     internal static State Tone(string value) => value.ToLowerInvariant() switch
     {
-        "on" or "allowed" or "watching" => State.Enabled,
+        "on" or "allowed" or "watching" or "connected" => State.Enabled,
         "off" or "missing" or "denied" or "needs access" => State.Attention,
+
+        "disconnected" or "not connected" => State.Neutral,
         _ => State.Neutral,
     };
 
@@ -75,24 +178,34 @@ internal static class Live
         return NotMeasured;
     }
 
-    private static bool StartupTask
-    {
-        get
-        {
-            try
-            {
-                string hooks = Path.Combine(AppContext.BaseDirectory, "Halo.Hooks.exe");
-                if (!File.Exists(hooks)) return false;
-                var psi = new System.Diagnostics.ProcessStartInfo(hooks)
-                { UseShellExecute = false, CreateNoWindow = true };
-                psi.ArgumentList.Add("query-autostart");
-                using var p = System.Diagnostics.Process.Start(psi);
-                if (p == null) return false;
+    internal static bool Connected(string which) => HookState(which, 8000) == "Connected";
 
-                if (!p.WaitForExit(4000)) return false;
-                return p.ExitCode == 0;
-            }
-            catch { return false; }
-        }
+    private static string HookState(string which, int timeoutMs = 4000)
+    {
+        string agent = which == "codex" ? "Codex" : "Claude Code";
+        if (string.Equals(Halo.ClaudeCode.HookMarks.Of(agent), Halo.ClaudeCode.HookMarks.Undone,
+                System.StringComparison.OrdinalIgnoreCase))
+            return "Disconnected";
+        return Hooks("query-" + which + "-hooks", timeoutMs) == 0 ? "Connected" : "Not connected";
     }
+
+    internal static int Hooks(string verb, int timeoutMs = 4000)
+    {
+        try
+        {
+            string exe = Path.Combine(AppContext.BaseDirectory, "Halo.Hooks.exe");
+            if (!File.Exists(exe)) return 2;
+            var psi = new System.Diagnostics.ProcessStartInfo(exe)
+            { UseShellExecute = false, CreateNoWindow = true };
+            psi.ArgumentList.Add(verb);
+            using var p = System.Diagnostics.Process.Start(psi);
+            if (p == null) return 2;
+
+            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(entireProcessTree: true); } catch { } return 2; }
+            return p.ExitCode;
+        }
+        catch { return 2; }
+    }
+
+    private static int StartupAnswer => Hooks("query-autostart");
 }

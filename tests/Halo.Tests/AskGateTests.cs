@@ -1,5 +1,6 @@
+extern alias hooksasm;
 using System.Text.Json.Nodes;
-using Halo.Hooks;
+using hooksasm::Halo.Hooks;
 
 namespace Halo.Tests;
 

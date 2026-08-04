@@ -1,27 +1,33 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Halo.Hooks;
 
-internal static class CodexHookInstaller
+internal static class ClaudeHookInstaller
 {
-    private static readonly (string Event, string Command, string? Matcher)[] ManagedHooks =
+
+    private static readonly (string Event, string Command)[] ManagedHooks =
     [
-        ("SessionStart", "session-start", null),
-        ("UserPromptSubmit", "prompt", null),
-        ("PreToolUse", "tool", null),
-        ("PostToolUse", "tool-done", null),
-        ("PreCompact", "pre-compact", ".*"),
-        ("PostCompact", "post-compact", ".*"),
-        ("Stop", "stop", null),
+        ("SessionStart", "session-start"),
+        ("UserPromptSubmit", "prompt"),
+        ("PreToolUse", "tool"),
+        ("PostToolUse", "tool-done"),
+        ("Notification", "notify"),
+        ("PreCompact", "pre-compact"),
+        ("PostCompact", "post-compact"),
+        ("Stop", "stop"),
+        ("SessionEnd", "session-end"),
     ];
+
+    internal static string DefaultSettingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "settings.json");
 
     internal static void Install(string settingsPath, string hookExePath)
     {
+
         if (!Path.IsPathFullyQualified(hookExePath))
             throw new ArgumentException("The hook executable path must be absolute.", nameof(hookExePath));
 
@@ -32,18 +38,14 @@ internal static class CodexHookInstaller
         foreach (var managed in ManagedHooks)
         {
             var entries = GetEntries(hooks, managed.Event);
-            var handler = new JsonObject
+            entries.Add(new JsonObject
             {
-                ["type"] = "command",
-                ["command"] = $"\"{hookExePath}\" codex {managed.Command}",
-            };
-            var entry = new JsonObject
-            {
-                ["hooks"] = new JsonArray(handler),
-            };
-            if (managed.Matcher is not null)
-                entry["matcher"] = managed.Matcher;
-            entries.Add(entry);
+                ["hooks"] = new JsonArray(new JsonObject
+                {
+                    ["type"] = "command",
+                    ["command"] = $"\"{hookExePath}\" {managed.Command}",
+                }),
+            });
         }
 
         Save(settingsPath, settings);
@@ -57,7 +59,7 @@ internal static class CodexHookInstaller
         if (settings["hooks"] is JsonObject hooks)
             RemoveManagedHandlers(hooks);
         else if (settings["hooks"] is not null)
-            throw new JsonException("The Codex hooks property must be an object.");
+            throw new JsonException("The Claude hooks property must be an object.");
 
         Save(settingsPath, settings, createBackup: false);
     }
@@ -74,6 +76,7 @@ internal static class CodexHookInstaller
                         h is JsonObject hj && hj["command"] is JsonValue v &&
                         v.TryGetValue<string>(out var c) && IsManagedCommand(c))));
         }
+
         catch { return false; }
     }
 
@@ -81,14 +84,14 @@ internal static class CodexHookInstaller
     {
         if (!File.Exists(settingsPath)) return new JsonObject();
         return JsonNode.Parse(File.ReadAllText(settingsPath)) as JsonObject
-            ?? throw new JsonException("The Codex hook settings root must be an object.");
+            ?? throw new JsonException("The Claude hook settings root must be an object.");
     }
 
     private static JsonObject GetHooks(JsonObject settings)
     {
         if (settings["hooks"] is JsonObject hooks) return hooks;
         if (settings["hooks"] is not null)
-            throw new JsonException("The Codex hooks property must be an object.");
+            throw new JsonException("The Claude hooks property must be an object.");
 
         hooks = new JsonObject();
         settings["hooks"] = hooks;
@@ -99,7 +102,7 @@ internal static class CodexHookInstaller
     {
         if (hooks[eventName] is JsonArray entries) return entries;
         if (hooks[eventName] is not null)
-            throw new JsonException($"The Codex hook event '{eventName}' must be an array.");
+            throw new JsonException($"The Claude hook event '{eventName}' must be an array.");
 
         entries = new JsonArray();
         hooks[eventName] = entries;
@@ -112,7 +115,7 @@ internal static class CodexHookInstaller
         {
             if (hooks[managed.Event] is null) continue;
             if (hooks[managed.Event] is not JsonArray entries)
-                throw new JsonException($"The Codex hook event '{managed.Event}' must be an array.");
+                throw new JsonException($"The Claude hook event '{managed.Event}' must be an array.");
 
             for (var entryIndex = entries.Count - 1; entryIndex >= 0; entryIndex--)
             {
@@ -141,7 +144,7 @@ internal static class CodexHookInstaller
         if (executableEnd < 0) return false;
 
         var tail = command[(executableEnd + "Halo.Hooks.exe".Length)..].TrimStart('"', ' ', '\t');
-        if (tail.StartsWith("codex ", StringComparison.OrdinalIgnoreCase)) return true;
+        if (tail.StartsWith("codex ", StringComparison.OrdinalIgnoreCase)) return false;
         return ManagedHooks.Any(managed =>
             tail.Equals(managed.Command, StringComparison.OrdinalIgnoreCase));
     }
@@ -159,15 +162,13 @@ internal static class CodexHookInstaller
         var temporaryPath = settingsPath + ".tmp";
         try
         {
-            File.WriteAllText(temporaryPath, settings.ToJsonString(new JsonSerializerOptions
-            {
-                WriteIndented = true,
-            }), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.WriteAllText(temporaryPath,
+                settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             File.Move(temporaryPath, settingsPath, overwrite: true);
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch { }
+            try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
         }
     }
 }

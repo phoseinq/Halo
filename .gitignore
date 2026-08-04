@@ -10,3 +10,8 @@ publish/
 dist/
 .claude/settings.local.json
 .serena/logs/
+
+# Store logo set + the sheet used to eyeball it: pure derivatives of installer/halo.png that
+# installer/msix/make-assets.ps1 regenerates, so checking them in is a second copy of the artwork to drift.
+installer/msix/Assets/
+installer/msix/contact-sheet.png

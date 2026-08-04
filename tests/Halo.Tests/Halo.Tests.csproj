@@ -26,9 +26,24 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Halo.App is the canonical copy of the two shared files: AppModel.cs is linked into all three exes
+         and HookMarks.cs into two, so with all three referenced plainly, naming either type here is CS0433
+         "exists in both" - which is exactly what happened the first time a test tried to write
+         HookMarks.Done. It also meant every packaged branch was untestable, since AppModel is the thing
+         those branches ask.
+
+         Aliasing the two duplicating assemblies takes their copies out of the global namespace, so the
+         unqualified name resolves to Halo.App's - the file the others link. It costs one `extern alias`
+         line in the three test files that name a Halo.Hooks type; nothing in src changes, which is the
+         reason to prefer it over a fourth shared assembly. That would have put another DLL beside the
+         deliberately tiny hooks exe and quietly broken the documented four-file hook quick-deploy. -->
     <ProjectReference Include="..\..\src\Halo.App\Halo.App.csproj" />
-    <ProjectReference Include="..\..\src\Halo.Hooks\Halo.Hooks.csproj" />
-    <ProjectReference Include="..\..\src\Halo.Settings\Halo.Settings.csproj" />
+    <ProjectReference Include="..\..\src\Halo.Hooks\Halo.Hooks.csproj">
+      <Aliases>hooksasm</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Halo.Settings\Halo.Settings.csproj">
+      <Aliases>settingsasm</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

@@ -12,6 +12,18 @@ internal static class Program
     private static void Main(string[] args)
     {
 
+        if (args.Length >= 1 && args[0] == "--banner-apply")
+        {
+            try
+            {
+                var lines = new System.Collections.Generic.List<string>();
+                string? line;
+                while ((line = Console.In.ReadLine()) is not null) lines.Add(line);
+                Console.WriteLine(Halo.Notifications.BannerApply.Apply(Halo.Notifications.BannerBatch.Parse(lines)));
+            }
+            catch (Exception e) { Console.Error.WriteLine("banner-apply failed: " + e.Message); }
+            return;
+        }
         if (args.Length >= 1 && args[0] == "--restore-notifications") { Halo.Notifications.BannerGate.Uninstall(); return; }
 
         if (args.Length >= 2 && args[0] == "--report-new") { NewReport(args[1]); return; }
@@ -51,6 +63,8 @@ internal static class Program
         if (args.Length >= 2 && args[0] == "--render-cue") { RenderCue(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-pin") { RenderPin(args[1]); return; }
+
+        if (args.Length >= 2 && args[0] == "--render-haloask") { RenderHaloAsk(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-vol") { RenderVol(args[1]); return; }
 
@@ -186,6 +200,58 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "--cancel-download") { CancelDownload(); return; }
 
         if (args.Length >= 2 && args[0] == "--probe-icon") { ProbeIcon(args[1]); return; }
+
+        if (args.Length >= 1 && args[0] == "--probe-package")
+        {
+            Console.WriteLine($"packaged : {Halo.Interop.AppModel.IsPackaged}");
+            Console.WriteLine($"identity : {Halo.Interop.AppModel.PackageFullName ?? "(none - ordinary install)"}");
+            return;
+        }
+
+        if (args.Length >= 1 && args[0] == "--probe-volume")
+        {
+            var meter = new Halo.Widgets.AudioMeter();
+            bool wasMuted = meter.Muted();
+            float wasLevel = meter.Volume();
+            Console.WriteLine($"before   : level {wasLevel:F3}, muted {wasMuted}");
+
+            if (wasLevel <= 0f)
+            {
+                Console.WriteLine("no endpoint, or the level read failed - refusing to touch it");
+                return;
+            }
+            try
+            {
+                if (!wasMuted) meter.ToggleMute();
+                Console.WriteLine($"muted    : level {meter.Volume():F3}, muted {meter.Muted()}");
+                float wanted = wasLevel > 0.5f ? 0.10f : 0.90f;
+                meter.SetVolume(wanted);
+                System.Threading.Thread.Sleep(150);
+                float now = meter.Volume();
+                Console.WriteLine($"wrote {wanted:F2} while muted -> reads back {now:F3}");
+                Console.WriteLine(Math.Abs(now - wanted) < 0.01f
+                    ? "verdict  : the write LANDS while muted - level and mute are independent"
+                    : "verdict  : the write was IGNORED while muted");
+            }
+            finally
+            {
+                meter.SetVolume(wasLevel);
+                if (!wasMuted) meter.Unmute();
+                Console.WriteLine($"restored : level {meter.Volume():F3}, muted {meter.Muted()}");
+            }
+            return;
+        }
+        if (args.Length >= 1 && args[0] == "--probe-banner")
+        {
+            Environment.SetEnvironmentVariable("HALO_BANNER_ROOT", @"Software\Halo\ProbeBannerRoot");
+            var edit = new Halo.Notifications.BannerEdit("probe.app", "ShowBanner", 0);
+            int ok = Halo.Notifications.BannerWriter.Commit([edit]);
+            Console.WriteLine($"packaged : {Halo.Interop.AppModel.IsPackaged}");
+            Console.WriteLine($"route    : {(Halo.Interop.AppModel.IsPackaged ? "out-of-package child" : "direct")}");
+            Console.WriteLine($"verified : {ok}/1");
+            Console.WriteLine($"readback : {Halo.Notifications.BannerApply.Read("probe.app", "ShowBanner")?.ToString() ?? "(nothing)"}");
+            return;
+        }
 
         if (args.Length >= 1 && args[0] == "--probe-bt") { ProbeBt(); return; }
 
@@ -666,6 +732,59 @@ internal static class Program
             Cell(500, false, 1f, "mid-hold", hold: 1f);
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    private static void RenderHaloAsk(string outPath)
+    {
+        (string title, string body, string yes, string no, int hover)[] cases =
+        [
+            ("Connect Claude Code to Halo?",
+             "Halo will add its hooks to your Claude Code settings so live sessions show up in the pill. It edits ~/.claude/settings.json and keeps a backup.",
+             "Connect", "Not now", -1),
+            ("Connect Claude Code to Halo?",
+             "Halo will add its hooks to your Claude Code settings so live sessions show up in the pill. It edits ~/.claude/settings.json and keeps a backup.",
+             "Connect", "Not now", 0),
+            ("Connect Codex to Halo?", "", "Connect", "Not now", 1),
+        ];
+
+        int gap = 26, y = gap;
+        var heights = new int[cases.Length];
+        for (int i = 0; i < cases.Length; i++)
+        {
+            heights[i] = Halo.Widgets.HaloAsk.Height(cases[i].title, cases[i].body);
+            y += heights[i] + gap;
+        }
+
+        using var bmp = new System.Drawing.Bitmap(Halo.Widgets.HaloAsk.W + gap * 2, y);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+
+            using (var bg = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height),
+                System.Drawing.Color.FromArgb(58, 62, 88), System.Drawing.Color.FromArgb(96, 64, 72), 25f))
+                g.FillRectangle(bg, 0, 0, bmp.Width, bmp.Height);
+
+            int top = gap;
+            for (int i = 0; i < cases.Length; i++)
+            {
+                var (title, body, yes, no, hover) = cases[i];
+                int h = heights[i];
+                using var panel = new System.Drawing.Bitmap(Halo.Widgets.HaloAsk.W, h,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var pg = System.Drawing.Graphics.FromImage(panel))
+                {
+                    pg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    using var shape = Halo.Widgets.Fx.PillPath(Halo.Widgets.HaloAsk.W, h, 26f, 0.5f);
+                    using (var fill = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(238, 16, 16, 19)))
+                        pg.FillPath(fill, shape);
+                    Halo.Widgets.HaloAsk.Draw(pg, Halo.Widgets.HaloAsk.W, h, title, body, yes, no, hover, 1f);
+                }
+                g.DrawImage(panel, gap, top);
+                top += h + gap;
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine("wrote " + outPath);
     }
 
     private static void RenderVol(string outPath)

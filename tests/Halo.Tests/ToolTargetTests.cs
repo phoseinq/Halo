@@ -1,3 +1,4 @@
+extern alias hooksasm;
 using Halo.Agents;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -10,7 +11,7 @@ namespace Halo.Tests;
 public class ToolTargetTests
 {
     private static string? Target(string tool, string json)
-        => Halo.Hooks.Program.ToolTarget(tool, Halo.Hooks.Program.AsObject(JsonNode.Parse(json)));
+        => hooksasm::Halo.Hooks.Program.ToolTarget(tool, hooksasm::Halo.Hooks.Program.AsObject(JsonNode.Parse(json)));
 
     // measured live: the field was written but always null, because tool_input arrives as a JSON STRING
     // from some surfaces and `as JsonObject` on that is null
@@ -18,10 +19,10 @@ public class ToolTargetTests
     public void AStringifiedPayloadIsReadTheSameAsAnObject()
     {
         var stringified = JsonValue.Create("""{"file_path":"C:\\repo\\Fx.cs"}""");
-        Assert.Equal("Fx.cs", Halo.Hooks.Program.ToolTarget("Edit",
-            Halo.Hooks.Program.AsObject(stringified)));
-        Assert.Null(Halo.Hooks.Program.AsObject(JsonValue.Create("not json")));
-        Assert.Null(Halo.Hooks.Program.AsObject(null));
+        Assert.Equal("Fx.cs", hooksasm::Halo.Hooks.Program.ToolTarget("Edit",
+            hooksasm::Halo.Hooks.Program.AsObject(stringified)));
+        Assert.Null(hooksasm::Halo.Hooks.Program.AsObject(JsonValue.Create("not json")));
+        Assert.Null(hooksasm::Halo.Hooks.Program.AsObject(null));
     }
 
     [Fact]

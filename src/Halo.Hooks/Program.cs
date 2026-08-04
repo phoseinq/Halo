@@ -20,6 +20,97 @@ internal static class Program
     private static int Main(string[] args)
     {
 
+        if (args.Length > 0 && args[0] == "probe-startup")
+        {
+            try
+            {
+                Console.WriteLine($"packaged : {Halo.Interop.AppModel.IsPackaged}");
+                Console.WriteLine($"identity : {Halo.Interop.AppModel.PackageFullName ?? "(none)"}");
+                Console.WriteLine($"before   : {Autostart.Describe()}");
+                if (args.Length > 1 && args[1] == "enable")
+                {
+                    Autostart.Install(AppContext.BaseDirectory + "Halo.App.exe");
+                    Console.WriteLine($"after    : {Autostart.Describe()}");
+                }
+                else if (args.Length > 1 && args[1] == "disable")
+                {
+                    Autostart.Uninstall();
+                    Console.WriteLine($"after    : {Autostart.Describe()}");
+                }
+                Console.WriteLine($"query    : exit {Autostart.Query()}   (0 on, 2 off and askable, 3 off and not ours)");
+                return 0;
+            }
+            catch (Exception e) { Console.Error.WriteLine("probe-startup failed: " + e.Message); return 1; }
+        }
+
+        if (args.Length > 0 && args[0] == "probe-banner")
+        {
+            try
+            {
+                string app = Path.Combine(AppContext.BaseDirectory, "Halo.App.exe");
+                if (!File.Exists(app)) { Console.Error.WriteLine("Halo.App.exe not beside me: " + app); return 1; }
+                var psi = new System.Diagnostics.ProcessStartInfo(app)
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+                psi.ArgumentList.Add("--probe-banner");
+                using var child = System.Diagnostics.Process.Start(psi);
+                if (child == null) { Console.Error.WriteLine("child did not start"); return 1; }
+                Console.Write(child.StandardOutput.ReadToEnd());
+                child.WaitForExit(60_000);
+                return 0;
+            }
+            catch (Exception e) { Console.Error.WriteLine("probe-banner failed: " + e.Message); return 1; }
+        }
+
+        if (args.Length > 0 && args[0] == "probe-registry-out")
+        {
+            try
+            {
+                string outDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "outproc");
+                Directory.CreateDirectory(outDir);
+
+                string src = AppContext.BaseDirectory;
+                foreach (var f in Directory.GetFiles(src))
+                {
+                    try { File.Copy(f, Path.Combine(outDir, Path.GetFileName(f)), overwrite: true); } catch { }
+                }
+                string copy = Path.Combine(outDir, "Halo.Hooks.exe");
+                Console.WriteLine($"parent packaged : {Halo.Interop.AppModel.IsPackaged}");
+                Console.WriteLine($"child exe       : {copy}");
+                var psi = new System.Diagnostics.ProcessStartInfo(copy)
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+                psi.ArgumentList.Add("probe-registry");
+                psi.ArgumentList.Add("outproc");
+                using var child = System.Diagnostics.Process.Start(psi);
+                if (child == null) { Console.Error.WriteLine("child did not start"); return 1; }
+                Console.WriteLine("--- child says ---");
+                Console.WriteLine(child.StandardOutput.ReadToEnd().TrimEnd());
+                child.WaitForExit(20_000);
+                return 0;
+            }
+            catch (Exception e) { Console.Error.WriteLine("probe failed: " + e.Message); return 1; }
+        }
+
+        if (args.Length > 0 && args[0] == "probe-registry")
+        {
+            const string key = @"Software\Halo\PackagingProbe";
+            string name = args.Length > 1 ? args[1] : "writtenAt";
+            string stamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            Console.WriteLine($"packaged : {Halo.Interop.AppModel.IsPackaged}");
+            Console.WriteLine($"identity : {Halo.Interop.AppModel.PackageFullName ?? "(none)"}");
+            try
+            {
+                using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key);
+                k.SetValue(name, stamp);
+                Console.WriteLine($@"wrote    : HKCU\{key}\{name} = {stamp}");
+                Console.WriteLine($@"readback : {Microsoft.Win32.Registry.GetValue($@"HKEY_CURRENT_USER\{key}", name, null) ?? "(nothing)"}");
+                Console.WriteLine("now read the same value from a shell outside the package: if it is there,");
+                Console.WriteLine("the write was NOT virtualized.");
+                return 0;
+            }
+            catch (Exception e) { Console.Error.WriteLine("probe failed: " + e.Message); return 1; }
+        }
+
         if (args.Length > 0 && args[0] is "install-autostart" or "uninstall-autostart" or "query-autostart")
         {
             try
@@ -34,7 +125,8 @@ internal static class Program
                         Autostart.Uninstall();
                         break;
                     default:
-                        return Autostart.IsInstalled() ? 0 : 2;
+
+                        return Autostart.Query();
                 }
                 return 0;
             }
@@ -45,7 +137,35 @@ internal static class Program
             }
         }
 
-        if (args.Length > 0 && args[0] is "install-codex-hooks" or "uninstall-codex-hooks")
+        if (args.Length > 0 && args[0] is "install-claude-hooks" or "uninstall-claude-hooks" or "query-claude-hooks")
+        {
+            try
+            {
+                var settingsPath = Environment.GetEnvironmentVariable("HALO_CLAUDE_SETTINGS_PATH");
+                if (string.IsNullOrWhiteSpace(settingsPath))
+                    settingsPath = ClaudeHookInstaller.DefaultSettingsPath;
+
+                switch (args[0])
+                {
+                    case "install-claude-hooks":
+                        ClaudeHookInstaller.Install(settingsPath, args.Length >= 2 ? args[1] : OwnHookPath());
+                        break;
+                    case "uninstall-claude-hooks":
+                        ClaudeHookInstaller.Uninstall(settingsPath);
+                        break;
+                    default:
+                        return ClaudeHookInstaller.IsInstalled(settingsPath) ? 0 : 2;
+                }
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error.Message);
+                return 1;
+            }
+        }
+
+        if (args.Length > 0 && args[0] is "install-codex-hooks" or "uninstall-codex-hooks" or "query-codex-hooks")
         {
             try
             {
@@ -55,13 +175,16 @@ internal static class Program
 
                 if (args[0] == "install-codex-hooks")
                 {
-                    if (args.Length != 2)
-                        throw new ArgumentException("install-codex-hooks requires an executable path.");
-                    CodexHookInstaller.Install(settingsPath, args[1]);
+                    CodexHookInstaller.Install(settingsPath, args.Length >= 2 ? args[1] : OwnHookPath());
+                }
+                else if (args[0] == "uninstall-codex-hooks")
+                {
+                    CodexHookInstaller.Uninstall(settingsPath);
                 }
                 else
                 {
-                    CodexHookInstaller.Uninstall(settingsPath);
+
+                    return CodexHookInstaller.IsInstalled(settingsPath) ? 0 : 2;
                 }
                 return 0;
             }
@@ -70,6 +193,12 @@ internal static class Program
                 Console.Error.WriteLine(error.Message);
                 return 1;
             }
+        }
+
+        if (args.Length > 0 && args[0].StartsWith("query-", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine($"unknown query: {args[0]}");
+            return 4;
         }
 
         try
@@ -211,6 +340,22 @@ internal static class Program
         {
             return 0;
         }
+    }
+
+    private static string OwnHookPath()
+    {
+        try
+        {
+            if (Halo.Interop.AppModel.IsPackaged)
+            {
+                string stub = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "WindowsApps", "Halo.Hooks.exe");
+                if (File.Exists(stub)) return stub;
+            }
+        }
+        catch { }
+        return Path.Combine(AppContext.BaseDirectory, "Halo.Hooks.exe");
     }
 
     private static JsonObject? ReadInput()

@@ -1,11 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <!-- 19041 rather than a bare net9.0-windows: the packaged build's autostart IS a WinRT call
+         (Windows.ApplicationModel.StartupTask), and this exe is the one place that owns what "start with
+         Windows" means. The projection assembly is already beside this exe - all three publish into one
+         folder and Halo.App has needed it since the notification listener - so this costs no extra file,
+         and nothing on the hot hook path (session-start, tool, tool-done) touches a WinRT type. -->
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>Halo.Hooks</RootNamespace>
     <AssemblyName>Halo.Hooks</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- shared with Halo.App rather than duplicated: three independent exes, one answer to "am I packaged" -->
+    <Compile Include="..\Halo.App\Interop\AppModel.cs" Link="AppModel.cs" />
+  </ItemGroup>
+
 </Project>

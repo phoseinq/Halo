@@ -215,6 +215,16 @@ public partial class MainWindow : Window
             ContentPanel.Children.Add(Heading(section, ContentPanel.Children.Count == 0 ? 3 : 14));
             ContentPanel.Children.Add(BuildSection(section));
         }
+
+        Live.Warm(page.Sections.SelectMany(s => s.Rows).Select(r => r.Key),
+            () => Dispatcher.InvokeAsync(() =>
+            {
+                if (_page != id) return;
+                double offset = DetailScroll.VerticalOffset;
+                ShowPage(id);
+                DetailScroll.UpdateLayout();
+                DetailScroll.ScrollToVerticalOffset(offset);
+            }));
     }
 
     private FrameworkElement Heading(Section section, double top)
@@ -567,13 +577,33 @@ public partial class MainWindow : Window
         var button = Styled(row, 124);
         button.Content = row.ActionLabel.Length > 0 ? row.ActionLabel : "Open";
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
-        button.Click += (_, _) => Actions.Run(row.Key);
+        button.Click += (_, _) => RunAction(row.Key, button);
         return button;
+    }
+
+    private static bool _actionInFlight;
+
+    private async void RunAction(string key, ButtonBase button)
+    {
+
+        if (_actionInFlight) return;
+        _actionInFlight = true;
+        button.IsEnabled = false;
+        try
+        {
+            if (Actions.NeedsUiThread(key)) Actions.Run(key);
+            else await System.Threading.Tasks.Task.Run(() => Actions.Run(key));
+            Live.Forget();
+            ShowPage(_page);
+        }
+        catch { }
+        finally { _actionInFlight = false; }
     }
 
     private FrameworkElement BuildStatus(Row row)
     {
-        string value = Live.Value(row);
+
+        string value = Live.Costly(row.Key) ? Live.Peek(row.Key) ?? Live.Checking : Live.Value(row);
         var tone = Live.Tone(value) switch
         {
             Live.State.Enabled => Mint,
@@ -596,9 +626,10 @@ public partial class MainWindow : Window
                 Margin = new Thickness(0, 0, 10, 0),
             });
             var open = Styled(row, 126);
-            open.Content = row.ActionLabel;
+            open.Content = Live.ActionLabel(row);
             open.HorizontalContentAlignment = HorizontalAlignment.Center;
-            open.Click += (_, _) => Actions.Run(row.Key);
+            open.IsEnabled = (string)open.Content != Live.Checking;
+            open.Click += (_, _) => RunAction(row.Key, open);
             panel.Children.Add(open);
             return panel;
         }
@@ -636,7 +667,7 @@ public partial class MainWindow : Window
     private Button Styled(Row row, double width) => new()
     {
         Style = (Style)FindResource("Glass"),
-        Width = width,
+        MinWidth = width,
         Height = 38,
         Padding = new Thickness(13, 0, 13, 0),
         ToolTip = row.Label,

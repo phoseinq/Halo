@@ -9,8 +9,41 @@ internal static class Autostart
 {
     internal const string TaskName = "Halo";
 
+    private static bool Packaged => Halo.Interop.AppModel.IsPackaged;
+
+    internal const string TaskId = "HaloStartup";
+
+    private static Windows.ApplicationModel.StartupTask? Task()
+    {
+        try { return Windows.ApplicationModel.StartupTask.GetAsync(TaskId).AsTask().GetAwaiter().GetResult(); }
+        catch { return null; }
+    }
+
+    private static bool Enable()
+    {
+        var task = Task();
+        if (task is null) return false;
+        try
+        {
+            var state = task.State;
+            if (state is Windows.ApplicationModel.StartupTaskState.Enabled
+                      or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy) return true;
+
+            var after = task.RequestEnableAsync().AsTask().GetAwaiter().GetResult();
+            return after is Windows.ApplicationModel.StartupTaskState.Enabled
+                         or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy;
+        }
+        catch { return false; }
+    }
+
     internal static void Install(string exePath)
     {
+        if (Packaged)
+        {
+
+            if (!Enable()) Console.Error.WriteLine("windows did not enable the startup task");
+            return;
+        }
         if (string.IsNullOrWhiteSpace(exePath)) throw new ArgumentException("autostart needs an executable path.");
         string xml = Path.Combine(Path.GetTempPath(), $"halo-autostart-{Guid.NewGuid():n}.xml");
         try
@@ -30,14 +63,46 @@ internal static class Autostart
 
     internal static void Uninstall()
     {
+
+        if (Packaged) { try { Task()?.Disable(); } catch { } }
+
         try { Run("/Delete", "/TN", TaskName, "/F"); } catch { }
         RemoveLegacyShortcut();
     }
 
-    internal static bool IsInstalled()
+    internal const int PackagedAnswer = 3;
+
+    internal static int Query()
     {
-        try { return Run("/Query", "/TN", TaskName) == 0; }
-        catch { return false; }
+        if (Packaged)
+        {
+            var task = Task();
+            if (task is null) return 2;
+            try
+            {
+                return task.State switch
+                {
+                    Windows.ApplicationModel.StartupTaskState.Enabled => 0,
+                    Windows.ApplicationModel.StartupTaskState.EnabledByPolicy => 0,
+
+                    Windows.ApplicationModel.StartupTaskState.DisabledByUser => PackagedAnswer,
+                    Windows.ApplicationModel.StartupTaskState.DisabledByPolicy => PackagedAnswer,
+                    _ => 2,
+                };
+            }
+            catch { return 2; }
+        }
+        try { return Run("/Query", "/TN", TaskName) == 0 ? 0 : 2; }
+        catch { return 2; }
+    }
+
+    internal static string Describe()
+    {
+        if (!Packaged) return "unpackaged (scheduled task: " + (Query() == 0 ? "registered" : "missing") + ")";
+        var task = Task();
+        if (task is null) return "packaged, but no startup task in the manifest (or no identity)";
+        try { return $"{task.State} -> exit {Query()}"; }
+        catch (Exception e) { return "state unreadable: " + e.Message; }
     }
 
     private static void RemoveLegacyShortcut()

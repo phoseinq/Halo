@@ -29,15 +29,16 @@ internal static class AudioSpectrum
     private static readonly float[] _ringL = new float[N * 2], _ringR = new float[N * 2];
     private static int _ringPos;
 
+    private static float _ref;
+
     private static void Loop()
     {
         while (true)
         {
-            try
-            {
-                if (Environment.TickCount64 > _until) { Available = false; Thread.Sleep(300); continue; }
-                Capture();
-            }
+
+            if (Environment.TickCount64 > _until) { Available = false; Thread.Sleep(300); continue; }
+
+            try { Capture(); }
             catch { Available = false; }
             Thread.Sleep(500);
         }
@@ -54,27 +55,32 @@ internal static class AudioSpectrum
         catch { return null; }
     }
 
-    private static void Capture()
+    private static bool Capture()
     {
         var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-        if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return;
+        if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return false;
         if (dev.GetId(out var boundId) != 0) boundId = null;
         var acid = typeof(IAudioClient).GUID;
-        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac) return;
-        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return;
+        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac) return false;
+        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return false;
         try
         {
             int channels = Marshal.ReadInt16(fmtPtr, 2);
             int rate = Marshal.ReadInt32(fmtPtr, 4);
             int bits = Marshal.ReadInt16(fmtPtr, 14);
-            if (bits != 32 || channels < 1 || rate < 8000) return;
+            if (bits != 32 || channels < 1 || rate < 8000) return false;
 
             const uint LOOPBACK = 0x00020000;
-            if (ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero) != 0) return;
+            if (ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero) != 0) return false;
             var ccid = typeof(IAudioCaptureClient).GUID;
-            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc) return;
-            if (ac.Start() != 0) return;
+            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc) return false;
+            if (ac.Start() != 0) return false;
             Available = true;
+
+            Array.Clear(_ringL);
+            Array.Clear(_ringR);
+            _ringPos = 0;
+            lock (_bands) { Array.Clear(_bands); _ref = 0f; }
 
             var win = Hann();
             long nextFft = 0;
@@ -120,6 +126,7 @@ internal static class AudioSpectrum
                 Thread.Sleep(5);
             }
             try { ac.Stop(); } catch { }
+            return true;
         }
         finally { Marshal.FreeCoTaskMem(fmtPtr); Available = false; }
     }
@@ -166,14 +173,19 @@ internal static class AudioSpectrum
             target[BandCount / 2] = Math.Clamp((db + 62f) / 35f, 0f, 1f);
         }
 
-        float max = 0f;
-        for (int b = 0; b < BandCount; b++) if (b != BandCount / 2 && target[b] > max) max = target[b];
-        if (max > 0.04f)
-            for (int b = 0; b < BandCount; b++)
-                if (b != BandCount / 2)
-                    target[b] = MathF.Pow(target[b] / max, 1.6f) * (0.30f + 0.70f * max);
-        if (max <= 0.04f)
-            for (int b = 0; b < BandCount; b++) if (b != BandCount / 2) target[b] = 0f;
+        float peak = 0f;
+        for (int b = 0; b < BandCount; b++) if (b != BandCount / 2 && target[b] > peak) peak = target[b];
+
+        _ref += (peak - _ref) * (peak > _ref ? 0.4f : 0.03f);
+
+        for (int b = 0; b < BandCount; b++)
+        {
+            if (b == BandCount / 2) continue;
+
+            target[b] = _ref > 0.04f
+                ? MathF.Pow(MathF.Min(target[b] / _ref, 1f), 1.6f) * (0.30f + 0.70f * _ref)
+                : 0f;
+        }
 
         for (int b = 0; b < BandCount; b++)
         {

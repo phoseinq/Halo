@@ -578,7 +578,12 @@ internal sealed class MediaWidget : IWidget
         }
     }
 
-    private void SetVol(float f) { _meter.SetVolume(f); Bump(); }
+    private void SetVol(float f)
+    {
+        _meter.SetVolume(f);
+        if (f > 0.0001f) _meter.Unmute();
+        Bump();
+    }
     private void Mute() { _meter.ToggleMute(); Bump(); }
     private void Bump() { lock (_lock) { _version++; } }
 

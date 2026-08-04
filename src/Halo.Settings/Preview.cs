@@ -12,6 +12,8 @@ internal static class Preview
     {
         const int W = 840, H = 640;
 
+        Live.Prime(Catalog.Get(Parse(page)).Sections.SelectMany(s => s.Rows).Select(r => r.Key));
+
         var window = new MainWindow();
         window.Preview(Parse(page), mode);
 

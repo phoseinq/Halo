@@ -180,12 +180,28 @@ public class HookConnectTests
         Assert.True(HookConnect.ShouldReport(HookConnect.MaxAttempts));
     }
 
-    // A failure must never write a mark: the mark is what stops the NEXT launch from trying, and the whole
-    // point of retrying is that a machine which failed today can succeed tomorrow.
+    // A failure must never write a mark: the mark is what records that Halo connected this agent, and the
+    // whole point of retrying is that a machine which failed today can succeed tomorrow.
     [Fact]
     public void A_failure_writes_no_mark_so_the_next_launch_tries_again()
     {
         Assert.Null(HookConnect.MarkFor(installed: false));
         Assert.Equal(HookMarks.Done, HookConnect.MarkFor(installed: true));
+    }
+
+    // "Halo connected this once" must not stop it connecting again. Found on a packaged install reading a
+    // mark the ordinary one had written: the handlers were gone and it refused to put them back, because
+    // the mark said done. Whether they are there NOW is the probe's question, and only the user's explicit
+    // Disconnect - `undone` - is allowed to be permanent.
+    [Fact]
+    public void A_previous_connection_does_not_block_a_missing_one_from_being_restored()
+    {
+        var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
+            agentSeen: () => true, hooksInstalled: () => false);
+        Assert.Equal(HookConnect.Step.Install, step);
+
+        // and the user's no still is
+        Assert.Equal(HookConnect.Step.Wait, HookConnect.Next(busy: false, alreadyTried: false, undone: true,
+            agentSeen: () => true, hooksInstalled: () => false));
     }
 }

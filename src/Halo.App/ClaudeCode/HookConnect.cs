@@ -168,8 +168,7 @@ internal static class HookConnect
                     var step = Next(
                         busy: false,
 
-                        alreadyTried: string.Equals(mark, HookMarks.Done, StringComparison.OrdinalIgnoreCase)
-                                      || IsSettled(agent),
+                        alreadyTried: IsSettled(agent),
                         undone: string.Equals(mark, HookMarks.Undone, StringComparison.OrdinalIgnoreCase),
                         agentSeen: () => { bool up = Running(processes); if (!up) Log($"{agent}: not running"); return up; },
 

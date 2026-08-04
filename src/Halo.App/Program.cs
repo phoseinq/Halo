@@ -64,6 +64,8 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-pin") { RenderPin(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--render-marquee") { RenderMarquee(args[1]); return; }
+
         if (args.Length >= 2 && args[0] == "--render-haloask") { RenderHaloAsk(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-vol") { RenderVol(args[1]); return; }
@@ -331,10 +333,46 @@ internal static class Program
         {
             for (int i = 0; i < 20; i++)
             {
+
                 var b = Halo.Widgets.AudioSpectrum.Bands();
-                Console.WriteLine($"avail={Halo.Widgets.AudioSpectrum.Available} " +
-                    string.Join(" ", Array.ConvertAll(b, v => v.ToString("0.00"))));
+                Console.WriteLine(b == null
+                    ? "avail=False (no bars)"
+                    : "avail=True " + string.Join(" ", Array.ConvertAll(b, v => v.ToString("0.00"))));
                 System.Threading.Thread.Sleep(300);
+            }
+            return;
+        }
+
+        if (args.Length >= 1 && args[0] == "--probe-eqwake")
+        {
+            int gap = args.Length >= 2 && int.TryParse(args[1], out var g) ? g : 7;
+            for (int round = 1; round <= 4; round++)
+            {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                long? firstLive = null;
+                while (clock.ElapsedMilliseconds < 12_000)
+                {
+                    if (Halo.Widgets.AudioSpectrum.Bands() != null) { firstLive = clock.ElapsedMilliseconds; break; }
+                    System.Threading.Thread.Sleep(8);
+                }
+                Console.WriteLine($"round {round}: live after {(firstLive?.ToString() ?? ">12000")} ms");
+                if (firstLive == null) break;
+
+                var warm = System.Diagnostics.Stopwatch.StartNew();
+                while (warm.ElapsedMilliseconds < 1500) { Halo.Widgets.AudioSpectrum.Bands(); System.Threading.Thread.Sleep(8); }
+
+                if (round == 3)
+                {
+                    Console.WriteLine($"  ...{gap}s with KeepWarm (the fix: not drawn, still warm)");
+                    var held = System.Diagnostics.Stopwatch.StartNew();
+                    while (held.ElapsedMilliseconds < gap * 1000)
+                    { Halo.Widgets.AudioSpectrum.KeepWarm(); System.Threading.Thread.Sleep(8); }
+                }
+                else
+                {
+                    Console.WriteLine($"  ...parking for {gap}s (nobody is asking for bars)");
+                    System.Threading.Thread.Sleep(gap * 1000);
+                }
             }
             return;
         }
@@ -357,6 +395,12 @@ internal static class Program
 
         try
         {
+
+            if (args.Length >= 1 && args[0] == "--probe-crash")
+                throw new InvalidOperationException(
+                    "probe-crash: deliberate, raised by the dev hook",
+                    new System.IO.IOException("probe-crash inner: pretend the notch surface was locked"));
+
             Win32.OleInitialize(IntPtr.Zero);
             var notch = new LayeredNotch();
             notch.Show();
@@ -372,9 +416,10 @@ internal static class Program
 
             try
             {
-                Halo.Reports.ReportStore.Write(
-                    Halo.Reports.ReportPayload.Json(Halo.Reports.ReportPayload.Collect("crash", ex, "")),
-                    "crash");
+                string json = Halo.Reports.ReportPayload.Json(
+                    Halo.Reports.ReportPayload.Collect("crash", ex, ""));
+                Halo.Reports.ReportStore.Write(json, "crash");
+                Halo.Reports.Intake.TrySend(json);
             }
             catch { }
             throw;
@@ -703,6 +748,43 @@ internal static class Program
             }
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+    }
+
+    private static void RenderMarquee(string outPath)
+    {
+        const int Rows = 30, W = 320, RowH = 21;
+        const string Title = "The Lord of the Rings: The Fellowship of the Ring (Extended Edition) 2001";
+
+        const string Rtl = "\u0641\u06CC\u0644\u0645 \u0628\u0633\u06CC\u0627\u0631 \u0637\u0648\u0644\u0627\u0646\u06CC \u0628\u0627 \u0646\u0627\u0645 \u062F\u0631\u0627\u0632 \u0628\u0631\u0627\u06CC \u0622\u0632\u0645\u0627\u06CC\u0634 \u0645\u0627\u0631\u06A9\u06CC - \u0641\u06CC\u0644\u0645 \u0628\u0633\u06CC\u0627\u0631 \u0637\u0648\u0644\u0627\u0646\u06CC \u0628\u0627 \u0646\u0627\u0645 \u062F\u0631\u0627\u0632 \u0628\u0631\u0627\u06CC \u0622\u0632\u0645\u0627\u06CC\u0634 \u0645\u0627\u0631\u06A9\u06CC";
+        using var bmp = new System.Drawing.Bitmap(W * 2 + 30, Rows * RowH + 40);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(28, 28, 32));
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var f = new System.Drawing.Font("Segoe UI", 10.5f);
+            using var b = new System.Drawing.SolidBrush(System.Drawing.Color.White);
+            using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 235, 235, 235));
+            using var lf = new System.Drawing.Font("Segoe UI", 9f);
+
+            void Column(float x, string text, string label)
+            {
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(label, lf, lb, x, 6);
+                var m = new Halo.Widgets.Marquee();
+
+                for (int i = 0; i < 40; i++) m.Draw(g, text, f, b, -9999f, -9999f, W, true, 1f / 60f);
+                for (int r = 0; r < Rows; r++)
+                {
+
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                    m.Draw(g, text, f, b, x, 26 + r * RowH, W, true, 1f / 60f);
+                }
+            }
+            Column(10, Title, "LTR, one frame per row");
+            Column(W + 20, Rtl, "RTL, one frame per row");
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine(outPath);
     }
 
     private static void RenderPin(string outPath)

@@ -34,7 +34,8 @@ internal sealed class GenericAgentWidget : IWidget
 
     public string Icon => "";
     public bool IsActive => Live is not null;
-    public IEnumerable<int> OwnerPids => Live is { } st ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+    public IEnumerable<int> OwnerPids => Live is { } st
+        ? new[] { st.Pid, st.ConsolePid, st.HostPid } : Array.Empty<int>();
     public int Version => _store.Version;
     public string GroupKey => Live?.Name?.ToLowerInvariant() ?? "agent";
     public long ActivityRank => Live is { } st

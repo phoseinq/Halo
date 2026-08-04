@@ -14,7 +14,13 @@ internal static class AudioSpectrum
     private static Thread? _thread;
     private static long _until;
 
-    public static float[] Bands()
+    public static float[]? Bands()
+    {
+        KeepWarm();
+        lock (_bands) return Available ? (float[])_bands.Clone() : null;
+    }
+
+        public static void KeepWarm()
     {
         _until = Environment.TickCount64 + 5000;
         if (_thread == null)
@@ -22,7 +28,6 @@ internal static class AudioSpectrum
             _thread = new Thread(Loop) { IsBackground = true, Priority = ThreadPriority.BelowNormal };
             _thread.Start();
         }
-        lock (_bands) return (float[])_bands.Clone();
     }
 
     private const int N = 1024;
@@ -31,15 +36,29 @@ internal static class AudioSpectrum
 
     private static float _ref;
 
+    private const float Attack = 0.4f, Release = 0.03f;
+
+    internal const float RefFloor = 0.04f;
+
+    internal static float Ceiling(float reference) => 0.30f + 0.70f * reference;
+
+    internal static float TrackReference(float reference, float peak)
+        => reference + (peak - reference) * (peak > reference ? Attack : Release);
+
+    internal static float Normalize(float value, float reference)
+        => reference > RefFloor
+            ? MathF.Pow(MathF.Min(value / reference, 1f), 1.6f) * Ceiling(reference)
+            : 0f;
+
     private static void Loop()
     {
         while (true)
         {
 
-            if (Environment.TickCount64 > _until) { Available = false; Thread.Sleep(300); continue; }
+            if (Environment.TickCount64 > _until) { lock (_bands) Available = false; Thread.Sleep(300); continue; }
 
             try { Capture(); }
-            catch { Available = false; }
+            catch { lock (_bands) Available = false; }
             Thread.Sleep(500);
         }
     }
@@ -55,32 +74,32 @@ internal static class AudioSpectrum
         catch { return null; }
     }
 
-    private static bool Capture()
+    private static void Capture()
     {
         var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-        if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return false;
+        if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return;
         if (dev.GetId(out var boundId) != 0) boundId = null;
         var acid = typeof(IAudioClient).GUID;
-        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac) return false;
-        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return false;
+        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac) return;
+        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return;
         try
         {
             int channels = Marshal.ReadInt16(fmtPtr, 2);
             int rate = Marshal.ReadInt32(fmtPtr, 4);
             int bits = Marshal.ReadInt16(fmtPtr, 14);
-            if (bits != 32 || channels < 1 || rate < 8000) return false;
+            if (bits != 32 || channels < 1 || rate < 8000) return;
 
             const uint LOOPBACK = 0x00020000;
-            if (ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero) != 0) return false;
+            if (ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero) != 0) return;
             var ccid = typeof(IAudioCaptureClient).GUID;
-            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc) return false;
-            if (ac.Start() != 0) return false;
-            Available = true;
+            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc) return;
+            if (ac.Start() != 0) return;
 
             Array.Clear(_ringL);
             Array.Clear(_ringR);
             _ringPos = 0;
-            lock (_bands) { Array.Clear(_bands); _ref = 0f; }
+
+            lock (_bands) { Array.Clear(_bands); _ref = 0f; Available = true; }
 
             var win = Hann();
             long nextFft = 0;
@@ -126,9 +145,9 @@ internal static class AudioSpectrum
                 Thread.Sleep(5);
             }
             try { ac.Stop(); } catch { }
-            return true;
+            return;
         }
-        finally { Marshal.FreeCoTaskMem(fmtPtr); Available = false; }
+        finally { Marshal.FreeCoTaskMem(fmtPtr); lock (_bands) Available = false; }
     }
 
     private static float[] Hann()
@@ -175,16 +194,12 @@ internal static class AudioSpectrum
 
         float peak = 0f;
         for (int b = 0; b < BandCount; b++) if (b != BandCount / 2 && target[b] > peak) peak = target[b];
-
-        _ref += (peak - _ref) * (peak > _ref ? 0.4f : 0.03f);
+        _ref = TrackReference(_ref, peak);
 
         for (int b = 0; b < BandCount; b++)
         {
             if (b == BandCount / 2) continue;
-
-            target[b] = _ref > 0.04f
-                ? MathF.Pow(MathF.Min(target[b] / _ref, 1f), 1.6f) * (0.30f + 0.70f * _ref)
-                : 0f;
+            target[b] = Normalize(target[b], _ref);
         }
 
         for (int b = 0; b < BandCount; b++)

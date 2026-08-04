@@ -81,7 +81,10 @@ internal sealed class CodexWidget : IWidget
 
     public long ActivityRank => Current is { } st
         ? AgentActivity.Rank(Shown(st), st.StartedAt, DateTimeOffset.UtcNow) : 0;
-    public IEnumerable<int> OwnerPids => Current is { } st ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+
+    public IEnumerable<int> OwnerPids => Current is { } st
+        ? new[] { st.Pid, st.ConsolePid, st.HostPid } : Array.Empty<int>();
+    public string? RevealProcess => Current?.Source == CodexSurface.Desktop ? "chatgpt" : "codex";
 
     public bool Animating => _appear < 1f || Compacting(Current)
         || (_wasOpen && (WidgetInput.Over || RingsSettling));

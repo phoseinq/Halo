@@ -180,18 +180,11 @@ internal static class Catalog
 
             new("PROBLEMS", "\uE730", [
                 Action("report.problem", "Report a problem",
-                    "Write it, read exactly what it contains, then choose where it goes. Nothing is sent until you press send.",
+                    "Write it, read exactly what it contains, then press send. Crashes report themselves; nothing else leaves without the button.",
                     "Write a report"),
-                new("report.endpoint", "Send reports to",
-                    "An HTTPS address of your own. Leave it empty and reports never touch the network: copy, save to a file, or open a prefilled GitHub issue.",
-                    RowKind.Text, "", []),
-
-                new("report.key", "Endpoint key",
-                    "Only if your endpoint asks for one. Sent as an Authorization header, never inside the report.",
-                    RowKind.Text, "", []),
             ]),
             new("PROJECT", "\uE943", [
-                new("about.repo", "Repository", "github.com/phoseinq/DynamicWin", RowKind.Status, "", [], "Open"),
+                new("about.repo", "Repository", "github.com/phoseinq/Halo", RowKind.Status, "", [], "Open"),
             ]),
         ]),
     ];

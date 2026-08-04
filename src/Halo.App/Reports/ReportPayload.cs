@@ -13,6 +13,10 @@ internal sealed record ReportFacts(
     string Display,
     int Dpi,
     string Runtime,
+    string Locale,
+    int Cpus,
+    int RamMb,
+    int UptimeMin,
     string Primary,
     IReadOnlyList<string> Live,
     bool Expanded,
@@ -21,6 +25,7 @@ internal sealed record ReportFacts(
     string? ExceptionType,
     string? ExceptionMessage,
     IReadOnlyList<string> Stack,
+    IReadOnlyList<string> Inner,
     string Description);
 
 internal static class ReportPayload
@@ -40,6 +45,16 @@ internal static class ReportPayload
             ["dpi"] = f.Dpi,
             ["runtime"] = f.Runtime,
 
+            ["locale"] = f.Locale,
+
+            ["machine"] = new JsonObject
+            {
+                ["cpus"] = f.Cpus,
+                ["ram_mb"] = f.RamMb,
+            },
+
+            ["uptime_min"] = f.UptimeMin,
+
             ["surface"] = new JsonObject
             {
                 ["primary"] = f.Primary,
@@ -51,12 +66,15 @@ internal static class ReportPayload
         };
         if (f.ExceptionType is { Length: > 0 })
         {
-            root["exception"] = new JsonObject
+            var block = new JsonObject
             {
                 ["type"] = f.ExceptionType,
                 ["message"] = f.ExceptionMessage ?? "",
                 ["stack"] = new JsonArray(ArrayOf(f.Stack)),
             };
+
+            if (f.Inner.Count > 0) block["inner"] = new JsonArray(ArrayOf(f.Inner));
+            root["exception"] = block;
         }
 
         root["description"] = f.Description;
@@ -94,6 +112,10 @@ internal static class ReportPayload
             Display: Display,
             Dpi: Dpi,
             Runtime: Runtime,
+            Locale: Locale,
+            Cpus: Cpus,
+            RamMb: RamMb,
+            UptimeMin: UptimeMin,
             Primary: shape.TryGetValue("primary", out var p) ? p : "unknown",
             Live: live,
             Expanded: shape.TryGetValue("expanded", out var e) && e == "1",
@@ -103,7 +125,65 @@ internal static class ReportPayload
 
             ExceptionMessage: ex is null ? null : Scrub.All(ex.Message),
             Stack: StackLines(ex),
+            Inner: InnerChain(ex),
             Description: description);
+    }
+
+    internal static IReadOnlyList<string> InnerChain(Exception? ex)
+    {
+        var chain = new List<string>();
+        try
+        {
+            var inner = ex?.InnerException;
+            while (inner is not null && chain.Count < 5)
+            {
+                chain.Add(inner.GetType().FullName + ": " + Scrub.All(inner.Message));
+                inner = inner.InnerException;
+            }
+        }
+        catch { }
+        return chain;
+    }
+
+    private static string Locale
+    {
+        get
+        {
+            try { return System.Globalization.CultureInfo.CurrentUICulture.Name; }
+            catch { return "unknown"; }
+        }
+    }
+
+    private static int Cpus
+    {
+        get
+        {
+            try { return Environment.ProcessorCount; }
+            catch { return 0; }
+        }
+    }
+
+    private static int RamMb
+    {
+        get
+        {
+
+            try { return (int)(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024)); }
+            catch { return 0; }
+        }
+    }
+
+    private static int UptimeMin
+    {
+        get
+        {
+            try
+            {
+                using var self = System.Diagnostics.Process.GetCurrentProcess();
+                return (int)(DateTime.Now - self.StartTime).TotalMinutes;
+            }
+            catch { return 0; }
+        }
     }
 
     private static string Version

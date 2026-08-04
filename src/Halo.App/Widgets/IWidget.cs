@@ -41,6 +41,8 @@ internal interface IWidget
 
     bool Animating => false;
 
+    void Tick() { }
+
     bool Sprinting => false;
 
     Color? Ring => null;
@@ -52,6 +54,8 @@ internal interface IWidget
     long ActivityRank => 0;
 
     IEnumerable<int> OwnerPids => Array.Empty<int>();
+
+    string? RevealProcess => null;
 
     void DrawContent(Graphics g, int w, int h, float expandFade);
 

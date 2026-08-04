@@ -29,7 +29,15 @@ internal static class Actions
                         bool codex = key == "hooks.codex";
                         string agent = codex ? "Codex" : "Claude Code";
 
-                        bool connected = Live.Connected(codex ? "codex" : "claude");
+                        string? shown = Live.Peek(key);
+
+                        if (shown == Live.Unavailable) break;
+
+                        string reading = Live.HookReading(codex ? "codex" : "claude");
+                        if (reading == Live.Unavailable) break;
+
+                        if (shown is not null && shown != reading) break;
+                        bool connected = reading == "Connected";
 
                         if (connected)
                         {
@@ -75,7 +83,8 @@ internal static class Actions
                             foreach (var name in new[]
                                      {
                                          "offset", "pin", "tray.txt", "notif-seen.txt", "limit-fired",
-                                         "notif-debug.txt", "banner-orig.tsv",
+                                         "notif-debug.txt", "banner-orig.tsv", "tg-debug.txt",
+                                         "marquee-debug.txt", "marquee-debug.on",
                                      })
                             {
                                 try { System.IO.File.Delete(System.IO.Path.Combine(HaloDir, name)); } catch { }
@@ -106,7 +115,7 @@ internal static class Actions
                     if (token.Length > 0) System.Windows.Clipboard.SetText(token);
                     break;
                 case "about.repo":
-                    Open("https://github.com/phoseinq/DynamicWin");
+                    Open("https://github.com/phoseinq/Halo");
                     break;
 
                 case "report.problem":

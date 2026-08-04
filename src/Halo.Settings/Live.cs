@@ -55,7 +55,7 @@ internal static class Live
     private static string Guarded(string key)
     {
         try { return Read(new Row(key, "", "", RowKind.Status, "", [])); }
-        catch { return "Unavailable"; }
+        catch { return Unavailable; }
     }
 
     internal static void Forget()
@@ -95,7 +95,9 @@ internal static class Live
         {
             0 => "On",
             3 => "Turned off in Windows",
-            _ => Halo.Interop.AppModel.IsPackaged ? "Off" : "Missing",
+
+            2 => Halo.Interop.AppModel.IsPackaged ? "Off" : "Missing",
+            _ => Unavailable,
         },
 
         "hooks.claude" => HookState("claude"),
@@ -107,16 +109,21 @@ internal static class Live
     };
 
     internal const string Checking = "Checking...";
+    internal const string Unavailable = "Unavailable";
 
     internal static string ActionLabel(Row row) => row.Key switch
     {
-        "hooks.claude" or "hooks.codex" => Peek(row.Key) switch
-        {
-            "Connected" => "Disconnect",
-            "Not connected" or "Disconnected" => "Connect",
-            _ => Checking,
-        },
+        "hooks.claude" or "hooks.codex" => HookAction(Peek(row.Key)),
         _ => row.ActionLabel,
+    };
+
+    internal static string HookAction(string? reading) => reading switch
+    {
+        "Connected" => "Disconnect",
+        "Not connected" or "Disconnected" => "Connect",
+
+        Unavailable => "Retry",
+        _ => Checking,
     };
 
     internal static State Tone(string value) => value.ToLowerInvariant() switch
@@ -124,7 +131,7 @@ internal static class Live
         "on" or "allowed" or "watching" or "connected" => State.Enabled,
         "off" or "missing" or "denied" or "needs access" => State.Attention,
 
-        "disconnected" or "not connected" => State.Neutral,
+        "disconnected" or "not connected" or "unavailable" => State.Neutral,
         _ => State.Neutral,
     };
 
@@ -178,7 +185,7 @@ internal static class Live
         return NotMeasured;
     }
 
-    internal static bool Connected(string which) => HookState(which, 8000) == "Connected";
+    internal static string HookReading(string which) => HookState(which, 8000);
 
     private static string HookState(string which, int timeoutMs = 4000)
     {
@@ -186,25 +193,29 @@ internal static class Live
         if (string.Equals(Halo.ClaudeCode.HookMarks.Of(agent), Halo.ClaudeCode.HookMarks.Undone,
                 System.StringComparison.OrdinalIgnoreCase))
             return "Disconnected";
-        return Hooks("query-" + which + "-hooks", timeoutMs) == 0 ? "Connected" : "Not connected";
+        int code = Hooks("query-" + which + "-hooks", timeoutMs);
+
+        return code switch { 0 => "Connected", 2 => "Not connected", _ => Unavailable };
     }
+
+    internal const int CouldNotRun = -1;
 
     internal static int Hooks(string verb, int timeoutMs = 4000)
     {
         try
         {
             string exe = Path.Combine(AppContext.BaseDirectory, "Halo.Hooks.exe");
-            if (!File.Exists(exe)) return 2;
+            if (!File.Exists(exe)) return CouldNotRun;
             var psi = new System.Diagnostics.ProcessStartInfo(exe)
             { UseShellExecute = false, CreateNoWindow = true };
             psi.ArgumentList.Add(verb);
             using var p = System.Diagnostics.Process.Start(psi);
-            if (p == null) return 2;
+            if (p == null) return CouldNotRun;
 
-            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(entireProcessTree: true); } catch { } return 2; }
+            if (!p.WaitForExit(timeoutMs)) { try { p.Kill(entireProcessTree: true); } catch { } return CouldNotRun; }
             return p.ExitCode;
         }
-        catch { return 2; }
+        catch { return CouldNotRun; }
     }
 
     private static int StartupAnswer => Hooks("query-autostart");

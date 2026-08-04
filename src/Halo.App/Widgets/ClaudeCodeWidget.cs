@@ -66,7 +66,11 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     public long ActivityRank => Live is { } st
         ? AgentActivity.Rank(Shown(st), ParseTime(st.StartedAt), DateTimeOffset.UtcNow) : 0;
-    public IEnumerable<int> OwnerPids => Live is { } st ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+
+    public IEnumerable<int> OwnerPids => Live is { } st
+        ? new[] { st.Pid, st.ConsolePid, st.HostPid } : Array.Empty<int>();
+
+    public string? RevealProcess => "claude";
 
     public bool Animating => _appear < 1f || Compacting(Live)
         || (_wasOpen && (WidgetInput.Over || RingsSettling));

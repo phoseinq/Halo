@@ -1051,6 +1051,8 @@ internal sealed partial class NotchController
         _dt = _lastFrameAt == 0 ? 0.008f : Math.Clamp((frameNow - _lastFrameAt) / 1000f, 0.001f, 0.05f);
         _lastFrameAt = frameNow;
         PollDisplay();
+
+        foreach (var w in _widgets) { try { w.Tick(); } catch { } }
         AdaptFrameRate();
         EaseRings();
         CheckAlerts();
@@ -1432,7 +1434,9 @@ internal sealed partial class NotchController
 
         bool morphing = next != _progress || _notifT != prevNotifT || _askT != prevAskT || _shrink != prevShrink
             || sprint;
-        if (morphing != _morphing) { _morphing = morphing; RaiseTimer(morphing); ApplyCadence(); }
+
+        RaiseTimer(morphing || (next > 0.5f && animating));
+        if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 
         if (_morphRate.Step(morphing, _dt)) RateReport.Write(_morphRate.Measured, _displayHz);
 
@@ -2161,6 +2165,8 @@ internal sealed partial class NotchController
             if (hwnd == IntPtr.Zero) hwnd = AncestorWindow(widget);
             if (hwnd == IntPtr.Zero && widget is MediaWidget media)
                 hwnd = AppFront.TopLevelForProcess(media.App);
+            if (hwnd == IntPtr.Zero && widget.RevealProcess is { Length: > 0 } app)
+                hwnd = AppFront.TopLevelForProcess(app);
             if (hwnd != IntPtr.Zero) AppFront.Front(hwnd);
         }
         catch { }

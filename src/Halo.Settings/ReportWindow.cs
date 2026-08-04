@@ -10,15 +10,14 @@ namespace Halo.Settings;
 
 internal sealed class ReportWindow : Window
 {
-    internal const string EndpointKey = "report.endpoint";
-    internal const string KeyKey = "report.key";
-
     private readonly TextBox _description;
     private readonly TextBox _preview;
     private readonly TextBlock _status;
-    private readonly Button _create;
+    private readonly Button _send;
+    private readonly Button _disclose;
     private readonly StackPanel _actions;
     private string? _path;
+    private bool _busy;
 
     internal static void Open(Window? owner = null)
     {
@@ -37,17 +36,14 @@ internal sealed class ReportWindow : Window
         if (filled)
         {
             window._preview.Text = SamplePreview;
-            window._preview.Visibility = Visibility.Visible;
-            window._actions.Visibility = Visibility.Visible;
-            window._create.IsEnabled = false;
             window._description.Text = "the album cover stays as the spotify logo for a whole track";
-            window.Say("This is the report, exactly as it sits on disk. Nothing has been sent.",
-                       window.Secondary);
+            window.ShowDetails(true);
+            window.Say("Sent. It is on disk too, at %LOCALAPPDATA%\\Halo\\reports.", window.Mint);
         }
         return (FrameworkElement)window.Content;
     }
 
-    private const string SamplePreview = """
+    internal const string SamplePreview = """
         {
           "kind": "manual",
           "at": "2026-08-03T13:42:56Z",
@@ -56,6 +52,12 @@ internal sealed class ReportWindow : Window
           "display": "2560x1440 @ 280 Hz",
           "dpi": 96,
           "runtime": ".NET 9.0.18",
+          "locale": "en-US",
+          "machine": {
+            "cpus": 20,
+            "ram_mb": 32492
+          },
+          "uptime_min": 96,
           "surface": {
             "primary": "MediaWidget",
             "live": [ "MediaWidget", "ClaudeWidget" ],
@@ -93,8 +95,8 @@ internal sealed class ReportWindow : Window
 
         root.Children.Add(Row(0, Label(
             "Halo mirrors other people's notifications, what you are playing and your tray file names, so a "
-            + "report carries a named list of facts about this machine and nothing else. You will see the "
-            + "whole file before anything happens to it.", Secondary, 12.5)));
+            + "report carries a named list of facts about this machine and nothing else. Read the whole "
+            + "file first with 'What gets sent?' - it is the same file either way.", Secondary, 12.5)));
 
         _description = new TextBox
         {
@@ -110,13 +112,30 @@ internal sealed class ReportWindow : Window
             CaretBrush = Ink,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
+
+        _description.TextChanged += (_, _) =>
+        {
+            if (_path is null) return;
+            _path = null;
+            ShowDetails(false);
+            Say("", Secondary);
+        };
         root.Children.Add(Row(1, _description));
 
-        _create = Glass("Create report", 150);
-        _create.Margin = new Thickness(0, 12, 0, 0);
-        _create.HorizontalAlignment = HorizontalAlignment.Left;
-        _create.Click += (_, _) => Create();
-        root.Children.Add(Row(2, _create));
+        _send = Glass("Send report", 150);
+        _send.Click += (_, _) => SendFlow();
+
+        _disclose = Glass("What gets sent?", 150);
+        _disclose.Margin = new Thickness(10, 0, 0, 0);
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 12, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        buttons.Children.Add(_send);
+        buttons.Children.Add(_disclose);
+        root.Children.Add(Row(2, buttons));
 
         _preview = new TextBox
         {
@@ -135,17 +154,24 @@ internal sealed class ReportWindow : Window
         };
         root.Children.Add(Row(3, _preview));
 
+        _disclose.Click += (_, _) =>
+        {
+            if (_preview.Visibility == Visibility.Visible) { ShowDetails(false); return; }
+            if (_path is null && !Create()) return;
+            ShowDetails(true);
+        };
+
         _actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 14, 0, 0),
             Visibility = Visibility.Collapsed,
         };
+
         _actions.Children.Add(Action("Copy", 96, Copy));
         _actions.Children.Add(Action("Save as...", 110, Save));
         _actions.Children.Add(Action("Open a GitHub issue", 170, Issue));
         _actions.Children.Add(Action("Open in Notepad", 150, Notepad));
-        _actions.Children.Add(Action("Send", 96, Send));
         root.Children.Add(Row(4, _actions));
 
         _status = Label("", Secondary, 12);
@@ -156,7 +182,10 @@ internal sealed class ReportWindow : Window
         Content = root;
 
         var crash = preview ? null : NewestReport();
-        if (crash != null) Load(crash, "This is the last crash Halo recorded. Nothing has been sent.");
+
+        if (crash != null)
+            Load(crash, "Halo crashed last time and reported it automatically. "
+                        + "Anything you add here is sent as its own report.");
     }
 
     private Brush Ink => (Brush)FindResource("Ink");
@@ -222,17 +251,23 @@ internal sealed class ReportWindow : Window
     {
         _path = path;
         _preview.Text = File.ReadAllText(path);
-        _preview.Visibility = Visibility.Visible;
-        _actions.Visibility = Visibility.Visible;
         Say(message, Secondary);
     }
 
-    private void Create()
+    private void ShowDetails(bool show)
+    {
+        var visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        _preview.Visibility = visibility;
+        _actions.Visibility = visibility;
+        _disclose.Content = show ? "Hide details" : "What gets sent?";
+    }
+
+    private bool Create()
     {
         try
         {
             string exe = Path.Combine(AppContext.BaseDirectory, "Halo.App.exe");
-            if (!File.Exists(exe)) { Say("Halo.App.exe is not beside this window.", Coral); return; }
+            if (!File.Exists(exe)) { Say("Halo.App.exe is not beside this window.", Coral); return false; }
 
             string desc = Path.Combine(Path.GetTempPath(), "halo-report-description.txt");
             File.WriteAllText(desc, _description.Text);
@@ -247,19 +282,35 @@ internal sealed class ReportWindow : Window
                 psi.ArgumentList.Add("--report-new");
                 psi.ArgumentList.Add(desc);
                 using var process = Process.Start(psi);
-                if (process is null) { Say("Could not start Halo.App.", Coral); return; }
+                if (process is null) { Say("Could not start Halo.App.", Coral); return false; }
                 string printed = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(10_000);
 
                 string? path = File.Exists(printed) ? printed : NewestAny();
-                if (path is null) { Say("The report was not written.", Coral); return; }
-                _create.IsEnabled = false;
-                _description.IsReadOnly = true;
+                if (path is null) { Say("The report was not written.", Coral); return false; }
                 Load(path, "This is the report, exactly as it sits on disk. Nothing has been sent.");
+                return true;
             }
             finally { try { File.Delete(desc); } catch { } }
         }
-        catch (Exception ex) { Say(ex.Message, Coral); }
+        catch (Exception ex) { Say(ex.Message, Coral); return false; }
+    }
+
+    private async void SendFlow()
+    {
+        if (_busy) return;
+        _busy = true;
+        _send.IsEnabled = false;
+        try
+        {
+            if (_path is null && !Create()) return;
+            await Send();
+        }
+        finally
+        {
+            _busy = false;
+            _send.IsEnabled = true;
+        }
     }
 
     private static string? NewestAny()
@@ -313,19 +364,12 @@ internal sealed class ReportWindow : Window
         Process.Start(new ProcessStartInfo("notepad.exe", _path) { UseShellExecute = true });
     }
 
-    private async void Send()
+    private async Task Send()
     {
-        var store = new Store();
-        string endpoint = store.Text(EndpointKey, "");
-        if (endpoint.Length == 0)
+        if (!Uri.TryCreate(Intake.Endpoint, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps)
         {
-            Say("No endpoint is set. Add one on this page and press Apply, or use Copy, Save or GitHub.",
-                Coral);
-            return;
-        }
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            Say("The endpoint must be an https:// address.", Coral);
+            Say("The built-in endpoint is not a valid https:// address.", Coral);
             return;
         }
         try
@@ -336,8 +380,7 @@ internal sealed class ReportWindow : Window
                                                   "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content };
 
-            string key = store.Text(KeyKey, "");
-            if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Intake.Key);
             using var response = await client.SendAsync(request);
             if (response.IsSuccessStatusCode)
                 Say($"Sent. The report is still on disk at {_path}", Mint);

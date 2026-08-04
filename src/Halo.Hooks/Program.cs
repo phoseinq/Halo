@@ -591,7 +591,90 @@ internal static class Program
 
         uint term = Ancestor(map, start, IsTerminal);
         if (term != 0) status["consolePid"] = (int)term;
+
+        uint host = HostWindowPid(map, start);
+        if (host != 0) status["hostPid"] = (int)host;
     }
+
+    private static uint HostWindowPid(Dictionary<uint, (uint parent, string name)> map, uint start)
+    {
+        try
+        {
+            var owners = WindowOwners();
+            uint from = start;
+            IntPtr con = GetConsoleWindow();
+            if (con != IntPtr.Zero)
+            {
+                GetWindowThreadProcessId(con, out uint conPid);
+                if (conPid > 4) from = conPid;
+            }
+            uint found = WalkToWindow(map, owners, from);
+
+            if (found == 0 && from != start) found = WalkToWindow(map, owners, start);
+            return found != 0 ? found : EnvHostPid(owners, map);
+        }
+        catch { }
+        return 0;
+    }
+
+    private static uint EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map)
+    {
+        string? want = null;
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))
+            want = "windowsterminal.exe";
+        else if (string.Equals(Environment.GetEnvironmentVariable("TERM_PROGRAM"), "vscode",
+                     StringComparison.OrdinalIgnoreCase))
+            want = "code.exe";
+        if (want == null) return 0;
+
+        uint only = 0;
+        foreach (var pid in owners)
+        {
+            if (!map.TryGetValue(pid, out var e)) continue;
+            if (!e.name.Equals(want, StringComparison.OrdinalIgnoreCase)) continue;
+            if (only != 0) return 0;
+            only = pid;
+        }
+        return only;
+    }
+
+    private static uint WalkToWindow(Dictionary<uint, (uint parent, string name)> map, HashSet<uint> owners,
+        uint start)
+    {
+        if (owners.Contains(start)) return start;
+        uint cur = start;
+        for (int i = 0; i < 24 && cur != 0 && map.TryGetValue(cur, out var e); i++)
+        {
+            cur = e.parent;
+            if (cur > 4 && owners.Contains(cur)) return cur;
+        }
+        return 0;
+    }
+
+    private static HashSet<uint> WindowOwners()
+    {
+        var owners = new HashSet<uint>();
+        EnumWindows((h, _) =>
+        {
+
+            if (IsWindowVisible(h) && GetWindow(h, GW_OWNER) == IntPtr.Zero && GetWindowTextLengthW(h) > 0)
+            {
+                GetWindowThreadProcessId(h, out uint pid);
+                if (pid != 0) owners.Add(pid);
+            }
+            return true;
+        }, IntPtr.Zero);
+        return owners;
+    }
+
+    private const uint GW_OWNER = 4;
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lparam);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lparam);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")] private static extern int GetWindowTextLengthW(IntPtr hwnd);
+    [DllImport("kernel32.dll")] private static extern IntPtr GetConsoleWindow();
 
     private enum CodexSurface { Cli, Desktop }
 

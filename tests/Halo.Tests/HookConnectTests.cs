@@ -10,9 +10,16 @@ public class HookConnectTests
     // The probes are the real thing's cost, so they are functions here too - there is no plain-bool
     // overload to test against any more, deliberately: the one that existed was what a new caller would
     // have copied, and copying it is how the eager probing came back.
-    private static HookConnect.Step Next(bool seen = true, bool installed = false,
+    private static HookConnect.Step Next(bool? seen = true, bool? installed = false,
         bool tried = false, bool undone = false, bool busy = false)
-        => HookConnect.Next(busy, tried, undone, () => seen, () => installed);
+        => HookConnect.Next(busy, tried, undone, () => seen == true, () => installed);
+
+    // The probe could not answer. Installing on this is Halo writing nine handlers into settings.json
+    // because it failed to look - unattended, on a repeating scan, which is why this matters more here
+    // than in the panel where a person at least pressed something.
+    [Fact]
+    public void Never_installs_on_a_probe_that_did_not_answer()
+        => Assert.Equal(HookConnect.Step.Wait, Next(installed: null));
 
     [Fact]
     public void Installs_when_the_agent_turns_up_unhooked()

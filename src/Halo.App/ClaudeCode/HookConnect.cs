@@ -13,11 +13,11 @@ internal static class HookConnect
         Install,
     }
 
-    internal static Step Next(bool busy, bool alreadyTried, bool undone, Func<bool> agentSeen, Func<bool> hooksInstalled)
+    internal static Step Next(bool busy, bool alreadyTried, bool undone, Func<bool> agentSeen, Func<bool?> hooksInstalled)
     {
         if (busy || alreadyTried || undone) return Step.Wait;
         if (!agentSeen()) return Step.Wait;
-        return hooksInstalled() ? Step.Wait : Step.Install;
+        return hooksInstalled() switch { false => Step.Install, _ => Step.Wait };
     }
 
     internal static string? MarkFor(bool installed) => installed ? HookMarks.Done : null;
@@ -105,7 +105,13 @@ internal static class HookConnect
                                       || IsSettled(agent),
                         undone: string.Equals(mark, HookMarks.Undone, StringComparison.OrdinalIgnoreCase),
                         agentSeen: () => Running(processes),
-                        hooksInstalled: () => installed = Query(agent) == 0);
+
+                        hooksInstalled: () =>
+                        {
+                            int code = Query(agent);
+                            installed = code == 0;
+                            return code switch { 0 => true, 2 => false, _ => (bool?)null };
+                        });
 
                     if (installed) lock (Gate) Settled.Add(agent);
                     if (step != Step.Install) continue;
@@ -128,6 +134,8 @@ internal static class HookConnect
         });
     }
 
+    internal const int CouldNotRun = -1;
+
     private static int Query(string agent)
     {
         try
@@ -135,12 +143,12 @@ internal static class HookConnect
             var psi = new ProcessStartInfo(HookExe()) { UseShellExecute = false, CreateNoWindow = true };
             psi.ArgumentList.Add(agent == "Codex" ? "query-codex-hooks" : "query-claude-hooks");
             using var p = Process.Start(psi);
-            if (p == null) return 2;
+            if (p == null) return CouldNotRun;
 
-            if (!p.WaitForExit(15_000)) { try { p.Kill(entireProcessTree: true); } catch { } return 2; }
+            if (!p.WaitForExit(15_000)) { try { p.Kill(entireProcessTree: true); } catch { } return CouldNotRun; }
             return p.ExitCode;
         }
-        catch { return 2; }
+        catch { return CouldNotRun; }
     }
 
     private static (bool Ok, string Why, string Path) Install(string agent)

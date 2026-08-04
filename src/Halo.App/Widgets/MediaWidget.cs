@@ -102,6 +102,13 @@ internal sealed class MediaWidget : IWidget
     }
     public int Version { get { lock (_lock) { return _version; } } }
 
+    public void Tick()
+    {
+        bool playing;
+        lock (_lock) playing = _playing;
+        if (playing) AudioSpectrum.KeepWarm();
+    }
+
     public Bitmap? IconImage
     {
         get
@@ -1457,7 +1464,8 @@ internal sealed class MediaWidget : IWidget
         float x0 = rightX - totalW;
 
         float[]? bands = playing ? AudioSpectrum.Bands() : null;
-        bool live = bands != null && AudioSpectrum.Available;
+
+        bool live = bands != null;
         float peak = playing ? _meter.Peak() : 0f;
         _amp += (Math.Clamp((float)Math.Sqrt(peak) * 1.4f, 0f, 1f) - _amp) * 0.22f;
         double t = Environment.TickCount / 1000.0;

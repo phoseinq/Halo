@@ -9,10 +9,12 @@ namespace Halo.Tests;
 // that matters - it fails the moment a field appears that nobody named.
 public class BugReportTests
 {
-    private static ReportFacts Facts(string? exType = null, string message = "", string[]? stack = null)
+    private static ReportFacts Facts(string? exType = null, string message = "", string[]? stack = null,
+                                     string[]? inner = null)
         => new("manual", "2026-08-03T00:00:00Z", "3.3.0.0", "10.0.26200.0", "2560x1440 @ 280 Hz", 96,
-               ".NET 9.0.18", "MediaWidget", ["MediaWidget", "ClaudeWidget"], false, false, 280,
-               exType, message, stack ?? [], "it went wrong");
+               ".NET 9.0.18", "en-US", 16, 32768, 42,
+               "MediaWidget", ["MediaWidget", "ClaudeWidget"], false, false, 280,
+               exType, message, stack ?? [], inner ?? [], "it went wrong");
 
     [Fact]
     public void The_report_carries_exactly_the_fields_that_were_named()
@@ -21,7 +23,8 @@ public class BugReportTests
         var keys = new List<string>();
         foreach (var p in doc.RootElement.EnumerateObject()) keys.Add(p.Name);
         Assert.Equal(
-            ["kind", "at", "halo", "windows", "display", "dpi", "runtime", "surface", "description"],
+            ["kind", "at", "halo", "windows", "display", "dpi", "runtime", "locale", "machine",
+             "uptime_min", "surface", "description"],
             keys);
     }
 
@@ -32,6 +35,42 @@ public class BugReportTests
         var keys = new List<string>();
         foreach (var p in doc.RootElement.GetProperty("surface").EnumerateObject()) keys.Add(p.Name);
         Assert.Equal(["primary", "live", "expanded", "heavy", "tier"], keys);
+    }
+
+    [Fact]
+    public void The_machine_block_is_shape_and_never_identity()
+    {
+        using var doc = JsonDocument.Parse(ReportPayload.Json(Facts()));
+        var keys = new List<string>();
+        foreach (var p in doc.RootElement.GetProperty("machine").EnumerateObject()) keys.Add(p.Name);
+        Assert.Equal(["cpus", "ram_mb"], keys);
+    }
+
+    // The wrapper is usually the useless one - "one or more errors occurred" over the real failure - so
+    // the chain is what makes a crash report actionable.
+    [Fact]
+    public void A_wrapped_exception_carries_its_inner_chain()
+    {
+        using var doc = JsonDocument.Parse(ReportPayload.Json(
+            Facts("System.AggregateException", "one or more errors occurred", ["at Halo.Frame()"],
+                  ["System.IO.IOException: the file is locked"])));
+        var inner = doc.RootElement.GetProperty("exception").GetProperty("inner");
+        Assert.Equal("System.IO.IOException: the file is locked", inner[0].GetString());
+    }
+
+    [Fact]
+    public void An_unwrapped_exception_has_no_inner_block()
+    {
+        using var doc = JsonDocument.Parse(ReportPayload.Json(Facts("System.Exception", "boom")));
+        Assert.False(doc.RootElement.GetProperty("exception").TryGetProperty("inner", out _));
+    }
+
+    [Fact]
+    public void The_inner_chain_stops_rather_than_walking_a_cycle_forever()
+    {
+        var deep = new Exception("1", new Exception("2", new Exception("3",
+                       new Exception("4", new Exception("5", new Exception("6"))))));
+        Assert.True(ReportPayload.InnerChain(deep).Count <= 5);
     }
 
     // A manual report has no exception, and an empty exception block invites a reader to think one was

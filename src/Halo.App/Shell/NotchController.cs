@@ -1578,8 +1578,12 @@ internal sealed partial class NotchController
 
     private bool Live(int i)
     {
-        var feature = FeatureOf(_widgets[i]);
-        return _widgets[i].IsActive && (feature is null || _settings.Enabled(feature.Value));
+        try
+        {
+            var feature = FeatureOf(_widgets[i]);
+            return _widgets[i].IsActive && (feature is null || _settings.Enabled(feature.Value));
+        }
+        catch { return false; }
     }
 
     private static Halo.Settings.FeatureId? FeatureOf(IWidget widget) => widget switch

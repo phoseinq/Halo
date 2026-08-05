@@ -23,7 +23,8 @@ internal static class Intake
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Halo", "settings.json");
             return Halo.Settings.SettingsFile.Read(path)
-                .Bool(Halo.Settings.SettingsKeys.AutoCrashReport, false);
+                .Bool(Halo.Settings.SettingsKeys.AutoCrashReport,
+                      Halo.Settings.SettingsKeys.AutoCrashDefault);
         }
         catch { return false; }
     }

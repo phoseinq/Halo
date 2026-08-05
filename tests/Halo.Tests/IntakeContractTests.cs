@@ -89,8 +89,10 @@ public class IntakeContractTests
                     if (row.Key == Halo.Settings.SettingsKeys.AutoCrashReport)
                         Assert.Equal("off", row.Fallback);
 
-        // and the reader's fallback, which is the other half of the same promise
-        Assert.False(new Halo.Settings.SettingsFile().Bool(
-            Halo.Settings.SettingsKeys.AutoCrashReport, false));
+        // and the reader's fallback, which is the other half of the same promise. Held against the
+        // CONSTANT the reader passes, not against a `false` this test hands to Bool() itself - that one
+        // could only ever fail if Bool ignored its own argument, so it pinned nothing while reading as
+        // though it did. Flipping either side now breaks here.
+        Assert.False(Halo.Settings.SettingsKeys.AutoCrashDefault);
     }
 }

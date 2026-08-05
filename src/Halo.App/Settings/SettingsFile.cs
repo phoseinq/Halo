@@ -107,5 +107,7 @@ internal static class SettingsKeys
 
     internal const string AutoCrashReport = "report.autoCrash";
 
+    internal const bool AutoCrashDefault = false;
+
     internal static string Feature(FeatureId id) => "feature." + FeatureCatalog.For(id).Key;
 }

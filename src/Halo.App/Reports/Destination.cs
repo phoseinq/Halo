@@ -49,4 +49,23 @@ internal static class Destination
         }
         catch { return false; }
     }
+
+    internal readonly record struct Route(Kind Kind, string Target, string? Bearer, string? Error);
+
+    internal static Route Resolve(string? rawEndpoint, string? rawKey, string builtInEndpoint,
+        string builtInKey)
+    {
+        var kind = Decide(rawEndpoint, builtInEndpoint);
+        if (kind == Kind.Off)
+            return new Route(kind, "", null, "Reports are switched off: report.endpoint in settings.json is empty.");
+
+        string target = kind == Kind.Custom ? rawEndpoint!.Trim() : builtInEndpoint;
+        string? bearer = Key(kind, builtInKey, rawKey);
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return new Route(kind, target, bearer, kind == Kind.Custom
+                ? "report.endpoint in settings.json is not a valid https:// address."
+                : "The built-in endpoint is not a valid https:// address.");
+
+        return new Route(kind, target, bearer, null);
+    }
 }

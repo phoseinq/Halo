@@ -385,23 +385,11 @@ internal sealed class ReportWindow : Window
     {
 
         var store = new Store();
-        string? rawEndpoint = store.Raw(Destination.EndpointKey);
-        var kind = Destination.Decide(rawEndpoint, Intake.Endpoint);
-        if (kind == Destination.Kind.Off)
-        {
-            Say("Reports are switched off: report.endpoint in settings.json is empty.", Coral);
-            return;
-        }
-        string target = kind == Destination.Kind.Custom ? rawEndpoint!.Trim() : Intake.Endpoint;
-        string? bearer = Destination.Key(kind, Intake.Key, store.Raw(Destination.KeyKey));
-        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri)
-            || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            Say(kind == Destination.Kind.Custom
-                ? "report.endpoint in settings.json is not a valid https:// address."
-                : "The built-in endpoint is not a valid https:// address.", Coral);
-            return;
-        }
+        var route = Destination.Resolve(store.Raw(Destination.EndpointKey), store.Raw(Destination.KeyKey),
+                                        Intake.Endpoint, Intake.Key);
+        if (route.Error is string why) { Say(why, Coral); return; }
+        var uri = new Uri(route.Target);
+        string? bearer = route.Bearer;
         try
         {
             Say("Sending...", Secondary);

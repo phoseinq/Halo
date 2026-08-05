@@ -168,4 +168,62 @@ public class DestinationTests
         }
         finally { try { System.IO.File.Delete(path); } catch { } }
     }
+
+    // The WIRING, not just the pieces. Every assertion above and below is a pure function, and the wiring
+    // between them is where this bug landed four releases running - Send() built its own Store on the
+    // default path, so Store -> Raw -> Decide -> bearer -> target could only be exercised by pressing the
+    // button on a machine that happened to have the right file. Resolve is that path as a value.
+    [Fact]
+    public void The_off_route_carries_a_reason_and_no_target()
+    {
+        var r = Halo.Reports.Destination.Resolve("", null, Built, "halo1.builtin");
+        Assert.Equal(Halo.Reports.Destination.Kind.Off, r.Kind);
+        Assert.NotNull(r.Error);
+        Assert.Null(r.Bearer);
+    }
+
+    [Fact]
+    public void The_built_in_route_carries_halos_key()
+    {
+        var r = Halo.Reports.Destination.Resolve(null, null, Built, "halo1.builtin");
+        Assert.Null(r.Error);
+        Assert.Equal(Built, r.Target);
+        Assert.Equal("halo1.builtin", r.Bearer);
+    }
+
+    // the credential half, end to end: their host, their key, and never Halo's whatever report.key holds
+    [Fact]
+    public void A_custom_route_never_carries_halos_key()
+    {
+        var mine = Halo.Reports.Destination.Resolve("https://mine.example/in", "mykey", Built, "halo1.builtin");
+        Assert.Null(mine.Error);
+        Assert.Equal("https://mine.example/in", mine.Target);
+        Assert.Equal("mykey", mine.Bearer);
+
+        var leaked = Halo.Reports.Destination.Resolve("https://mine.example/in", "halo1.builtin", Built, "halo1.builtin");
+        Assert.Null(leaked.Bearer);
+    }
+
+    [Fact]
+    public void A_non_https_custom_target_is_refused_by_name()
+    {
+        var r = Halo.Reports.Destination.Resolve("http://mine.example/in", null, Built, "halo1.builtin");
+        Assert.NotNull(r.Error);
+        Assert.Contains("report.endpoint", r.Error);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("https://mine.example/in", "halo1.builtin")]
+    [InlineData("https://mine.example/in", "mykey")]
+    public void Both_executables_resolve_the_same_route(string? endpoint, string? key)
+    {
+        var a = Halo.Reports.Destination.Resolve(endpoint, key, Built, "halo1.builtin");
+        var b = settingsasm::Halo.Settings.Destination.Resolve(endpoint, key, Built, "halo1.builtin");
+        Assert.Equal((int)a.Kind, (int)b.Kind);
+        Assert.Equal(a.Target, b.Target);
+        Assert.Equal(a.Bearer, b.Bearer);
+        Assert.Equal(a.Error, b.Error);
+    }
 }

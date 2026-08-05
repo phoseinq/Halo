@@ -26,6 +26,8 @@ internal sealed class CcUsage
 
 internal sealed class CcStatus
 {
+
+    public bool FromDesktopApp { get; set; }
     public string? Name { get; set; }
     public string? Icon { get; set; }
     public string? State { get; set; }
@@ -227,6 +229,8 @@ internal sealed class StatusStore
             {
                 _files.TryGetValue(_appPath, out var prev);
                 _app = Read(_appPath, prev);
+
+                if (_app is not null) _app.FromDesktopApp = true;
                 if (_app is not null) next[_appPath] = _app;
             }
             _files = next;

@@ -71,7 +71,7 @@ internal sealed class ClaudeCodeWidget : IWidget
         ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
     public int RevealPid => Live?.HostPid ?? 0;
 
-    public string? RevealProcess => Live is { ConsolePid: 0, HostPid: 0 } ? "claude" : null;
+    public string? RevealProcess => Live is { FromDesktopApp: true } ? "claude" : null;
 
     public bool Animating => _appear < 1f || Compacting(Live)
         || (_wasOpen && (WidgetInput.Over || RingsSettling));

@@ -179,6 +179,8 @@ internal sealed partial class NotchController
     private float _scale0, _handle;
     private bool _hiddenForFullscreen;
 
+    private bool _overFullscreen;
+
     private float _offsetX;
     private bool _moving;
     private float _holdT;
@@ -419,7 +421,8 @@ internal sealed partial class NotchController
         if (!Win32.GetSystemTimes(out long idle, out long kern, out long user)) return;
         long total = kern + user;
 
-        bool watching = _progress > 0.02f || _notif != null || _drop >= 0f
+        bool watching = _progress > 0.02f || _drop >= 0f
+                        || (_notif != null && !_overFullscreen)
                         || _cue.Alive(Environment.TickCount64);
         int target = _fps;
         if (_cpuBusyBase != 0 && total > _cpuBusyBase)
@@ -1062,15 +1065,6 @@ internal sealed partial class NotchController
         _lastFrameAt = frameNow;
         PollDisplay();
 
-        for (int i = 0; i < _widgets.Length; i++)
-        {
-            try
-            {
-                var feature = FeatureOf(_widgets[i]);
-                if (feature is null || _settings.Enabled(feature.Value)) _widgets[i].Tick();
-            }
-            catch { }
-        }
         AdaptFrameRate();
         EaseRings();
         CheckAlerts();
@@ -1086,8 +1080,15 @@ internal sealed partial class NotchController
         DetectAgentCancel(fg);
         DetectLanguageChange(fg);
 
-        bool fullscreen = !Pinned(_pinned) && _notch.IsFullscreen(fg);
+        _overFullscreen = _notch.IsFullscreen(fg);
+        bool fullscreen = !Pinned(_pinned) && _overFullscreen;
         var active = fullscreen ? [] : ActiveIndices();
+
+        foreach (int i in active)
+        {
+            try { _widgets[i].Tick(); }
+            catch { }
+        }
 
         bool notifLive = _notif != null || _notifSrc.HasPending;
         var visibility = NotchVisibility.Decide(fullscreen && !notifLive, _hiddenForFullscreen);

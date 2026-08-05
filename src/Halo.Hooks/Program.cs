@@ -609,8 +609,8 @@ internal static class Program
                 if (conPid > 4) from = conPid;
             }
 
-            uint env = EnvHostPid(owners, map);
-            if (env != 0) return env;
+            uint? env = EnvHostPid(owners, map);
+            if (env is uint hinted) return hinted;
 
             uint found = WalkToWindow(map, owners, from);
 
@@ -621,22 +621,25 @@ internal static class Program
         return 0;
     }
 
-    private static uint EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map)
+    private static uint? EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map)
     {
 
-        string? want = null;
+        string[]? want = null;
         if (string.Equals(Environment.GetEnvironmentVariable("TERM_PROGRAM"), "vscode",
                 StringComparison.OrdinalIgnoreCase))
-            want = "code.exe";
+
+            want = ["code.exe", "cursor.exe", "codium.exe", "vscodium.exe",
+                    "code - insiders.exe", "windsurf.exe"];
         else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))
-            want = "windowsterminal.exe";
-        if (want == null) return 0;
+            want = ["windowsterminal.exe"];
+
+        if (want == null) return null;
 
         uint only = 0;
         foreach (var pid in owners)
         {
             if (!map.TryGetValue(pid, out var e)) continue;
-            if (!e.name.Equals(want, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!want.Any(w => e.name.Equals(w, StringComparison.OrdinalIgnoreCase))) continue;
             if (only != 0) return 0;
             only = pid;
         }

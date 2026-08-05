@@ -15,8 +15,8 @@ internal sealed record ReportFacts(
     string Runtime,
     string Locale,
     int Cpus,
-    int RamMb,
-    int UptimeMin,
+    int? RamMb,
+    int? UptimeMin,
     string Primary,
     IReadOnlyList<string> Live,
     bool Expanded,
@@ -50,10 +50,11 @@ internal static class ReportPayload
             ["machine"] = new JsonObject
             {
                 ["cpus"] = f.Cpus,
-                ["ram_mb"] = f.RamMb,
+
+                ["ram_mb"] = f.RamMb is int r ? JsonValue.Create(r) : null,
             },
 
-            ["uptime_min"] = f.UptimeMin,
+            ["uptime_min"] = f.UptimeMin is int u ? JsonValue.Create(u) : null,
 
             ["surface"] = new JsonObject
             {
@@ -115,7 +116,7 @@ internal static class ReportPayload
             Locale: Locale,
             Cpus: Cpus,
             RamMb: RamMb,
-            UptimeMin: UptimeMin,
+            UptimeMin: kind == "manual" ? null : UptimeMin,
             Primary: shape.TryGetValue("primary", out var p) ? p : "unknown",
             Live: live,
             Expanded: shape.TryGetValue("expanded", out var e) && e == "1",
@@ -163,17 +164,21 @@ internal static class ReportPayload
         }
     }
 
-    private static int RamMb
+    private static int? RamMb
     {
         get
         {
 
-            try { return (int)(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / (1024 * 1024)); }
-            catch { return 0; }
+            try
+            {
+                long bytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+                return bytes > 0 ? (int)(bytes / (1024 * 1024)) : null;
+            }
+            catch { return null; }
         }
     }
 
-    private static int UptimeMin
+    private static int? UptimeMin
     {
         get
         {
@@ -182,7 +187,7 @@ internal static class ReportPayload
                 using var self = System.Diagnostics.Process.GetCurrentProcess();
                 return (int)(DateTime.Now - self.StartTime).TotalMinutes;
             }
-            catch { return 0; }
+            catch { return null; }
         }
     }
 

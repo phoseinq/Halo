@@ -57,7 +57,7 @@ internal sealed class ReportWindow : Window
             "cpus": 20,
             "ram_mb": 32492
           },
-          "uptime_min": 96,
+          "uptime_min": null,
           "surface": {
             "primary": "MediaWidget",
             "live": [ "MediaWidget", "ClaudeWidget" ],
@@ -383,10 +383,20 @@ internal sealed class ReportWindow : Window
 
     private async Task Send()
     {
-        if (!Uri.TryCreate(Intake.Endpoint, UriKind.Absolute, out var uri)
+
+        string configured = new Store().Text("report.endpoint", Intake.Endpoint).Trim();
+        if (configured.Length == 0)
+        {
+            Say("Reports are switched off: report.endpoint in settings.json is empty.", Coral);
+            return;
+        }
+        bool custom = !string.Equals(configured, Intake.Endpoint, StringComparison.Ordinal);
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri)
             || uri.Scheme != Uri.UriSchemeHttps)
         {
-            Say("The built-in endpoint is not a valid https:// address.", Coral);
+            Say(custom
+                ? "report.endpoint in settings.json is not a valid https:// address."
+                : "The built-in endpoint is not a valid https:// address.", Coral);
             return;
         }
         try

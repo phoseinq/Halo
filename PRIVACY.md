@@ -52,7 +52,9 @@ All of it stays on your machine.
 
 ## What Halo writes to disk
 
-Everything lives in `%LOCALAPPDATA%\Halo\`. Deleting that folder resets Halo completely.
+Almost everything lives in `%LOCALAPPDATA%\Halo\`. Deleting that folder resets Halo completely. There
+is one exception, and it is the section directly below this list — Halo edits your coding agent's own
+configuration file so its panels can work at all.
 
 - `offset`, `pinned`, `scale`, `capturable` — where you put the pill and how you like it
 - `settings.json` — every switch in the settings window
@@ -68,7 +70,11 @@ Everything lives in `%LOCALAPPDATA%\Halo\`. Deleting that folder resets Halo com
   each with a `.sent` file beside it if that one was actually sent
 - `crash-sent` — a short hash of the last few crashes that were sent, so the same fault is not reported
   again on every relaunch. It holds hashes and timestamps, never the text it was made from
-- `*-debug.txt` — local diagnostics
+- `hooks-connect.txt` — one line per agent recording that Halo connected it, or that you disconnected it.
+  The second is what stops Halo ever offering again
+- `*-debug.txt` — local diagnostics, off unless you ask for them. `hooks-debug.txt` only appears while a
+  file named `hooks-debug.on` sits beside it, and records which agent was seen and which check stopped a
+  connection — never anything from your prompts or your code
 
 The diagnostics are worth being specific about, because they concern your notifications:
 `notif-debug.txt` records **which app** sent a notification and **how many characters** its title and
@@ -79,6 +85,30 @@ body had — never the text. A line looks like this, and that is the whole of it
 ```
 
 None of these files are ever transmitted anywhere on their own.
+
+### The one file Halo changes that is not its own
+
+For the Claude Code and Codex panels to show anything, those tools have to tell Halo when something
+happens. They do that through their own hook settings, so Halo writes nine handler lines into
+**`~/.claude/settings.json`**, and the equivalent into Codex's config, the first time it sees that agent
+running on your machine.
+
+This is the only thing Halo writes outside its own folder, and it is the one place it changes another
+program's configuration. So, precisely:
+
+- **Your previous file is copied to `settings.json.halo-bak` first**, every time, before anything is
+  written. If a policy or a sync tool had marked that file read-only, Halo clears the flag long enough to
+  write and then **puts it back**
+- **A notification tells you it happened**, naming the file and the backup. It is not silent
+- **Only Halo's own handlers are touched.** Hooks you or another tool put there are left exactly as they
+  were, including the other agent's
+- **"Disconnect" in the settings window removes them**, and that answer is permanent — Halo will not put
+  them back on the next launch, or ever, unless you ask
+- Halo reads **nothing** out of that file except whether its own handlers are present
+
+What the handlers then send Halo is described under "What Halo reads from your machine": which tool is
+running, what state it is in, and how long it has been at it. Never your prompts, your code, or the
+model's replies.
 
 ---
 
@@ -204,8 +234,15 @@ Halo makes no request that is not on this list.
 | `flagcdn.com` | the flag image for that country | the two-letter country code |
 | `geocoding-api.open-meteo.com` and `api.open-meteo.com` | the weather on the hourly banner, refreshed every half hour | **coordinates.** If Windows location is on and Halo is allowed, those are **your device's own coordinates**, to about 11 m. Otherwise they are the coordinates of the city from your timezone — "Asia/Tehran" becomes "Tehran" — which is a whole city wide. The city name is also sent once, to look it up |
 | `displaycatalog.mp.microsoft.com` | the name and art of a Microsoft Store install in progress | the Store product id |
-| `halo.pvboy.dev:2053` — the author's bug-report intake | when you press send on a report you have read, and — only if you switch it on — when Halo crashes | the report shown above, and nothing else. Your IP address, as any HTTPS request does |
+| `halo.pvboy.dev:2053` — the author's bug-report intake | when you press send on a report you have read, and — only if you switch it on — when Halo crashes | the report shown above, and nothing else. Your IP address, as any HTTPS request does. **You can redirect this or switch it off entirely** — see below |
 | `127.0.0.1` | VLC playback controls, and Halo's own local API when you enable it | nothing — it never leaves your machine |
+
+**Redirecting or disabling reports.** Two keys in `%LOCALAPPDATA%\Halo\settings.json` decide where a
+report goes. Set `report.endpoint` to your own https address and reports go there instead, with
+`report.key` as the credential — Halo's own token is never sent to an address that is not Halo's.
+**Set `report.endpoint` to an empty string and reports never touch the network at all**, including the
+automatic crash path; they are still written to disk for you to read. Leave both alone and the built-in
+intake above is used, and only when you press send.
 
 **`ipwho.is`, `api.ipapi.is` and `bash.ws` are the only requests that tell a third party anything about
 you.** All three disclose your public IP the same way opening any web page does. `ipwho.is` runs only

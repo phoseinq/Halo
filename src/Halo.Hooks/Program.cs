@@ -637,19 +637,24 @@ internal static class Program
         if (want == null) return null;
 
         uint ancestor = WalkToWindow(map, owners, start);
-        if (ancestor != 0 && map.TryGetValue(ancestor, out var owner) &&
-            want.Contains(owner.name, StringComparer.OrdinalIgnoreCase))
-            return ancestor;
+        bool ancestorNamed = ancestor != 0 && map.TryGetValue(ancestor, out var owner) &&
+                             want.Contains(owner.name, StringComparer.OrdinalIgnoreCase);
 
         uint only = 0;
         foreach (var pid in owners)
         {
             if (!map.TryGetValue(pid, out var e)) continue;
             if (!want.Contains(e.name, StringComparer.OrdinalIgnoreCase)) continue;
-            if (only != 0) return 0;
+            if (only != 0)
+            {
+
+                return ancestorNamed ? ancestor : 0;
+            }
             only = pid;
         }
-        return only;
+
+        if (only != 0 && ancestorNamed && ancestor != only) return 0;
+        return only != 0 ? only : (ancestorNamed ? ancestor : 0);
     }
 
     private static uint WalkToWindow(Dictionary<uint, (uint parent, string name)> map, HashSet<uint> owners,

@@ -230,4 +230,17 @@ public class BugReportTests
                ".NET 9.0.18", "en-US", 20, null, null,
                "MediaWidget", ["MediaWidget"], false, false, 280,
                null, null, [], [], "x");
+
+    // AT COLLECT, not at the serializer. The two tests above assert Json() renders a null, and both stayed
+    // green with the rule that produces the null deleted - so they described a fix they could not detect.
+    // A manual report is assembled by the throwaway --report-new child, whose own uptime is seconds; the
+    // pill's is unknowable from there, and a wrong number in a report is read by a stranger as a fact.
+    [Fact]
+    public void A_manual_report_does_not_claim_the_helper_processes_uptime()
+        => Assert.Null(Halo.Reports.ReportPayload.Collect("manual", null, "x").UptimeMin);
+
+    // and a crash report IS assembled by the pill, so its uptime is real and must survive
+    [Fact]
+    public void A_crash_report_keeps_the_uptime_it_can_actually_measure()
+        => Assert.NotNull(Halo.Reports.ReportPayload.Collect("crash", null, "x").UptimeMin);
 }

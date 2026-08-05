@@ -179,6 +179,8 @@ internal sealed partial class NotchController
     private float _scale0, _handle;
     private bool _hiddenForFullscreen;
 
+    private bool[]? _featureMask;
+
     private bool _overFullscreen;
 
     private float _offsetX;
@@ -1065,6 +1067,7 @@ internal sealed partial class NotchController
         _dt = _lastFrameAt == 0 ? 0.008f : Math.Clamp((frameNow - _lastFrameAt) / 1000f, 0.001f, 0.05f);
         _lastFrameAt = frameNow;
         PollDisplay();
+        RefreshFeatureMask();
         AdaptFrameRate();
         EaseRings();
         CheckAlerts();
@@ -1089,11 +1092,7 @@ internal sealed partial class NotchController
         {
             for (int i = 0; i < _widgets.Length; i++)
             {
-                try
-                {
-                    var feature = FeatureOf(_widgets[i]);
-                    if (feature is null || _settings.Enabled(feature.Value)) _widgets[i].Tick();
-                }
+                try { if (FeatureOn(i)) _widgets[i].Tick(); }
                 catch { }
             }
         }
@@ -1588,12 +1587,31 @@ internal sealed partial class NotchController
 
     private bool Live(int i)
     {
-        try
-        {
-            var feature = FeatureOf(_widgets[i]);
-            return _widgets[i].IsActive && (feature is null || _settings.Enabled(feature.Value));
-        }
+        try { return _widgets[i].IsActive && FeatureOn(i); }
         catch { return false; }
+    }
+
+    private bool FeatureOn(int i)
+    {
+        if (_featureMask is { } mask && i < mask.Length) return mask[i];
+        var feature = FeatureOf(_widgets[i]);
+        return feature is null || _settings.Enabled(feature.Value);
+    }
+
+    private void RefreshFeatureMask()
+    {
+        var mask = _featureMask;
+        if (mask is null || mask.Length != _widgets.Length) mask = new bool[_widgets.Length];
+        for (int i = 0; i < _widgets.Length; i++)
+        {
+            try
+            {
+                var feature = FeatureOf(_widgets[i]);
+                mask[i] = feature is null || _settings.Enabled(feature.Value);
+            }
+            catch { mask[i] = false; }
+        }
+        _featureMask = mask;
     }
 
     private static Halo.Settings.FeatureId? FeatureOf(IWidget widget) => widget switch

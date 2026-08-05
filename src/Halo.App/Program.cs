@@ -422,8 +422,9 @@ internal static class Program
                 string json = Halo.Reports.ReportPayload.Json(
                     Halo.Reports.ReportPayload.Collect("crash", ex, ""));
                 string path = Halo.Reports.ReportStore.Write(json, "crash");
-                if (Halo.Reports.Intake.AutoCrash() && (_probeCrash || Halo.Reports.Intake.CrashIsNew(ex))
-                    && Halo.Reports.Intake.TrySend(json))
+                var settings = Halo.Reports.Intake.Settings();
+                if (Halo.Reports.Intake.AutoCrash(settings) && (_probeCrash || Halo.Reports.Intake.CrashIsNew(ex))
+                    && Halo.Reports.Intake.TrySend(json, settings))
                 {
 
                     Halo.Reports.ReportStore.MarkSent(path);

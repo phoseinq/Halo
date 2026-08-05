@@ -18,11 +18,17 @@ internal static class Intake
     private static string SettingsPath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "settings.json");
 
-    internal static bool AutoCrash()
+    internal static Halo.Settings.SettingsFile Settings()
+    {
+        try { return Halo.Settings.SettingsFile.Read(SettingsPath); }
+        catch { return Halo.Settings.SettingsFile.Empty; }
+    }
+
+    internal static bool AutoCrash(Halo.Settings.SettingsFile? file = null)
     {
         try
         {
-            return Halo.Settings.SettingsFile.Read(SettingsPath)
+            return (file ?? Settings())
                 .Bool(Halo.Settings.SettingsKeys.AutoCrashReport,
                       Halo.Settings.SettingsKeys.AutoCrashDefault);
         }
@@ -85,14 +91,14 @@ internal static class Intake
         catch { return []; }
     }
 
-    internal static bool TrySend(string json)
+    internal static bool TrySend(string json, Halo.Settings.SettingsFile? file = null)
     {
         try
         {
             using var client = new HttpClient { Timeout = Timeout };
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var file = Halo.Settings.SettingsFile.Read(SettingsPath);
+            file ??= Settings();
             string? rawEndpoint = file.Raw(Destination.EndpointKey);
             var kind = Destination.Decide(rawEndpoint, Endpoint);
             if (kind == Destination.Kind.Off) return false;

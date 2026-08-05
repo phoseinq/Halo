@@ -164,8 +164,10 @@ internal static class ClaudeHookInstaller
         {
             File.WriteAllText(temporaryPath,
                 settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            ClearReadOnly(settingsPath);
+
+            bool wasReadOnly = ClearReadOnly(settingsPath);
             File.Move(temporaryPath, settingsPath, overwrite: true);
+            RestoreReadOnly(settingsPath, wasReadOnly);
         }
         finally
         {
@@ -178,18 +180,32 @@ internal static class ClaudeHookInstaller
         string backupPath = settingsPath + ".halo-bak";
         ClearReadOnly(backupPath);
         File.Copy(settingsPath, backupPath, overwrite: true);
+
+        ClearReadOnly(backupPath);
     }
 
-    internal static void ClearReadOnly(string path)
+    internal static bool ClearReadOnly(string path)
     {
         try
         {
-            if (!File.Exists(path)) return;
+            if (!File.Exists(path)) return false;
             var attributes = File.GetAttributes(path);
-            if ((attributes & FileAttributes.ReadOnly) != 0)
-                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            if ((attributes & FileAttributes.ReadOnly) == 0) return false;
+            File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            return true;
         }
 
+        catch { return false; }
+    }
+
+    internal static void RestoreReadOnly(string path, bool was)
+    {
+        if (!was) return;
+        try
+        {
+            if (File.Exists(path))
+                File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+        }
         catch { }
     }
 }

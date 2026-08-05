@@ -18,7 +18,18 @@ public class ClaudeHookInstallerTests : IDisposable
     private string Settings => Path.Combine(_root, "settings.json");
 
     public ClaudeHookInstallerTests() => Directory.CreateDirectory(_root);
-    public void Dispose() { try { Directory.Delete(_root, true); } catch { } }
+    // clears ReadOnly first: the read-only regression test deliberately leaves one behind, and
+    // Directory.Delete throws on it - into the bare catch, leaking a temp folder on every run
+    public void Dispose()
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+                File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+        }
+        catch { }
+        try { Directory.Delete(_root, true); } catch { }
+    }
 
     private JsonObject Read() => (JsonObject)JsonNode.Parse(File.ReadAllText(Settings))!;
     private static string[] Commands(JsonObject hooks, string evt) =>
@@ -159,10 +170,16 @@ public class ClaudeHookInstallerTests : IDisposable
         ClaudeHookInstaller.Install(Settings, _exe);   // must not throw
         Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
 
-        // And again, because the backup takes its attributes from the file it was copied FROM: a read-only
-        // settings.json produces a read-only .halo-bak every time, so the fix only holds if the clearing
-        // happens on each pass rather than once. That is the loop that wedged the live machine.
-        Assert.True(File.GetAttributes(backup).HasFlag(FileAttributes.ReadOnly));
+        // The attribute is PUT BACK on settings.json. A policy or a sync client that marked it read-only
+        // meant it, and Halo dropping that protection for every other tool on the machine - unrecorded and
+        // with no way back - is the opposite of what BannerGate does with ShowBanner.
+        Assert.True(File.GetAttributes(Settings).HasFlag(FileAttributes.ReadOnly));
+        // but NOT on the backup, which File.Copy would otherwise inherit onto it: that is the file the
+        // banner tells the user their old settings are saved in, so it has to be openable
+        Assert.False(File.GetAttributes(backup).HasFlag(FileAttributes.ReadOnly));
+
+        // and again, because restoring the attribute means the next install meets the same wall it just
+        // cleared - the fix only holds if the clearing happens on every pass rather than once
         ClaudeHookInstaller.Install(Settings, _exe);
         Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
     }

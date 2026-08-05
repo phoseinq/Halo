@@ -163,8 +163,10 @@ internal static class CodexHookInstaller
             {
                 WriteIndented = true,
             }), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            ClaudeHookInstaller.ClearReadOnly(settingsPath);
+
+            bool wasReadOnly = ClaudeHookInstaller.ClearReadOnly(settingsPath);
             File.Move(temporaryPath, settingsPath, overwrite: true);
+            ClaudeHookInstaller.RestoreReadOnly(settingsPath, wasReadOnly);
         }
         finally
         {

@@ -1453,7 +1453,8 @@ internal sealed partial class NotchController
         bool morphing = next != _progress || _notifT != prevNotifT || _askT != prevAskT || _shrink != prevShrink
             || sprint;
 
-        bool watched = hovered || _notif != null || _ask != null || _greet != GreetingKind.None;
+        bool watched = hovered || notice
+                       || _notif != null || _ask != null || _greet != GreetingKind.None;
         RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)));
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 

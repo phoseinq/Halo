@@ -84,8 +84,7 @@ internal static class Actions
                                      {
                                          "offset", "pin", "tray.txt", "notif-seen.txt", "limit-fired",
                                          "notif-debug.txt", "banner-orig.tsv", "tg-debug.txt",
-                                         "marquee-debug.txt", "marquee-debug.on",
-                                         "hooks-debug.txt", "crash-sent",
+                                         "hooks-debug.txt", "hooks-debug.on", "crash-sent",
                                      })
                             {
                                 try { System.IO.File.Delete(System.IO.Path.Combine(HaloDir, name)); } catch { }

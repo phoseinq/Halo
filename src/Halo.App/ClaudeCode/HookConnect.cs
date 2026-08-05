@@ -85,16 +85,20 @@ internal static class HookConnect
             long now = Environment.TickCount64;
             lock (Gate)
             {
-                if (LastLine.TryGetValue(agent, out var previous) && previous == line) return;
-                LastLine[agent] = line;
+
                 if (now - _onAt >= 5000)
                 {
                     _onAt = now;
+                    bool was = _on;
                     _on = File.Exists(Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "Halo", "hooks-debug.on"));
+
+                    if (_on && !was) LastLine.Clear();
                 }
                 if (!_on) return;
+                if (LastLine.TryGetValue(agent, out var previous) && previous == line) return;
+                LastLine[agent] = line;
             }
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo");
@@ -175,7 +179,8 @@ internal static class HookConnect
                     int waiting = -1;
                     lock (Gate)
                     {
-                        if (Busy.Contains(agent)) continue;
+
+                        if (!Busy.Add(agent)) continue;
 
                         if (RetryAt.TryGetValue(agent, out long at) && Environment.TickCount64 < at)
                             waiting = (int)((at - Environment.TickCount64) / 1000);
@@ -210,14 +215,10 @@ internal static class HookConnect
                     if (step != Step.Install)
                     {
                         if (probed && answer is null)
-                            NoteFailure(agent, "the hook helper did not answer", notify, wrote: false);
+                            NoteFailure(agent, "", notify, wrote: false);
                         continue;
                     }
 
-                    bool mine;
-                    lock (Gate) mine = Busy.Add(agent);
-                    if (!mine) continue;
-                    try
                     {
                         var (ok, why, path) = Install(agent);
                         if (MarkFor(ok) is string mark2) HookMarks.Write(agent, mark2);
@@ -230,10 +231,11 @@ internal static class HookConnect
                         }
                         else NoteFailure(agent, why, notify);
                     }
-                    finally { lock (Gate) Busy.Remove(agent); }
                 }
 
                 catch (Exception e) { Log(agent, $"{agent}: threw {e.GetType().Name}: {e.Message}"); }
+
+                finally { lock (Gate) Busy.Remove(agent); }
             }
         });
     }

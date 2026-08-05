@@ -93,12 +93,12 @@ internal static class Intake
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var file = Halo.Settings.SettingsFile.Read(SettingsPath);
-            string? rawEndpoint = file.Values.TryGetValue(Destination.EndpointKey, out var re) ? re : null;
+            string? rawEndpoint = file.Raw(Destination.EndpointKey);
             var kind = Destination.Decide(rawEndpoint, Endpoint);
             if (kind == Destination.Kind.Off) return false;
             string target = kind == Destination.Kind.Custom ? rawEndpoint!.Trim() : Endpoint;
             string? bearer = Destination.Key(kind, Key,
-                file.Values.TryGetValue(Destination.KeyKey, out var rk) ? rk : null);
+                file.Raw(Destination.KeyKey));
             if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
                 return false;
 

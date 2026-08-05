@@ -27,7 +27,7 @@ internal sealed class CcUsage
 internal sealed class CcStatus
 {
 
-    [System.Text.Json.Serialization.JsonIgnore]
+    [JsonIgnore]
     public bool FromDesktopApp { get; set; }
     public string? Name { get; set; }
     public string? Icon { get; set; }

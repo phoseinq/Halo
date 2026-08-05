@@ -52,6 +52,12 @@ public class DestinationTests
             Halo.Reports.Destination.Key(Halo.Reports.Destination.Kind.Custom, "halo1.builtin", " theirs "));
         Assert.Null(
             Halo.Reports.Destination.Key(Halo.Reports.Destination.Kind.Custom, "halo1.builtin", null));
+        // the hole the first version left: the old panel rows wrote BOTH keys with the shipped defaults,
+        // so a user who edited only the endpoint still carries Halo's token in report.key - and reading it
+        // back and forwarding it is the same disclosure, through the door the fix left open
+        Assert.Null(
+            Halo.Reports.Destination.Key(Halo.Reports.Destination.Kind.Custom, "halo1.builtin",
+                                         "  halo1.builtin  "));
         Assert.Null(
             Halo.Reports.Destination.Key(Halo.Reports.Destination.Kind.Off, "halo1.builtin", "theirs"));
     }
@@ -74,4 +80,73 @@ public class DestinationTests
                      settingsasm::Halo.Settings.Destination.EndpointKey);
         Assert.Equal(Halo.Reports.Destination.KeyKey, settingsasm::Halo.Settings.Destination.KeyKey);
     }
+
+    // THROUGH THE READER, from a real file on disk. Every assertion above is a pure function, and all of
+    // them passed while the shipped feature was broken: both loaders dropped an empty value at load, so
+    // "" arrived at Decide as null and "never send" posted to the built-in intake anyway. Three releases
+    // in a row this fix failed one layer below where it was tested. This is that layer.
+    [Theory]
+    [InlineData("\"\"", (int)Halo.Reports.Destination.Kind.Off)]
+    [InlineData("\"   \"", (int)Halo.Reports.Destination.Kind.Off)]
+    [InlineData("\"https://mine.example/in\"", (int)Halo.Reports.Destination.Kind.Custom)]
+    [InlineData("\"" + Built + "\"", (int)Halo.Reports.Destination.Kind.BuiltIn)]
+    public void The_decision_survives_a_round_trip_through_settings_json(string literal, int expected)
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "halo-dest-" + System.Guid.NewGuid().ToString("n") + ".json");
+        try
+        {
+            System.IO.File.WriteAllText(path,
+                "{\"version\":1,\"values\":{\"report.endpoint\":" + literal + "}}");
+            var file = Halo.Settings.SettingsFile.Read(path);
+            Assert.Equal(expected,
+                (int)Halo.Reports.Destination.Decide(file.Raw(Destination_EndpointKey), Built));
+        }
+        finally { try { System.IO.File.Delete(path); } catch { } }
+    }
+
+    private const string Destination_EndpointKey = "report.endpoint";
+
+    // A key absent from the file is still "not configured", which must stay distinct from empty.
+    [Fact]
+    public void An_absent_key_survives_the_round_trip_too()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "halo-dest-" + System.Guid.NewGuid().ToString("n") + ".json");
+        try
+        {
+            System.IO.File.WriteAllText(path, """{"version":1,"values":{"appearance.scale":"100%"}}""");
+            var file = Halo.Settings.SettingsFile.Read(path);
+            Assert.Null(file.Raw(Destination_EndpointKey));
+            Assert.Equal(Halo.Reports.Destination.Kind.BuiltIn,
+                Halo.Reports.Destination.Decide(file.Raw(Destination_EndpointKey), Built));
+        }
+        finally { try { System.IO.File.Delete(path); } catch { } }
+    }
+
+    // Both Key implementations, not just Decide - Key is where the credential logic lives now, and the
+    // two copies had to be edited by hand.
+    [Theory]
+    [InlineData((int)Halo.Reports.Destination.Kind.BuiltIn, null)]
+    [InlineData((int)Halo.Reports.Destination.Kind.Custom, "theirs")]
+    [InlineData((int)Halo.Reports.Destination.Kind.Custom, "halo1.anything")]
+    [InlineData((int)Halo.Reports.Destination.Kind.Custom, null)]
+    [InlineData((int)Halo.Reports.Destination.Kind.Off, "theirs")]
+    public void Both_executables_pick_the_same_key(int kind, string? raw)
+        => Assert.Equal(
+            Halo.Reports.Destination.Key((Halo.Reports.Destination.Kind)kind, "halo1.builtin", raw),
+            settingsasm::Halo.Settings.Destination.Key(
+                (settingsasm::Halo.Settings.Destination.Kind)kind, "halo1.builtin", raw));
+
+    // a revoked Halo token from an earlier generation is still a Halo credential
+    [Fact]
+    public void No_halo_issued_token_of_any_generation_reaches_a_third_party()
+        => Assert.Null(Halo.Reports.Destination.Key(
+            Halo.Reports.Destination.Kind.Custom, "halo1.current", "halo1.revokedFirstGeneration"));
+
+    // a trailing slash is the same intake, and demoting it would strip the token and 401
+    [Fact]
+    public void A_cosmetic_variant_of_the_built_in_url_is_still_the_built_in_one()
+        => Assert.Equal(Halo.Reports.Destination.Kind.BuiltIn,
+                        Halo.Reports.Destination.Decide(Built + "/", Built));
 }

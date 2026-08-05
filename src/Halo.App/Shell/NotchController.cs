@@ -1085,7 +1085,7 @@ internal sealed partial class NotchController
         _overFullscreen = fullscreen;
         var active = fullscreen ? [] : ActiveIndices();
 
-        if (!fullscreen)
+        if (!_hiddenForFullscreen)
         {
             for (int i = 0; i < _widgets.Length; i++)
             {

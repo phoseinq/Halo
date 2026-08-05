@@ -86,7 +86,7 @@ internal sealed class Store
             if (JsonNode.Parse(File.ReadAllText(_path)) is not JsonObject root) return;
             if (root["values"] is not JsonObject values) return;
             foreach (var (key, node) in values)
-                if (node is JsonValue value && value.TryGetValue<string>(out var text) && text.Length > 0)
+                if (node is JsonValue value && value.TryGetValue<string>(out var text) )
                     _saved[key] = text;
         }
         catch { }

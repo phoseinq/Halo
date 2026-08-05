@@ -25,6 +25,8 @@ internal sealed class SettingsFile
     internal string Text(string key, string fallback)
         => _values.TryGetValue(key, out var v) && v.Length > 0 ? v : fallback;
 
+    internal string? Raw(string key) => _values.TryGetValue(key, out var v) ? v : null;
+
     internal bool Bool(string key, bool fallback)
         => _values.TryGetValue(key, out var v)
             ? v.Equals("on", StringComparison.OrdinalIgnoreCase) || v.Equals("true", StringComparison.OrdinalIgnoreCase)
@@ -64,7 +66,8 @@ internal sealed class SettingsFile
                 if (node is null) continue;
                 string? text = node is JsonValue value && value.TryGetValue<string>(out var s)
                     ? s : node.ToJsonString().Trim('"');
-                if (!string.IsNullOrEmpty(text)) map[key] = text;
+
+                map[key] = text;
             }
             return new SettingsFile(map);
         }

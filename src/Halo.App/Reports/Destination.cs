@@ -27,7 +27,9 @@ internal static class Destination
         if (kind != Kind.Custom) return kind == Kind.BuiltIn ? builtIn : null;
         string trimmed = rawKey?.Trim() ?? "";
 
-        if (trimmed.Length == 0 || trimmed.StartsWith("halo1.", StringComparison.Ordinal)) return null;
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        if (trimmed.StartsWith("halo1.", StringComparison.Ordinal)) return null;
+        if (string.Equals(trimmed, builtIn.Trim(), StringComparison.Ordinal)) return null;
         return trimmed;
     }
 
@@ -37,9 +39,13 @@ internal static class Destination
         {
             if (!Uri.TryCreate(a, UriKind.Absolute, out var ua)) return false;
             if (!Uri.TryCreate(b.Trim(), UriKind.Absolute, out var ub)) return false;
-            return ua.Host.Equals(ub.Host, StringComparison.OrdinalIgnoreCase) && ua.Port == ub.Port
+            return ua.Scheme.Equals(ub.Scheme, StringComparison.OrdinalIgnoreCase)
+                && ua.Host.Equals(ub.Host, StringComparison.OrdinalIgnoreCase) && ua.Port == ub.Port
                 && ua.AbsolutePath.TrimEnd('/').Equals(ub.AbsolutePath.TrimEnd('/'),
-                                                       StringComparison.OrdinalIgnoreCase);
+                                                       StringComparison.OrdinalIgnoreCase)
+
+                && string.Equals(ua.Query, ub.Query, StringComparison.Ordinal)
+                && string.Equals(ua.UserInfo, ub.UserInfo, StringComparison.Ordinal);
         }
         catch { return false; }
     }

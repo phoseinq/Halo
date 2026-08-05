@@ -112,4 +112,49 @@ public sealed class SettingsStoreTests : IDisposable
         store.Set("glass", "on", "on");
         Assert.Equal(0, store.PendingCount);
     }
+
+    // The panel half of the empty-value work had NO test, in the file the fix was mirrored into by hand.
+    // Reverting either guard in Store left the whole suite green while the panel again could not see
+    // "never send" and again flipped every default-on row off - the identical regression in the identical
+    // function. Through a real file, because that is the layer that was wrong three releases running.
+    [Fact]
+    public void An_empty_value_survives_the_load_but_reads_as_absent()
+    {
+        File.WriteAllText(Path_,
+            """{"version":1,"values":{"report.endpoint":"","general.startup":""}}""");
+        var store = new Store(Path_);
+
+        Assert.Equal("", store.Raw("report.endpoint"));      // Raw is the one place it is visible
+        Assert.Null(store.Raw("never.written"));             // and absent is still a different answer
+        Assert.True(store.Bool("general.startup", true));    // a default-on row stays on
+        Assert.Equal("on", store.Text("general.startup", "on"));
+    }
+
+    // whitespace is a real input - Destination treats "   " as "never send", so the readers have to agree
+    [Fact]
+    public void A_whitespace_value_does_not_override_a_default_either()
+    {
+        File.WriteAllText(Path_, """{"version":1,"values":{"general.startup":"   "}}""");
+        var store = new Store(Path_);
+        Assert.True(store.Bool("general.startup", true));
+        Assert.Equal("on", store.Text("general.startup", "on"));
+    }
+
+    // Both Bool implementations, held against each other. They had drifted: the panel accepted only "on"
+    // while the pill accepted "on" OR "true", so a hand-edited or API-written "true" made the pill show a
+    // widget the panel drew as off, and neither side was wrong on its own terms.
+    [Theory]
+    [InlineData("on", true)]
+    [InlineData("true", true)]
+    [InlineData("off", false)]
+    [InlineData("nonsense", false)]
+    [InlineData("", true)]
+    [InlineData("   ", true)]
+    public void Both_executables_read_a_toggle_the_same_way(string stored, bool expected)
+    {
+        File.WriteAllText(Path_,
+            "{\"version\":1,\"values\":{\"feature.media\":\"" + stored + "\"}}");
+        Assert.Equal(expected, new Store(Path_).Bool("feature.media", true));
+        Assert.Equal(expected, Halo.Settings.SettingsFile.Read(Path_).Bool("feature.media", true));
+    }
 }

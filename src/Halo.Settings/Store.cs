@@ -25,9 +25,9 @@ internal sealed class Store
 
     internal string Text(string key, string fallback)
     {
-        if (_draft.TryGetValue(key, out var d)) return d.Length > 0 ? d : fallback;
+        if (_draft.TryGetValue(key, out var d)) return !string.IsNullOrWhiteSpace(d) ? d : fallback;
         if (_resetPending) return fallback;
-        return _saved.TryGetValue(key, out var v) && v.Length > 0 ? v : fallback;
+        return _saved.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : fallback;
     }
 
     internal string? Raw(string key)
@@ -40,11 +40,16 @@ internal sealed class Store
     internal bool Bool(string key, bool fallback)
     {
 
-        if (_draft.TryGetValue(key, out var d) && d.Length > 0)
-            return d.Equals("on", StringComparison.OrdinalIgnoreCase);
+        if (_draft.TryGetValue(key, out var d)) return On(d, fallback);
         if (_resetPending) return fallback;
-        return _saved.TryGetValue(key, out var v) && v.Length > 0
-            ? v.Equals("on", StringComparison.OrdinalIgnoreCase) : fallback;
+        return _saved.TryGetValue(key, out var v) ? On(v, fallback) : fallback;
+    }
+
+    private static bool On(string v, bool fallback)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return fallback;
+        return v.Equals("on", StringComparison.OrdinalIgnoreCase)
+            || v.Equals("true", StringComparison.OrdinalIgnoreCase);
     }
 
     internal void Set(string key, string value, string fallback = "")

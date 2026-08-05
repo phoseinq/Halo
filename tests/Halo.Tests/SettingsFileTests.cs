@@ -38,6 +38,11 @@ public class SettingsFileTests
     [Theory]
     [InlineData("on", true)]
     [InlineData("true", true)]
+    // empty and whitespace read as ABSENT, so the fallback wins - keeping empty values at load for
+    // report.endpoint's "never send" made this reader the one that noticed, and it flipped every
+    // default-on setting off for a file carrying one
+    [InlineData("", true)]
+    [InlineData("   ", true)]
     [InlineData("off", false)]
     [InlineData("anything else", false)]
     public void ATogglesWordIsItsValue(string stored, bool expected)

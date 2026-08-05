@@ -23,18 +23,18 @@ internal sealed class SettingsFile
     internal IReadOnlyDictionary<string, string> Values => _values;
 
     internal string Text(string key, string fallback)
-        => _values.TryGetValue(key, out var v) && v.Length > 0 ? v : fallback;
+        => _values.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : fallback;
 
     internal string? Raw(string key) => _values.TryGetValue(key, out var v) ? v : null;
 
     internal bool Bool(string key, bool fallback)
-        => _values.TryGetValue(key, out var v) && v.Length > 0
+        => _values.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v)
             ? v.Equals("on", StringComparison.OrdinalIgnoreCase) || v.Equals("true", StringComparison.OrdinalIgnoreCase)
             : fallback;
 
     internal float Number(string key, float fallback)
     {
-        if (!_values.TryGetValue(key, out var v) || v.Length == 0) return fallback;
+        if (!_values.TryGetValue(key, out var v) || string.IsNullOrWhiteSpace(v)) return fallback;
         var span = v.AsSpan().Trim().TrimEnd('%').Trim();
         return float.TryParse(span, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : fallback;
     }
@@ -67,7 +67,7 @@ internal sealed class SettingsFile
                 string? text = node is JsonValue value && value.TryGetValue<string>(out var s)
                     ? s : node.ToJsonString().Trim('"');
 
-                map[key] = text;
+                if (text is not null) map[key] = text;
             }
             return new SettingsFile(map);
         }

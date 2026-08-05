@@ -68,7 +68,8 @@ internal sealed class SettingsStore : IDisposable
         SettingsFile next;
         lock (_gate)
         {
-            if (_current.Text(key, "") == value) return false;
+
+            if (string.Equals(_current.Raw(key), value, StringComparison.Ordinal)) return false;
             next = _current.With(key, value);
             if (!next.Save(_path)) return false;
             _current = next;

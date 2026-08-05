@@ -28,7 +28,7 @@ internal sealed class SettingsFile
     internal string? Raw(string key) => _values.TryGetValue(key, out var v) ? v : null;
 
     internal bool Bool(string key, bool fallback)
-        => _values.TryGetValue(key, out var v)
+        => _values.TryGetValue(key, out var v) && v.Length > 0
             ? v.Equals("on", StringComparison.OrdinalIgnoreCase) || v.Equals("true", StringComparison.OrdinalIgnoreCase)
             : fallback;
 

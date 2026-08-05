@@ -149,4 +149,23 @@ public class DestinationTests
     public void A_cosmetic_variant_of_the_built_in_url_is_still_the_built_in_one()
         => Assert.Equal(Halo.Reports.Destination.Kind.BuiltIn,
                         Halo.Reports.Destination.Decide(Built + "/", Built));
+
+    // Keeping empty values at load is what makes "never send" reachable, and it must not leak into any
+    // other reader. Bool was the one that noticed: a stored "" is present but not "on", so every setting
+    // whose default is TRUE would have flipped off for a file carrying an empty value.
+    [Fact]
+    public void An_empty_value_does_not_override_a_true_default()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "halo-bool-" + System.Guid.NewGuid().ToString("n") + ".json");
+        try
+        {
+            System.IO.File.WriteAllText(path, """{"version":1,"values":{"general.startup":""}}""");
+            var file = Halo.Settings.SettingsFile.Read(path);
+            Assert.True(file.Bool("general.startup", true));
+            Assert.Equal("on", file.Text("general.startup", "on"));
+            Assert.Equal("", file.Raw("general.startup"));   // and Raw still sees it
+        }
+        finally { try { System.IO.File.Delete(path); } catch { } }
+    }
 }

@@ -39,9 +39,12 @@ internal sealed class Store
 
     internal bool Bool(string key, bool fallback)
     {
-        if (_draft.TryGetValue(key, out var d)) return d.Equals("on", StringComparison.OrdinalIgnoreCase);
+
+        if (_draft.TryGetValue(key, out var d) && d.Length > 0)
+            return d.Equals("on", StringComparison.OrdinalIgnoreCase);
         if (_resetPending) return fallback;
-        return _saved.TryGetValue(key, out var v) ? v.Equals("on", StringComparison.OrdinalIgnoreCase) : fallback;
+        return _saved.TryGetValue(key, out var v) && v.Length > 0
+            ? v.Equals("on", StringComparison.OrdinalIgnoreCase) : fallback;
     }
 
     internal void Set(string key, string value, string fallback = "")

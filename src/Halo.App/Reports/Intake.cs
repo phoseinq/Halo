@@ -15,14 +15,14 @@ internal static class Intake
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(6);
 
+    private static string SettingsPath => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "settings.json");
+
     internal static bool AutoCrash()
     {
         try
         {
-            string path = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Halo", "settings.json");
-            return Halo.Settings.SettingsFile.Read(path)
+            return Halo.Settings.SettingsFile.Read(SettingsPath)
                 .Bool(Halo.Settings.SettingsKeys.AutoCrashReport,
                       Halo.Settings.SettingsKeys.AutoCrashDefault);
         }
@@ -91,8 +91,20 @@ internal static class Intake
         {
             using var client = new HttpClient { Timeout = Timeout };
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = content };
-            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Key);
+
+            var file = Halo.Settings.SettingsFile.Read(SettingsPath);
+            string? rawEndpoint = file.Values.TryGetValue(Destination.EndpointKey, out var re) ? re : null;
+            var kind = Destination.Decide(rawEndpoint, Endpoint);
+            if (kind == Destination.Kind.Off) return false;
+            string target = kind == Destination.Kind.Custom ? rawEndpoint!.Trim() : Endpoint;
+            string? bearer = Destination.Key(kind, Key,
+                file.Values.TryGetValue(Destination.KeyKey, out var rk) ? rk : null);
+            if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+                return false;
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content };
+            if (bearer is not null)
+                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + bearer);
             using var response = client.Send(request);
             return response.IsSuccessStatusCode;
         }

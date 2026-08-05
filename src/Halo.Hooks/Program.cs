@@ -609,7 +609,7 @@ internal static class Program
                 if (conPid > 4) from = conPid;
             }
 
-            uint? env = EnvHostPid(owners, map);
+            uint? env = EnvHostPid(owners, map, from);
             if (env is uint hinted) return hinted;
 
             uint found = WalkToWindow(map, owners, from);
@@ -621,7 +621,8 @@ internal static class Program
         return 0;
     }
 
-    private static uint? EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map)
+    private static uint? EnvHostPid(HashSet<uint> owners, Dictionary<uint, (uint parent, string name)> map,
+        uint start)
     {
 
         string[]? want = null;
@@ -635,11 +636,16 @@ internal static class Program
 
         if (want == null) return null;
 
+        uint ancestor = WalkToWindow(map, owners, start);
+        if (ancestor != 0 && map.TryGetValue(ancestor, out var owner) &&
+            want.Contains(owner.name, StringComparer.OrdinalIgnoreCase))
+            return ancestor;
+
         uint only = 0;
         foreach (var pid in owners)
         {
             if (!map.TryGetValue(pid, out var e)) continue;
-            if (!want.Any(w => e.name.Equals(w, StringComparison.OrdinalIgnoreCase))) continue;
+            if (!want.Contains(e.name, StringComparer.OrdinalIgnoreCase)) continue;
             if (only != 0) return 0;
             only = pid;
         }

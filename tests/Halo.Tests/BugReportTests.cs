@@ -197,4 +197,37 @@ public class BugReportTests
         Assert.Equal("0", map["heavy"]);
         Assert.Equal("120", map["tier"]);
     }
+
+    // "Never display invented numbers" applies to a report harder than to the pill, because a stranger
+    // reads it as a fact about the reporter's machine. Both of these shipped a wrong one: uptime_min
+    // measured the throwaway --report-new child, so every manual report said ~0 while the pill had been
+    // up for hours, and ram_mb reads the last GC's memory info, which is a default struct when a process
+    // finishes without collecting. Null is the honest answer, and the KEY has to stay so the shape does
+    // not change under a reader.
+    [Fact]
+    public void An_unknown_number_is_null_and_keeps_its_key()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            Halo.Reports.ReportPayload.Json(Unknowns()));
+        var root = doc.RootElement;
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, root.GetProperty("uptime_min").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null,
+                     root.GetProperty("machine").GetProperty("ram_mb").ValueKind);
+    }
+
+    [Fact]
+    public void A_real_number_still_survives()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(
+            Halo.Reports.ReportPayload.Json(Unknowns() with { RamMb = 32492, UptimeMin = 96 }));
+        Assert.Equal(32492, doc.RootElement.GetProperty("machine").GetProperty("ram_mb").GetInt32());
+        Assert.Equal(96, doc.RootElement.GetProperty("uptime_min").GetInt32());
+    }
+
+    private static Halo.Reports.ReportFacts Unknowns()
+        => new("manual", "2026-08-05T00:00:00Z", "3.8.9.0", "10.0.26200.0", "2560x1440 @ 280 Hz", 96,
+               ".NET 9.0.18", "en-US", 20, null, null,
+               "MediaWidget", ["MediaWidget"], false, false, 280,
+               null, null, [], [], "x");
 }

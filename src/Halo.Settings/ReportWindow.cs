@@ -384,17 +384,20 @@ internal sealed class ReportWindow : Window
     private async Task Send()
     {
 
-        string configured = new Store().Text("report.endpoint", Intake.Endpoint).Trim();
-        if (configured.Length == 0)
+        var store = new Store();
+        string? rawEndpoint = store.Raw(Destination.EndpointKey);
+        var kind = Destination.Decide(rawEndpoint, Intake.Endpoint);
+        if (kind == Destination.Kind.Off)
         {
             Say("Reports are switched off: report.endpoint in settings.json is empty.", Coral);
             return;
         }
-        bool custom = !string.Equals(configured, Intake.Endpoint, StringComparison.Ordinal);
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri)
+        string target = kind == Destination.Kind.Custom ? rawEndpoint!.Trim() : Intake.Endpoint;
+        string? bearer = Destination.Key(kind, Intake.Key, store.Raw(Destination.KeyKey));
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri)
             || uri.Scheme != Uri.UriSchemeHttps)
         {
-            Say(custom
+            Say(kind == Destination.Kind.Custom
                 ? "report.endpoint in settings.json is not a valid https:// address."
                 : "The built-in endpoint is not a valid https:// address.", Coral);
             return;
@@ -407,7 +410,8 @@ internal sealed class ReportWindow : Window
                                                   "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content };
 
-            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Intake.Key);
+            if (bearer is not null)
+                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + bearer);
             using var response = await client.SendAsync(request);
             if (response.IsSuccessStatusCode)
             {

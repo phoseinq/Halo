@@ -30,6 +30,13 @@ internal sealed class Store
         return _saved.TryGetValue(key, out var v) && v.Length > 0 ? v : fallback;
     }
 
+    internal string? Raw(string key)
+    {
+        if (_draft.TryGetValue(key, out var d)) return d;
+        if (_resetPending) return null;
+        return _saved.TryGetValue(key, out var v) ? v : null;
+    }
+
     internal bool Bool(string key, bool fallback)
     {
         if (_draft.TryGetValue(key, out var d)) return d.Equals("on", StringComparison.OrdinalIgnoreCase);

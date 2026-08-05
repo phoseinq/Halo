@@ -27,6 +27,7 @@ internal sealed class CcUsage
 internal sealed class CcStatus
 {
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool FromDesktopApp { get; set; }
     public string? Name { get; set; }
     public string? Icon { get; set; }
@@ -230,8 +231,11 @@ internal sealed class StatusStore
                 _files.TryGetValue(_appPath, out var prev);
                 _app = Read(_appPath, prev);
 
-                if (_app is not null) _app.FromDesktopApp = true;
-                if (_app is not null) next[_appPath] = _app;
+                if (_app is not null)
+                {
+                    _app.FromDesktopApp = true;
+                    next[_appPath] = _app;
+                }
             }
             _files = next;
             AssignSlots(_clock());

@@ -8,6 +8,11 @@ namespace Halo.Tests;
 // "running…" cannot tell a three-second `git status` from a two-minute `dotnet build`, and that was the one
 // thing the pill had no way to say about a tool call. The hook now forwards what the tool is acting ON, and
 // the wording puts it in front of the voice when there is nothing more pressing to report.
+// Serialised against the other classes that touch it: Strings.Use switches the ACTIVE LANGUAGE for
+// the whole process, so a test that reads a localized string while another has just moved to
+// Persian reads the wrong one. It failed one run in three before this - a settings label, a mood
+// set and a report route, never the same one twice, which is what a shared global looks like.
+[Collection("locale")]
 public class ToolTargetTests
 {
     private static string? Target(string tool, string json)

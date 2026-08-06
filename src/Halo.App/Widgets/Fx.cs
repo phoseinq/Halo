@@ -11,9 +11,9 @@ internal static class Fx
 {
     public static readonly Color White = Color.FromArgb(238, 255, 255, 255);
 
-    public const string NetLabel = "net";
-    public const string ApiLabel = "api";
-    public const string LossLabel = "loss";
+    public static string NetLabel => Halo.Localization.Strings.Get("net.label");
+    public static string ApiLabel => Halo.Localization.Strings.Get("net.api");
+    public static string LossLabel => Halo.Localization.Strings.Get("net.loss");
 
     public static string CleanText(string? s)
     {

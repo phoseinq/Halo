@@ -18,6 +18,17 @@
 
   <ItemGroup>
     <Resource Include="..\Halo.App\Assets\halo.ico" Link="halo.ico" />
+    <!-- the same file on disk as Halo.App embeds, under the same logical name, because Strings reads it
+         out of ITS OWN assembly - a linked class in a second exe finds a second copy or finds nothing -->
+    <EmbeddedResource Include="..\Halo.App\Localization\locales\en.json"
+                      LogicalName="Halo.Localization.en.json" />
+    <!-- and the loose ones beside the exe, the same way Halo.App ships them. Strings.LocalesDir resolves
+         next to the ASSEMBLY, so the panel was looking in its own output folder and finding nothing: the
+         language picker offers only what Available() can see, so without this it offered English alone
+         however many locale files the repo carried. -->
+    <Content Include="..\Halo.App\Localization\locales\*.json"
+             Exclude="..\Halo.App\Localization\locales\en.json"
+             Link="locales\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +37,10 @@
     <Compile Include="..\Halo.App\Interop\AppModel.cs" Link="AppModel.cs" />
     <!-- the panel writes "undone" here and the pill reads it; one definition of the format, not two -->
     <Compile Include="..\Halo.App\ClaudeCode\HookMarks.cs" Link="HookMarks.cs" />
+    <!-- the third linked file, for the same reason as the other two: a key table is a format, and both
+         exes reading one settings.json have to resolve it identically. The twinning that Intake and
+         Destination use is about one exe not being able to stop the other STARTING; this is not that. -->
+    <Compile Include="..\Halo.App\Localization\Strings.cs" Link="Strings.cs" />
   </ItemGroup>
 
 </Project>

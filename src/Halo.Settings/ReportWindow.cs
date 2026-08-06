@@ -38,7 +38,7 @@ internal sealed class ReportWindow : Window
             window._preview.Text = SamplePreview;
             window._description.Text = "the album cover stays as the spotify logo for a whole track";
             window.ShowDetails(true);
-            window.Say("Sent. It is on disk too, at %LOCALAPPDATA%\\Halo\\reports.", window.Mint);
+            window.Say(Halo.Localization.Strings.Get("report.sentOnDisk"), window.Mint);
         }
         return (FrameworkElement)window.Content;
     }
@@ -71,7 +71,7 @@ internal sealed class ReportWindow : Window
 
     private ReportWindow(bool preview = false)
     {
-        Title = "Report a problem";
+        Title = Halo.Localization.Strings.Get("report.title");
         Width = 720;
         Height = 640;
         MinWidth = 560;
@@ -93,10 +93,7 @@ internal sealed class ReportWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        root.Children.Add(Row(0, Label(
-            "Halo mirrors other people's notifications, what you are playing and your tray file names, so a "
-            + "report carries a named list of facts about this machine and nothing else. Read the whole "
-            + "file first with 'What gets sent?' - it is the same file either way.", Secondary, 12.5)));
+        root.Children.Add(Row(0, Label(Halo.Localization.Strings.Get("report.blurb"), Secondary, 12.5)));
 
         _description = new TextBox
         {
@@ -122,10 +119,10 @@ internal sealed class ReportWindow : Window
         };
         root.Children.Add(Row(1, _description));
 
-        _send = Glass("Send report", 150);
+        _send = Glass(Halo.Localization.Strings.Get("report.send"), 150);
         _send.Click += (_, _) => SendFlow();
 
-        _disclose = Glass("What gets sent?", 150);
+        _disclose = Glass(Halo.Localization.Strings.Get("report.whatGetsSent"), 150);
         _disclose.Margin = new Thickness(10, 0, 0, 0);
         var buttons = new StackPanel
         {
@@ -168,10 +165,10 @@ internal sealed class ReportWindow : Window
             Visibility = Visibility.Collapsed,
         };
 
-        _actions.Children.Add(Action("Copy", 96, Copy));
-        _actions.Children.Add(Action("Save as...", 110, Save));
-        _actions.Children.Add(Action("Open a GitHub issue", 170, Issue));
-        _actions.Children.Add(Action("Open in Notepad", 150, Notepad));
+        _actions.Children.Add(Action(Halo.Localization.Strings.Get("report.copy"), 96, Copy));
+        _actions.Children.Add(Action(Halo.Localization.Strings.Get("report.saveAs"), 110, Save));
+        _actions.Children.Add(Action(Halo.Localization.Strings.Get("report.openIssue"), 170, Issue));
+        _actions.Children.Add(Action(Halo.Localization.Strings.Get("report.openNotepad"), 150, Notepad));
         root.Children.Add(Row(4, _actions));
 
         _status = Label("", Secondary, 12);
@@ -276,7 +273,7 @@ internal sealed class ReportWindow : Window
         var visibility = show ? Visibility.Visible : Visibility.Collapsed;
         _preview.Visibility = visibility;
         _actions.Visibility = visibility;
-        _disclose.Content = show ? "Hide details" : "What gets sent?";
+        _disclose.Content = show ? Halo.Localization.Strings.Get("report.hideDetails") : Halo.Localization.Strings.Get("report.whatGetsSent");
     }
 
     private bool Create()
@@ -284,7 +281,7 @@ internal sealed class ReportWindow : Window
         try
         {
             string exe = Path.Combine(AppContext.BaseDirectory, "Halo.App.exe");
-            if (!File.Exists(exe)) { Say("Halo.App.exe is not beside this window.", Coral); return false; }
+            if (!File.Exists(exe)) { Say(Halo.Localization.Strings.Get("report.noExe"), Coral); return false; }
 
             string desc = Path.Combine(Path.GetTempPath(), "halo-report-description.txt");
             File.WriteAllText(desc, _description.Text);
@@ -299,13 +296,13 @@ internal sealed class ReportWindow : Window
                 psi.ArgumentList.Add("--report-new");
                 psi.ArgumentList.Add(desc);
                 using var process = Process.Start(psi);
-                if (process is null) { Say("Could not start Halo.App.", Coral); return false; }
+                if (process is null) { Say(Halo.Localization.Strings.Get("report.noStart"), Coral); return false; }
                 string printed = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(10_000);
 
                 string? path = File.Exists(printed) ? printed : NewestAny();
-                if (path is null) { Say("The report was not written.", Coral); return false; }
-                Load(path, "This is the report, exactly as it sits on disk. Nothing has been sent.");
+                if (path is null) { Say(Halo.Localization.Strings.Get("report.notWritten"), Coral); return false; }
+                Load(path, Halo.Localization.Strings.Get("report.intro"));
                 return true;
             }
             finally { try { File.Delete(desc); } catch { } }
@@ -345,7 +342,7 @@ internal sealed class ReportWindow : Window
     private void Copy()
     {
         Clipboard.SetText(_preview.Text);
-        Say("Copied. It never went near the network.", Mint);
+        Say(Halo.Localization.Strings.Get("report.copied"), Mint);
     }
 
     private void Save()
@@ -357,7 +354,7 @@ internal sealed class ReportWindow : Window
         };
         if (dialog.ShowDialog(this) != true) return;
         File.WriteAllText(dialog.FileName, _preview.Text);
-        Say("Saved. Attach it to an email yourself if you want me to have it.", Mint);
+        Say(Halo.Localization.Strings.Get("report.saved"), Mint);
     }
 
     private const int IssueBodyLimit = 6000;
@@ -372,7 +369,7 @@ internal sealed class ReportWindow : Window
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         Say(trimmed
             ? "Opened GitHub. The report was too long for a URL, so attach the saved file as well."
-            : "Opened GitHub. Nothing is filed until you press submit there.", trimmed ? Coral : Mint);
+            : Halo.Localization.Strings.Get("report.openedGitHub"), trimmed ? Coral : Mint);
     }
 
     private void Notepad()
@@ -392,7 +389,7 @@ internal sealed class ReportWindow : Window
         string? bearer = route.Bearer;
         try
         {
-            Say("Sending...", Secondary);
+            Say(Halo.Localization.Strings.Get("report.sending"), Secondary);
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
             using var content = new StringContent(_preview.Text, System.Text.Encoding.UTF8,
                                                   "application/json");
@@ -409,9 +406,9 @@ internal sealed class ReportWindow : Window
             }
             else
                 Say($"The endpoint answered {(int)response.StatusCode} {response.ReasonPhrase}. "
-                    + "The report is still on disk.", Coral);
+                    + Halo.Localization.Strings.Get("report.stillOnDisk"), Coral);
         }
 
-        catch (Exception ex) { Say("Send failed: " + ex.Message + ". The report is still on disk.", Coral); }
+        catch (Exception ex) { Say(Halo.Localization.Strings.Get("report.sendFailed") + ex.Message + ". The report is still on disk.", Coral); }
     }
 }

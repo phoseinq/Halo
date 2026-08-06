@@ -28,17 +28,45 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        if (Halo.Localization.Strings.IsRtl) FlowDirection = System.Windows.FlowDirection.RightToLeft;
+        Chrome();
         SourceInitialized += (_, _) => Glass.Apply(this);
         BuildNav();
         ShowPage(PageId.Home);
         Draft();
     }
 
+    private void Chrome()
+    {
+        TitleText.Text = Halo.Localization.Strings.Get("chrome.title");
+        ResetButton.Content = Halo.Localization.Strings.Get("chrome.reset");
+        ApplyButton.Content = Halo.Localization.Strings.Get("chrome.apply");
+        UnappliedText.Text = Halo.Localization.Strings.Get("chrome.unapplied");
+        KeepEditingButton.Content = Halo.Localization.Strings.Get("chrome.keepEditing");
+        DiscardButton.Content = Halo.Localization.Strings.Get("chrome.discard");
+    }
+
+        private void Relanguage()
+    {
+        string before = Halo.Localization.Strings.Lang;
+        Halo.Localization.Strings.Use(new Store().Text("general.language", Catalog.LanguageRowFallback));
+        if (Halo.Localization.Strings.Lang == before) return;
+
+        FlowDirection = Halo.Localization.Strings.IsRtl
+            ? System.Windows.FlowDirection.RightToLeft : System.Windows.FlowDirection.LeftToRight;
+        Chrome();
+        _nav.Clear();
+        NavPanel.Children.Clear();
+        BuildNav();
+    }
+
     private void Draft()
     {
         int n = _store.PendingCount;
         DraftBar.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
-        DraftState.Text = n == 1 ? "1 change waiting" : $"{n} changes waiting";
+
+        DraftState.Text = n == 1 ? Halo.Localization.Strings.Get("draft.one") : Halo.Localization.Strings.Format("draft.many", n);
         if (_restore != null) _restore.IsEnabled = n > 0;
     }
 
@@ -47,6 +75,7 @@ public partial class MainWindow : Window
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         _store.Apply();
+        Relanguage();
         ShowPage(_page);
         Draft();
     }
@@ -65,8 +94,8 @@ public partial class MainWindow : Window
             e.Cancel = true;
             int n = _store.PendingCount;
             GuardDetail.Text = n == 1
-                ? "One change has not been applied yet. Halo is still running the previous settings."
-                : $"{n} changes have not been applied yet. Halo is still running the previous settings.";
+                ? Halo.Localization.Strings.Get("guard.one")
+                : Halo.Localization.Strings.Format("guard.many", n);
             Guard.Visibility = Visibility.Visible;
             return;
         }
@@ -357,7 +386,7 @@ public partial class MainWindow : Window
         panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
         var valueText = new TextBlock
         {
-            Text = value,
+            Text = Live.Display(value),
             Foreground = Ink,
             FontSize = 11.5,
             FontWeight = FontWeights.Medium,
@@ -426,7 +455,8 @@ public partial class MainWindow : Window
         {
             var label = new TextBlock
             {
-                Text = option,
+
+                Text = Live.Display(option),
                 Foreground = Ink,
                 FontSize = 11.5,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -446,7 +476,7 @@ public partial class MainWindow : Window
                 value = chosen;
                 _store.Set(row.Key, chosen, row.Fallback);
                 Draft();
-                valueText.Text = chosen;
+                valueText.Text = Live.Display(chosen);
                 PaintCells();
                 popup.IsOpen = false;
             };
@@ -575,7 +605,8 @@ public partial class MainWindow : Window
     private FrameworkElement BuildAction(Row row)
     {
         var button = Styled(row, 124);
-        button.Content = row.ActionLabel.Length > 0 ? row.ActionLabel : "Open";
+
+        button.Content = Live.Display(row.ActionLabel.Length > 0 ? row.ActionLabel : "Open");
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.Click += (_, _) => RunAction(row.Key, button);
         return button;
@@ -600,10 +631,58 @@ public partial class MainWindow : Window
         finally { _actionInFlight = false; }
     }
 
+    private WeakReference<TextBlock>? _rateText;
+    private System.IO.FileSystemWatcher? _rateWatch;
+
+        private void WatchRate()
+    {
+        if (_rateWatch != null) return;
+        try
+        {
+            string path = Live.RatePath;
+            string? dir = System.IO.Path.GetDirectoryName(path);
+            if (dir is null) return;
+            System.IO.Directory.CreateDirectory(dir);
+            _rateWatch = new System.IO.FileSystemWatcher(dir, System.IO.Path.GetFileName(path))
+            {
+
+                NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.Size
+                             | System.IO.NotifyFilters.FileName,
+                EnableRaisingEvents = true,
+            };
+            _rateWatch.Changed += (_, _) => RateChanged();
+            _rateWatch.Created += (_, _) => RateChanged();
+            _rateWatch.Renamed += (_, _) => RateChanged();
+        }
+        catch { _rateWatch = null; }
+    }
+
+    private void RateChanged()
+    {
+        try
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_rateText is null || !_rateText.TryGetTarget(out var text)) return;
+                string value = Live.MeasuredRate;
+                if (text.Text == value) return;
+                text.Text = value;
+                text.Foreground = Live.Tone(value) switch
+                {
+                    Live.State.Enabled => Mint,
+                    Live.State.Attention => Coral,
+                    _ => Secondary,
+                };
+            }));
+        }
+        catch { }
+    }
+
     private FrameworkElement BuildStatus(Row row)
     {
 
         string value = Live.Costly(row.Key) ? Live.Peek(row.Key) ?? Live.Checking : Live.Value(row);
+        string shown = Live.Display(value);
         var tone = Live.Tone(value) switch
         {
             Live.State.Enabled => Mint,
@@ -618,7 +697,7 @@ public partial class MainWindow : Window
             var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(new TextBlock
             {
-                Text = value,
+                Text = shown,
                 Foreground = tone,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 11,
@@ -626,9 +705,9 @@ public partial class MainWindow : Window
                 Margin = new Thickness(0, 0, 10, 0),
             });
             var open = Styled(row, 126);
-            open.Content = Live.ActionLabel(row);
+            open.Content = Live.Display(Live.ActionLabel(row));
             open.HorizontalContentAlignment = HorizontalAlignment.Center;
-            open.IsEnabled = (string)open.Content != Live.Checking;
+            open.IsEnabled = (string)open.Content != Live.Display(Live.Checking);
             open.Click += (_, _) => RunAction(row.Key, open);
             panel.Children.Add(open);
             return panel;
@@ -637,13 +716,18 @@ public partial class MainWindow : Window
         var dot = new Ellipse { Width = 6, Height = 6, Fill = tone, VerticalAlignment = VerticalAlignment.Center };
         var text = new TextBlock
         {
-            Text = value,
+
+            FlowDirection = Live.IsLatin(shown)
+                ? System.Windows.FlowDirection.LeftToRight : FlowDirection,
+            Text = shown,
             Foreground = tone,
             FontWeight = FontWeights.SemiBold,
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
+
+        if (row.Key == "appearance.fpsMeasured") { _rateText = new WeakReference<TextBlock>(text); WatchRate(); }
         var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         content.Children.Add(dot);
         content.Children.Add(text);
@@ -703,7 +787,7 @@ public partial class MainWindow : Window
         });
         copy.Children.Add(new TextBlock
         {
-            Text = "Your apps, activity and agents - surfaced when they matter.",
+            Text = Halo.Localization.Strings.Get("home.tagline"),
             Foreground = Secondary,
             FontSize = 13,
             FontWeight = FontWeights.Medium,
@@ -714,7 +798,7 @@ public partial class MainWindow : Window
         hero.Children.Add(copy);
         ContentPanel.Children.Add(hero);
 
-        ContentPanel.Children.Add(Eyebrow("EXPLORE", new Thickness(3, 0, 0, 7)));
+        ContentPanel.Children.Add(Eyebrow(Halo.Localization.Strings.Get("home.explore"), new Thickness(3, 0, 0, 7)));
         var grid = new Grid { Margin = new Thickness(0, 0, 2, 18) };
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -730,7 +814,7 @@ public partial class MainWindow : Window
         }
         ContentPanel.Children.Add(grid);
 
-        ContentPanel.Children.Add(Eyebrow("STATE", new Thickness(3, 0, 0, 7)));
+        ContentPanel.Children.Add(Eyebrow(Halo.Localization.Strings.Get("home.state"), new Thickness(3, 0, 0, 7)));
         ContentPanel.Children.Add(StateCard());
     }
 
@@ -784,15 +868,15 @@ public partial class MainWindow : Window
         var copy = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
         copy.Children.Add(new TextBlock
         {
-            Text = "Changes wait for Apply",
+            Text = Halo.Localization.Strings.Get("home.waiting"),
             Foreground = Mint,
             FontWeight = FontWeights.SemiBold,
             FontSize = 12.5,
         });
         copy.Children.Add(new TextBlock
         {
-            Text = "Nothing here reaches Halo until you press Apply at the bottom of the page. "
-                 + "Reset puts everything back the way you found it.",
+
+            Text = Halo.Localization.Strings.Get("home.waitingBody"),
             Foreground = Secondary,
             FontSize = 11.5,
             TextWrapping = TextWrapping.Wrap,
@@ -803,7 +887,7 @@ public partial class MainWindow : Window
         var reset = new Button
         {
             Style = (Style)FindResource("Glass"),
-            Content = "Restore defaults",
+            Content = Halo.Localization.Strings.Get("home.restore"),
             Height = 40,
             Padding = new Thickness(16, 0, 16, 0),
             Background = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0x9A, 0x8B)),

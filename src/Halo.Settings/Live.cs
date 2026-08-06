@@ -126,6 +126,41 @@ internal static class Live
         _ => Checking,
     };
 
+        internal static string Display(string value) => value switch
+    {
+        Checking => Halo.Localization.Strings.Get("state.checking"),
+        Unavailable => Halo.Localization.Strings.Get("state.unavailable"),
+        NotMeasured => Halo.Localization.Strings.Get("state.notMeasuredYet"),
+        "Connected" => Halo.Localization.Strings.Get("state.connected"),
+        "Not connected" => Halo.Localization.Strings.Get("state.notConnected"),
+        "Disconnected" => Halo.Localization.Strings.Get("state.disconnected"),
+        "On" => Halo.Localization.Strings.Get("state.on"),
+        "Off" => Halo.Localization.Strings.Get("state.off"),
+        "Missing" => Halo.Localization.Strings.Get("state.missing"),
+        "Turned off in Windows" => Halo.Localization.Strings.Get("state.turnedOffInWindows"),
+        "Managed by Windows" => Halo.Localization.Strings.Get("state.managedByWindows"),
+        "Not generated yet" => Halo.Localization.Strings.Get("state.notGeneratedYet"),
+        "Reverses everything" => Halo.Localization.Strings.Get("state.reversesEverything"),
+        "Connect" => Halo.Localization.Strings.Get("action.connect"),
+        "Disconnect" => Halo.Localization.Strings.Get("action.disconnect"),
+        "Retry" => Halo.Localization.Strings.Get("action.retry"),
+        "Open" => Halo.Localization.Strings.Get("action.open"),
+        "Open folder" => Halo.Localization.Strings.Get("action.openFolder"),
+        "Open settings" => Halo.Localization.Strings.Get("action.openSettings"),
+        "Copy" => Halo.Localization.Strings.Get("action.copy"),
+        "Reset" => Halo.Localization.Strings.Get("action.reset"),
+        "Reset position" => Halo.Localization.Strings.Get("action.resetPosition"),
+        "Write a report" => Halo.Localization.Strings.Get("report.write"),
+        "Auto" => Halo.Localization.Strings.Get("opt.auto"),
+        "Light" => Halo.Localization.Strings.Get("opt.light"),
+        "Balanced" => Halo.Localization.Strings.Get("opt.balanced"),
+        "Strong" => Halo.Localization.Strings.Get("opt.strong"),
+        "Reduced" => Halo.Localization.Strings.Get("opt.reduced"),
+        "Soft" => Halo.Localization.Strings.Get("opt.soft"),
+        "Standard" => Halo.Localization.Strings.Get("opt.standard"),
+        _ => value,
+    };
+
     internal static State Tone(string value) => value.ToLowerInvariant() switch
     {
         "on" or "allowed" or "watching" or "connected" => State.Enabled,
@@ -158,18 +193,23 @@ internal static class Live
         }
     }
 
+    internal static string MeasuredRate => Rate;
+
+    internal static string RatePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "fps");
+
     private static string Rate
     {
         get
         {
             try
             {
-                string path = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "fps");
-                var parts = File.ReadAllText(path).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var parts = File.ReadAllText(RatePath).Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 int measured = parts.Length > 0 && int.TryParse(parts[0], out var m) ? m : 0;
                 int hz = parts.Length > 1 && int.TryParse(parts[1], out var h) ? h : 0;
-                return Describe(measured, hz);
+
+                int settled = parts.Length > 2 && int.TryParse(parts[2], out var t) ? t : 0;
+                return Describe(measured, hz, settled);
             }
             catch { return NotMeasured; }
         }
@@ -177,12 +217,22 @@ internal static class Live
 
     internal const string NotMeasured = "Not measured yet";
 
-    internal static string Describe(int measured, int hz)
+        internal static bool IsLatin(string text)
     {
-        if (measured > 0 && hz > 0) return $"{measured} fps on a {hz} Hz display";
-        if (measured > 0) return $"{measured} fps";
-        if (hz > 0) return $"{hz} Hz display";
-        return NotMeasured;
+        foreach (var c in text)
+            if (c >= '֐' && c <= 'ࣿ') return false;
+        return true;
+    }
+
+    internal static string Describe(int measured, int hz, int settled = 0)
+    {
+        string rates =
+            measured > 0 && settled > 0 ? $"{measured} moving / {settled} still"
+            : settled > 0 ? $"{settled} still"
+            : measured > 0 ? $"{measured} fps"
+            : "";
+        if (rates.Length == 0) return hz > 0 ? $"{hz} Hz display" : NotMeasured;
+        return hz > 0 ? $"{rates} - {hz} Hz" : rates;
     }
 
     internal static string HookReading(string which) => HookState(which, 8000);

@@ -53,6 +53,8 @@ internal interface IWidget
 
     long ActivityRank => 0;
 
+    string SessionKey => "";
+
     IEnumerable<int> OwnerPids => Array.Empty<int>();
 
     int RevealPid => 0;

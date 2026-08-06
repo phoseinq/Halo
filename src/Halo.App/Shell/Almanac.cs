@@ -289,10 +289,19 @@ internal static class Almanac
         return w is null ? t : t + " · " + Temp(w.TempC, metric);
     }
 
-        internal static string Detail(DateTime now, CalendarKind kind)
-        => now.ToString("dddd", CultureInfo.InvariantCulture) + ", "
+    private static CultureInfo DateCulture
+    {
+        get
+        {
+            try { return CultureInfo.GetCultureInfo(Halo.Localization.Strings.Lang); }
+            catch { return CultureInfo.InvariantCulture; }
+        }
+    }
+
+    internal static string Detail(DateTime now, CalendarKind kind)
+        => now.ToString("dddd", DateCulture) + ", "
             + (DateIn(kind, now) is { Length: > 0 } d
-                ? d : now.ToString("d MMM", CultureInfo.InvariantCulture));
+                ? d : now.ToString("d MMM", DateCulture));
 
         internal static string Headline(DateTime now) => Headline(now, Latest, Metric);
 

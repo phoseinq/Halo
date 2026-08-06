@@ -90,9 +90,43 @@ public class MorphRateTests
     // The file is a contract with a different executable, so its shape is pinned here rather than left to
     // whatever string interpolation happened to produce.
     [Fact]
-    public void The_report_is_two_integers_and_nothing_else()
+    public void The_report_is_three_integers_and_nothing_else()
     {
-        Assert.Equal("231 280", RateReport.Format(231, 280));
-        Assert.Equal("0 0", RateReport.Format(0, 0));
+        Assert.Equal("231 280 280", RateReport.Format(231, 280, 280));
+        Assert.Equal("0 0 0", RateReport.Format(0, 0, 0));
+    }
+
+    // The settled rate has no falling edge to report on - the panel stays open for as long as the pointer
+    // stays - so it emits on a rolling window instead.
+    [Fact]
+    public void The_settled_rate_reports_once_the_window_is_full()
+    {
+        var rate = new SteadyRate();
+        Assert.False(rate.Step(true, 0.5));            // half a window: nothing yet
+        Assert.Equal(0, rate.Measured);
+        Assert.True(rate.Step(true, 0.5));             // window full: 2 frames in 1.0s
+        Assert.Equal(2, rate.Measured);
+    }
+
+    [Fact]
+    public void The_settled_rate_is_forgotten_when_the_panel_is_not_open()
+    {
+        var rate = new SteadyRate();
+        rate.Step(true, 0.5);
+        rate.Step(true, 0.5);
+        Assert.Equal(2, rate.Measured);
+        Assert.True(rate.Step(false, 0.016));          // reported, so the row stops claiming it
+        Assert.Equal(0, rate.Measured);
+        Assert.False(rate.Step(false, 0.016));         // and does not keep saying so
+    }
+
+    // a partial window that is interrupted must not be divided by anything
+    [Fact]
+    public void An_interrupted_window_is_discarded_rather_than_scaled_up()
+    {
+        var rate = new SteadyRate();
+        for (int i = 0; i < 30; i++) rate.Step(true, 0.004);   // 0.12s of frames
+        rate.Step(false, 0.004);
+        Assert.Equal(0, rate.Measured);
     }
 }

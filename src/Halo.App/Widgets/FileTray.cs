@@ -264,7 +264,7 @@ internal sealed class FileTray : IWidget
         using var title = new Font("Segoe UI Semibold", 21f, GraphicsUnit.Pixel);
         using var body = new Font("Segoe UI", 14f, GraphicsUnit.Pixel);
         using (var tb = new SolidBrush(Mul(White, fade)))
-            g.DrawString("File Tray", title, tb, Pad + 20, 10);
+            g.DrawString(Halo.Localization.Strings.Get("tray.title"), title, tb, Pad + 20, 10);
 
         int sel = SelectedCount;
         if (sel > 0) DrawRemoveChip(g, w, fade, sel);
@@ -374,7 +374,7 @@ internal sealed class FileTray : IWidget
         using var f2 = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
         using var sf = new StringFormat { Alignment = StringAlignment.Center };
         using (var b1 = new SolidBrush(Mul(White, fade)))
-            g.DrawString(active ? "Release to add" : "Drop files here", f1, b1, new RectangleF(box.X, cy + rad + 6, box.Width, 24), sf);
+            g.DrawString(active ? Halo.Localization.Strings.Get("tray.releaseToAdd") : "Drop files here", f1, b1, new RectangleF(box.X, cy + rad + 6, box.Width, 24), sf);
         if (!active)
             using (var b2 = new SolidBrush(Mul(Dim, fade)))
                 g.DrawString("they'll stay in the tray", f2, b2, new RectangleF(box.X, cy + rad + 30, box.Width, 20), sf);

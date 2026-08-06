@@ -55,6 +55,11 @@ internal static class Moods
             "api down :(", "api's out", "api unreachable", "no answer", "upstream silent",
             "api asleep", "api's away", "upstream dark", "no reply",
         },
+        ["retrying"] = new[]
+        {
+            "trying again", "one more go", "still knocking", "knocking again", "hanging on",
+            "waiting on the api", "another go", "back in a sec", "not giving up",
+        },
         ["netError"] = new[]
         {
             "net error :(", "line broke", "dropped", "connection lost", "net gave out",
@@ -413,7 +418,31 @@ internal static class Moods
 
         internal static IEnumerable<string> Keys => Pool.Keys;
 
-    internal static string[] Set(string key) => Pool.TryGetValue(key, out var v) ? v : Array.Empty<string>();
+        internal static string[] Set(string key)
+    {
+
+        if (!Pool.TryGetValue(key, out var english)) return Array.Empty<string>();
+        var over = Localized(key);
+        return over.Length > 0 ? over : english;
+    }
+
+    private static Dictionary<string, string[]> _localized = new(StringComparer.Ordinal);
+    private static int _localizedFor = -1;
+
+    private static string[] Localized(string key)
+    {
+        if (Halo.Localization.Strings.Lang == "en") return Array.Empty<string>();
+        int version = Halo.Localization.Strings.Version;
+        if (_localizedFor != version)
+        {
+            _localized = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            _localizedFor = version;
+        }
+        if (_localized.TryGetValue(key, out var hit)) return hit;
+        var lines = Halo.Localization.Strings.Set("mood." + key);
+        _localized[key] = lines;
+        return lines;
+    }
 
     private static readonly Random Rng = new();
     private static readonly object Gate = new();

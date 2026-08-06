@@ -1,0 +1,579 @@
+{
+  "_readme": "Halo 显示的全部文本。只翻译值，键保持不变。",
+  "_placeholders": "{0} 和 {1} 由 Halo 按此顺序填充。可以移动位置，但不要增删。",
+  "_missing": "缺失的键会回退为英文。部分翻译也可以正常使用。",
+  "reports.off": "报告已关闭：settings.json 中的 report.endpoint 为空。",
+  "reports.customNotHttps": "settings.json 中的 report.endpoint 不是有效的 https:// 地址。",
+  "reports.builtInNotHttps": "内置地址不是有效的 https://。",
+  "notice.app.system": "系统",
+  "notice.app.network": "网络",
+  "notice.app.battery": "电池",
+  "notice.app.claude": "Claude",
+  "notice.app.screenshot": "截图",
+  "notice.app.clipboard": "剪贴板",
+  "notice.screenshot.title": "已截图",
+  "notice.clipboard.title": "已复制图片",
+  "notice.load.cpu": "CPU",
+  "notice.load.memory": "内存",
+  "notice.load.title": "{0} 占用偏高 — {1}%",
+  "notice.load.body": "占用最多的是 {0}。",
+  "notice.load.ramFallback": "内存快用完了。",
+  "notice.context.title": "上下文已用 {0}%",
+  "notice.context.body": "接下来回答会变模糊 — 方便时执行 /compact。",
+  "notice.battery.low": "电量低",
+  "notice.battery.critical": "电量告急",
+  "notice.battery.title": "电池{0} — {1}%",
+  "notice.battery.body": "点按开启节电模式。",
+  "notice.net.down.title": "无网络连接",
+  "notice.net.down.body": "现在什么都发不出去。",
+  "notice.net.slow.title": "网络不佳",
+  "notice.api.down.title": "无法连接 Claude",
+  "notice.api.down.body": "你这边正常 — 是他们那边不通。",
+  "settings.appearance.scale.label": "药丸大小",
+  "settings.appearance.scale.desc": "同时缩放形状、文字和点按区域",
+  "settings.appearance.glass.label": "玻璃强度",
+  "settings.appearance.glass.desc": "在壁纸细节与对比度之间取得平衡",
+  "settings.appearance.motion.label": "动效",
+  "settings.appearance.motion.desc": "药丸移动后稳定下来的快慢",
+  "settings.appearance.fps.label": "帧率",
+  "settings.appearance.fps.desc": "药丸移动时 Halo 争取达到的帧率。Auto 跟随本显示器的刷新率，而任何设置在机器繁忙时都会自动下调。",
+  "settings.appearance.fpsMeasured.label": "实测帧率",
+  "settings.appearance.fpsMeasured.desc": "药丸实际达到的帧率 — 移动时，以及展开静止时 — 并列出本显示器能显示的上限",
+  "settings.general.startup.label": "随 Windows 启动",
+  "settings.general.startup.desc": "登录后自动打开 Halo",
+  "settings.general.fullscreen.label": "全屏之上仍显示",
+  "settings.general.fullscreen.desc": "让药丸浮在游戏和视频之上",
+  "settings.general.language.label": "语言",
+  "settings.general.language.desc": "Halo 显示自身文字所用的语言",
+  "settings.general.capture.label": "截图中包含 Halo",
+  "settings.general.capture.desc": "在截图和录屏中显示药丸",
+  "settings.general.follow.label": "跟随当前应用",
+  "settings.general.follow.desc": "自动把相关界面带到前面",
+  "settings.general.reset.label": "药丸位置",
+  "settings.general.reset.desc": "回到当前显示器的中央",
+  "settings.feature.media.label": "媒体",
+  "settings.feature.media.desc": "播放会话与 VLC 经典控件",
+  "settings.media.progress.label": "显示时间轴",
+  "settings.media.progress.desc": "在收起的药丸上绘制真实播放位置",
+  "settings.feature.downloads.label": "下载",
+  "settings.feature.downloads.desc": "浏览器、商店、游戏和应用的进度",
+  "settings.feature.fileTray.label": "文件托盘",
+  "settings.feature.fileTray.desc": "拖放搁架与剪贴板图片",
+  "settings.feature.bluetooth.label": "蓝牙",
+  "settings.feature.bluetooth.desc": "设备连接与电量",
+  "settings.feature.notifications.label": "镜像通知",
+  "settings.feature.notifications.desc": "在药丸中显示 Windows 通知",
+  "settings.notifications.silence.label": "静音系统横幅",
+  "settings.notifications.silence.desc": "阻止 Windows 为 Halo 已镜像的应用绘制自己的横幅。完全可撤销。",
+  "settings.alert.battery.label": "电池",
+  "settings.alert.battery.desc": "点一下即可开启节电模式。10% 始终视为告急。",
+  "settings.alert.batteryAt.label": "提醒阈值",
+  "settings.alert.batteryAt.desc": "第一次电池提醒出现的位置",
+  "settings.alert.cpu.label": "CPU 偏高",
+  "settings.alert.cpu.desc": "每档一次，并指出占用最多的进程",
+  "settings.alert.cpuAt.label": "从此处开始提醒",
+  "settings.alert.cpuAt.desc": "更高的档位仍会继续升级",
+  "settings.alert.memory.label": "内存偏高",
+  "settings.alert.memory.desc": "每档一次，并指出占用最多的进程",
+  "settings.alert.memoryAt.label": "从此处开始提醒",
+  "settings.alert.memoryAt.desc": "更高的档位仍会继续升级",
+  "settings.alert.internet.label": "网络",
+  "settings.alert.internet.desc": "缓慢、断线，以及 API 无法访问",
+  "settings.alert.clipboard.label": "截图与复制",
+  "settings.alert.clipboard.desc": "有内容进入剪贴板时弹出横幅",
+  "settings.alert.language.label": "键盘布局",
+  "settings.alert.language.desc": "切换时一秒钟的提示",
+  "settings.alert.hourly.label": "整点提示",
+  "settings.alert.hourly.desc": "整点报时，附日期与天气",
+  "settings.feature.claudeCode.label": "Claude Code",
+  "settings.feature.claudeCode.desc": "实时会话、额度与取消按钮",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "Codex Desktop 与命令行会话",
+  "settings.feature.genericAgents.label": "其他智能体",
+  "settings.feature.genericAgents.desc": "任何写入 ~/.halo/agents 的工具",
+  "settings.hooks.claude.label": "Claude Code 钩子",
+  "settings.hooks.claude.desc": "Halo 写入 ~/.claude/settings.json 的钩子，会话能出现正是靠它们",
+  "settings.hooks.codex.label": "Codex 钩子",
+  "settings.hooks.codex.desc": "Halo 写入 ~/.codex/hooks.json 的钩子，会话能出现正是靠它们",
+  "settings.claude.ask.label": "在药丸上作答",
+  "settings.claude.ask.desc": "镜像 Claude 的提问框，点选一行即可回答",
+  "settings.alert.context.label": "上下文快满",
+  "settings.alert.context.desc": "每个会话一次",
+  "settings.alert.contextAt.label": "上下文提醒阈值",
+  "settings.alert.contextAt.desc": "智能体Halo也在此处转为琥珀色",
+  "settings.alert.limit.label": "用量额度",
+  "settings.alert.limit.desc": "每个窗口一次",
+  "settings.alert.limitAt.label": "用量提醒阈值",
+  "settings.alert.limitAt.desc": "五小时或每周窗口的占比",
+  "settings.api.enabled.label": "本地 API",
+  "settings.api.enabled.desc": "在 127.0.0.1 上监听本机程序。本机之外的任何东西都访问不到。",
+  "settings.api.port.label": "端口",
+  "settings.api.port.desc": "只有在该端口已被占用时才需要更改",
+  "settings.api.token.label": "令牌",
+  "settings.api.token.desc": "首次开启 API 时生成。请放在 Authorization: Bearer 头中发送。",
+  "settings.api.notify.label": "发送通知",
+  "settings.api.notify.desc": "POST /notify — 标题、正文，以及可选的代码或待打开文件",
+  "settings.api.ask.label": "提出问题",
+  "settings.api.ask.desc": "带选项 POST /ask，然后轮询 /ask/{nonce} 取答案",
+  "settings.api.state.label": "读取屏幕上的内容",
+  "settings.api.state.desc": "GET /state、/media、/agents、/tray",
+  "settings.api.control.label": "按下按钮",
+  "settings.api.control.desc": "POST /media、/pill 和 /tray：播放、跳过、展开、固定、添加文件",
+  "settings.api.settings.label": "读取并修改设置",
+  "settings.api.settings.desc": "GET 与 PATCH /settings。也就是本窗口里的每一个开关。",
+  "settings.access.notifications.label": "通知访问权限",
+  "settings.access.notifications.desc": "镜像 Windows 通知所必需",
+  "settings.reset.everything.label": "全部重置",
+  "settings.reset.everything.desc": "恢复每个应用的通知横幅，断开两个智能体，并删除 Halo 保存的状态",
+  "settings.about.version.label": "版本",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "状态文件夹",
+  "settings.about.state.desc": "Halo 保存的零散文件：位置、固定、托盘、已读通知",
+  "settings.report.problem.label": "报告问题",
+  "settings.report.problem.desc": "写下来，看清楚里面到底有什么，然后按发送。不按按钮就什么都不会外发。",
+  "settings.report.autoCrash.label": "崩溃时直接发送",
+  "settings.report.autoCrash.desc": "只发崩溃报告本身，只在 Halo 真的崩溃时，且只发报告窗口向你展示过的字段",
+  "settings.about.repo.label": "代码仓库",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "主页",
+  "page.Home.desc": "一个更安静的起点",
+  "page.General.label": "常规",
+  "page.General.desc": "Halo 界面的行为与外观",
+  "page.Features.label": "功能",
+  "page.Features.desc": "药丸可以显示什么，以及何时显示",
+  "page.Agents.label": "智能体",
+  "page.Agents.desc": "Claude Code、Codex，以及其他会上报的工具",
+  "page.Api.label": "API",
+  "page.Api.desc": "让其他程序控制药丸",
+  "page.Access.label": "权限",
+  "page.Access.desc": "Halo 需要 Windows 提供什么才能工作",
+  "page.DocsAbout.label": "文档与关于",
+  "page.DocsAbout.desc": "所有说明所在之处",
+  "section.appearance": "外观",
+  "section.startup": "开机启动",
+  "section.behaviour": "行为",
+  "section.surfaces": "显示面",
+  "section.notifications": "通知",
+  "section.alertsaboutthismachine": "本机提醒",
+  "section.sessions": "会话",
+  "section.connection": "连接",
+  "section.questions": "提问",
+  "section.alerts": "提醒",
+  "section.endpoint": "接入点",
+  "section.whatcallersmaydo": "调用方可以做什么",
+  "section.permissions": "权限",
+  "section.removal": "移除",
+  "section.halo": "HALO",
+  "section.problems": "问题",
+  "section.project": "项目",
+  "nav.settings": "设置",
+  "nav.system": "系统",
+  "nav.reference": "参考",
+  "settings.access.startup.label": "启动项",
+  "settings.access.startup.packaged.desc": "由 Windows 决定登录时是否启动 Halo",
+  "settings.access.startup.task.desc": "登录时启动 Halo 的计划任务",
+  "settings.access.startup.action.packaged": "打开启动设置",
+  "settings.access.startup.action.task": "打开任务计划程序",
+  "settings.api.docs.label": "如何调用",
+  "settings.api.docs.desc": "端点、令牌，以及下面每个开关允许调用方做什么 — 打开任何一个之前请先读这份文档",
+  "agent.row.fiveHour": "5 小时",
+  "agent.row.weekly": "每周",
+  "agent.row.context": "上下文",
+  "agent.left": "剩余 {0}",
+  "agent.resets": "{0} 重置",
+  "agent.notFetched": "未获取",
+  "agent.noSession": "无会话",
+  "agent.noActiveSession": "没有进行中的会话",
+  "agent.contextOf": "共 {0}  ·  已用 {1}%",
+  "agent.contextShort": "上下文  ·  {0}K / {1}K",
+  "agent.refresh": "刷新",
+  "agent.neverFetched": "从未获取",
+  "agent.updated": "{0}更新",
+  "agent.neverRead": "从未读取",
+  "agent.read": "{0}读取",
+  "time.justNow": "刚刚",
+  "time.minsAgo": "{0} 分钟前",
+  "time.hoursAgo": "{0} 小时前",
+  "time.daysAgo": "{0} 天前",
+  "time.now": "刚刚",
+  "hooks.connected.title": "{0} 已连接",
+  "hooks.connected.body": "钩子已写入 {0}。原文件已另存为 .halo-bak。",
+  "hooks.failed.title": "无法连接 {0}",
+  "hooks.failed.write": "Halo 无法写入钩子设置",
+  "hooks.failed.run": "Halo 无法运行它的钩子助手",
+  "hooks.failed.body": "{0}。没有做任何更改。",
+  "hooks.failed.bodyWhy": "{0}：{1}。没有做任何更改。",
+  "limit.title": "{0} 用量 {1}%",
+  "limit.body": "你已用掉{1}额度的 {0}%。",
+  "limit.window.weekly": "每周",
+  "limit.window.5-hour": "五小时",
+  "limit.window.primary": "主要",
+  "limit.window.secondary": "次要",
+  "state.checking": "检查中...",
+  "state.connected": "已连接",
+  "state.notConnected": "未连接",
+  "state.disconnected": "已断开",
+  "state.on": "开",
+  "state.off": "关",
+  "state.missing": "缺失",
+  "state.unavailable": "无法确定",
+  "state.turnedOffInWindows": "已在 Windows 中关闭",
+  "state.managedByWindows": "由 Windows 管理",
+  "state.notGeneratedYet": "尚未生成",
+  "state.notMeasuredYet": "尚未测量",
+  "state.reversesEverything": "会撤销一切",
+  "action.open": "打开",
+  "action.openFolder": "打开文件夹",
+  "action.openSettings": "打开设置",
+  "action.copy": "复制",
+  "action.reset": "重置",
+  "action.resetPosition": "重置位置",
+  "action.connect": "连接",
+  "action.disconnect": "断开",
+  "action.retry": "重试",
+  "pill.copied": "已复制",
+  "tray.title": "文件托盘",
+  "tray.releaseToAdd": "松开即可添加",
+  "tray.remove": "移除 {0}",
+  "ask.typeSomething": "输入内容",
+  "agent.sampling": "采样中…",
+  "home.tagline": "你的应用、动态与智能体 — 在它们真正重要的时候出现。",
+  "home.explore": "浏览",
+  "home.state": "状态",
+  "home.card.general": "行为与外观",
+  "home.card.features": "应用界面",
+  "home.card.agents": "编程会话",
+  "home.card.access": "Windows 控制项",
+  "home.waiting": "更改等待应用",
+  "home.waitingBody": "在你按下页面底部的「应用」之前，这里的任何内容都不会传给 Halo。「重置」会把一切恢复原状。",
+  "home.restore": "恢复默认值",
+  "chrome.title": "Halo 设置",
+  "chrome.apply": "应用",
+  "chrome.reset": "重置",
+  "chrome.unapplied": "你有未应用的更改",
+  "chrome.keepEditing": "继续编辑",
+  "chrome.discard": "放弃并关闭",
+  "report.write": "撰写报告",
+  "draft.one": "1 项更改待应用",
+  "draft.many": "{0} 项更改待应用",
+  "guard.one": "有一项更改尚未应用。Halo 仍在使用先前的设置。",
+  "guard.many": "有 {0} 项更改尚未应用。Halo 仍在使用先前的设置。",
+  "home.card.api": "用代码驱动 Halo",
+  "mood.idle": [
+    "开工吧 :)",
+    "随时待命",
+    "就绪",
+    "桌面已清空",
+    "等着呢",
+    "闲着"
+  ],
+  "mood.offline": [
+    "离线 :(",
+    "没有信号",
+    "已断开",
+    "不在网上"
+  ],
+  "mood.apiDown": [
+    "api 挂了 :(",
+    "没有回应",
+    "上游静默"
+  ],
+  "mood.retrying": [
+    "再试一次",
+    "又试了一遍",
+    "还在敲门",
+    "不放弃"
+  ],
+  "mood.netError": [
+    "网络错误 :(",
+    "断了",
+    "线路挂了"
+  ],
+  "mood.apiError": [
+    "api 报错 :(",
+    "被拒绝",
+    "回复异常"
+  ],
+  "mood.compacted": [
+    "腾出空间了 :)",
+    "轻快了",
+    "整理好了"
+  ],
+  "mood.outOfCredit": [
+    "额度用完了 :(",
+    "见底了"
+  ],
+  "mood.writing": [
+    "书写中…",
+    "打字中…"
+  ],
+  "mood.reading": [
+    "阅读中…",
+    "查看中…"
+  ],
+  "mood.running": [
+    "执行中…",
+    "运行中…"
+  ],
+  "mood.digging": [
+    "深挖中…",
+    "翻找中…"
+  ],
+  "mood.fetching": [
+    "获取中…",
+    "下载中…"
+  ],
+  "mood.searching": [
+    "搜索中…",
+    "找找看 :P"
+  ],
+  "mood.delegating": [
+    "已交给别人…",
+    "分派中…"
+  ],
+  "mood.planning": [
+    "规划中…",
+    "思考中…"
+  ],
+  "mood.skill": [
+    "调用技能中…"
+  ],
+  "mood.asking": [
+    "你怎么看？",
+    "有个问题",
+    "该你了 ;)"
+  ],
+  "mood.unknown": [
+    "忙着…",
+    "在做点事…"
+  ],
+  "mood.compacting": [
+    "压缩中…",
+    "整理中…"
+  ],
+  "mood.patching": [
+    "打补丁中…",
+    "修复中…"
+  ],
+  "mood.plotting": [
+    "绘图中…"
+  ],
+  "mood.watching": [
+    "观察中…"
+  ],
+  "mood.reviewing": [
+    "审阅中…"
+  ],
+  "mood.publishing": [
+    "发布中…"
+  ],
+  "mood.consulting": [
+    "请教中…"
+  ],
+  "mood.peeking": [
+    "瞄一眼…"
+  ],
+  "mood.writing@long": [
+    "还在继续…"
+  ],
+  "mood.reading@long": [
+    "还在继续…"
+  ],
+  "mood.running@long": [
+    "还在继续…"
+  ],
+  "mood.digging@long": [
+    "还在继续…"
+  ],
+  "mood.fetching@long": [
+    "还在继续…"
+  ],
+  "mood.searching@long": [
+    "还在继续…"
+  ],
+  "mood.delegating@long": [
+    "还在继续…"
+  ],
+  "mood.planning@long": [
+    "还在继续…"
+  ],
+  "mood.skill@long": [
+    "还在继续…"
+  ],
+  "mood.unknown@long": [
+    "还在继续…"
+  ],
+  "mood.compacting@long": [
+    "还在继续…"
+  ],
+  "mood.patching@long": [
+    "还在继续…"
+  ],
+  "mood.plotting@long": [
+    "还在继续…"
+  ],
+  "mood.writing@ages": [
+    "这要花些时间…"
+  ],
+  "mood.reading@ages": [
+    "这要花些时间…"
+  ],
+  "mood.running@ages": [
+    "这要花些时间…"
+  ],
+  "mood.digging@ages": [
+    "这要花些时间…"
+  ],
+  "mood.fetching@ages": [
+    "这要花些时间…"
+  ],
+  "mood.searching@ages": [
+    "这要花些时间…"
+  ],
+  "mood.delegating@ages": [
+    "这要花些时间…"
+  ],
+  "mood.planning@ages": [
+    "这要花些时间…"
+  ],
+  "mood.skill@ages": [
+    "这要花些时间…"
+  ],
+  "mood.unknown@ages": [
+    "这要花些时间…"
+  ],
+  "mood.compacting@ages": [
+    "这要花些时间…"
+  ],
+  "mood.patching@ages": [
+    "这要花些时间…"
+  ],
+  "mood.plotting@ages": [
+    "这要花些时间…"
+  ],
+  "mood.idle@tight": [
+    "空闲"
+  ],
+  "mood.unknown@tight": [
+    "忙碌"
+  ],
+  "mood.running@tight": [
+    "执行…"
+  ],
+  "mood.writing@tight": [
+    "书写…"
+  ],
+  "mood.reading@tight": [
+    "阅读…"
+  ],
+  "mood.digging@tight": [
+    "查找…"
+  ],
+  "mood.idle@thin": [
+    "空闲"
+  ],
+  "mood.unknown@thin": [
+    "忙碌"
+  ],
+  "mood.running@thin": [
+    "执行…"
+  ],
+  "mood.writing@thin": [
+    "书写…"
+  ],
+  "mood.unknown@again": [
+    "又一次…"
+  ],
+  "mood.running@again": [
+    "又一次…"
+  ],
+  "mood.digging@again": [
+    "又一次…"
+  ],
+  "mood.writing@again": [
+    "又一次…"
+  ],
+  "mood.patching@again": [
+    "又一次…"
+  ],
+  "mood.unknown@heavy": [
+    "重活…"
+  ],
+  "mood.running@heavy": [
+    "重活…"
+  ],
+  "mood.reading@heavy": [
+    "重活…"
+  ],
+  "mood.writing@heavy": [
+    "重活…"
+  ],
+  "mood.idle@late": [
+    "晚安 :)"
+  ],
+  "mood.unknown@late": [
+    "还醒着…"
+  ],
+  "mood.running@late": [
+    "夜间执行…"
+  ],
+  "mood.writing@late": [
+    "夜里写…"
+  ],
+  "mood.idle@early": [
+    "早安 :)"
+  ],
+  "mood.unknown@early": [
+    "起得早…"
+  ],
+  "mood.running@early": [
+    "一早就跑…"
+  ],
+  "opt.light": "轻",
+  "opt.balanced": "均衡",
+  "opt.strong": "强",
+  "opt.reduced": "减弱",
+  "opt.soft": "柔和",
+  "opt.standard": "标准",
+  "tray.openSettings": "打开设置",
+  "tray.restart": "重启 Halo",
+  "tray.quit": "退出 Halo",
+  "opt.auto": "自动",
+  "net.label": "网络",
+  "net.api": "api",
+  "net.loss": "丢包",
+  "net.ms": "毫秒",
+  "net.dropped": "断开",
+  "net.locating": "定位中…",
+  "net.checkingExit": "检查出口…",
+  "net.testingDns": "测试 dns…",
+  "net.dnsOk": "dns 正常",
+  "net.dnsLeak": "dns 泄漏",
+  "net.residential": "住宅",
+  "net.datacenter": "数据中心",
+  "net.vpnExit": "vpn 出口",
+  "report.title": "报告问题",
+  "report.create": "生成报告",
+  "report.intro": "这就是报告本身，与磁盘上的内容完全一致。尚未发送任何内容。",
+  "report.whatGetsSent": "会发送哪些内容？",
+  "report.hideDetails": "隐藏详情",
+  "report.send": "发送报告",
+  "report.sending": "正在发送...",
+  "report.copy": "复制",
+  "report.saveAs": "另存为...",
+  "report.openNotepad": "用记事本打开",
+  "report.openIssue": "在 GitHub 上开一个 issue",
+  "report.copied": "已复制。它从未接触网络。",
+  "report.saved": "已保存。若希望我收到，请自行以邮件附件发送。",
+  "report.openedGitHub": "已打开 GitHub。在那里按下提交之前不会归档任何内容。",
+  "report.sendFailed": "发送失败：",
+  "report.stillOnDisk": "报告仍在磁盘上。",
+  "report.notWritten": "报告未写入。",
+  "report.blurb": "Halo 会镜像其他程序的通知、你正在播放的内容以及托盘里的文件名，因此一份报告携带的是一份具名的本机事实清单，仅此而已。请先用「会发送哪些内容？」通读整个文件 —— 两种方式看到的是同一个文件。",
+  "report.sentOnDisk": "已发送。磁盘上也保留了一份，位于 %LOCALAPPDATA%\\Halo\\reports。",
+  "report.noExe": "Halo.App.exe 不在此窗口旁边。",
+  "report.noStart": "无法启动 Halo.App。",
+  "ask.freeTextSub": "用你自己的话回答",
+  "ask.chat": "聊聊这个",
+  "ask.chatSub": "先放下问题，改为对话"
+}

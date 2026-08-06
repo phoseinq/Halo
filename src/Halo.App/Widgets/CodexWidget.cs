@@ -569,7 +569,7 @@ internal sealed class CodexWidget : IWidget
             using var wb = new SolidBrush(Mul(Dim, a * 0.7f));
             using var wsf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("sampling…", wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
+            g.DrawString(Halo.Localization.Strings.Get("agent.sampling"), wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
             return;
         }
 
@@ -697,10 +697,10 @@ internal sealed class CodexWidget : IWidget
     private static RectangleF RefreshRect(int w, int h) => new(RightEdge - 210, 22, 210, 20);
 
     private static string AgeText(TimeSpan d) =>
-        d.TotalMinutes < 1 ? "just now"
-        : d.TotalHours < 1 ? $"{(int)d.TotalMinutes}m ago"
-        : d.TotalDays < 1 ? $"{(int)d.TotalHours}h ago"
-        : $"{(int)d.TotalDays}d ago";
+        d.TotalMinutes < 1 ? Halo.Localization.Strings.Get("time.justNow")
+        : d.TotalHours < 1 ? Halo.Localization.Strings.Format("time.minsAgo", (int)d.TotalMinutes)
+        : d.TotalDays < 1 ? Halo.Localization.Strings.Format("time.hoursAgo", (int)d.TotalHours)
+        : Halo.Localization.Strings.Format("time.daysAgo", (int)d.TotalDays);
 
     public IReadOnlyList<(RectangleF rect, Action<PointF> onClick)> Buttons(int w, int h)
         => new[]

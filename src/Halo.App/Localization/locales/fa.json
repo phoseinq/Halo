@@ -1,0 +1,624 @@
+{
+  "_readme": "هر متنی که Halo نشان می‌دهد. فقط مقادیر را ترجمه کنید؛ کلیدها دست‌نخورده بمانند. کلیدهایی که با _ شروع می‌شوند یادداشت‌اند و نمایش داده نمی‌شوند.",
+  "_placeholders": "{0} و {1} را Halo پر می‌کند، به همان ترتیب. هر جای جمله لازم است بگذارید، ولی یکی را حذف یا اضافه نکنید.",
+  "_missing": "هر کلیدی که نباشد به انگلیسی برمی‌گردد. ترجمهٔ ناقص هم کار می‌کند.",
+  "reports.off": "گزارش‌ها خاموش‌اند: report.endpoint در settings.json خالی است.",
+  "reports.customNotHttps": "مقدار report.endpoint در settings.json یک نشانی معتبر https:// نیست.",
+  "reports.builtInNotHttps": "نشانی پیش‌فرض یک آدرس معتبر https:// نیست.",
+  "notice.app.system": "سیستم",
+  "notice.app.network": "شبکه",
+  "notice.app.battery": "باتری",
+  "notice.app.claude": "کلاد",
+  "notice.app.screenshot": "اسکرین‌شات",
+  "notice.app.clipboard": "کلیپ‌بورد",
+  "notice.screenshot.title": "اسکرین‌شات گرفته شد",
+  "notice.clipboard.title": "تصویر کپی شد",
+  "notice.load.cpu": "پردازنده",
+  "notice.load.memory": "حافظه",
+  "notice.load.title": "مصرف {0} بالاست — {1}٪",
+  "notice.load.body": "بیشترین مصرف از {0} است.",
+  "notice.load.ramFallback": "حافظه رو به اتمام است.",
+  "notice.context.title": "کانتکست {0}٪ پر شده",
+  "notice.context.body": "از این‌جا جواب‌ها مبهم‌تر می‌شوند — هر وقت شد /compact بزن.",
+  "notice.battery.low": "کم",
+  "notice.battery.critical": "بحرانی",
+  "notice.battery.title": "باتری {0} — {1}٪",
+  "notice.battery.body": "برای روشن‌کردن Power Saver بزن.",
+  "notice.net.down.title": "اینترنت نیست",
+  "notice.net.down.body": "هیچ چیزی بیرون نمی‌رود.",
+  "notice.net.slow.title": "اینترنت ضعیف",
+  "notice.api.down.title": "کلاد در دسترس نیست",
+  "notice.api.down.body": "اتصال تو سالم است — مال آن‌ها نه.",
+  "settings.appearance.scale.label": "اندازه‌ی پیل",
+  "settings.appearance.scale.desc": "هندسه، متن و ناحیه‌های لمسی را با هم مقیاس می‌کند",
+  "settings.appearance.glass.label": "شدت شیشه",
+  "settings.appearance.glass.desc": "توازن بین جزئیات والپیپر و کنتراست",
+  "settings.appearance.motion.label": "حرکت",
+  "settings.appearance.motion.desc": "پیل بعد از جابه‌جایی چقدر سریع سر جایش می‌نشیند",
+  "settings.appearance.fps.label": "نرخ فریم",
+  "settings.appearance.fps.desc": "چیزی که Halo موقع حرکت پیل به آن می‌رسد. Auto از نرخ نوسازی همین نمایشگر پیروی می‌کند، و هر تنظیمی وقتی دستگاه شلوغ باشد باز هم پایین‌تر می‌آید.",
+  "settings.appearance.fpsMeasured.label": "نرخ اندازه‌گیری‌شده",
+  "settings.appearance.fpsMeasured.desc": "آنچه پیل واقعاً به آن می‌رسد — هم موقع حرکت، هم وقتی باز و ساکن است — کنار چیزی که این نمایشگر می‌تواند نشان دهد",
+  "settings.general.startup.label": "شروع با ویندوز",
+  "settings.general.startup.desc": "Halo بعد از ورود شما اجرا شود",
+  "settings.general.fullscreen.label": "نمایش روی تمام‌صفحه",
+  "settings.general.fullscreen.desc": "پیل بالای بازی‌ها و ویدیو بماند",
+  "settings.general.language.label": "زبان",
+  "settings.general.language.desc": "زبانی که Halo متن‌های خودش را با آن نشان می‌دهد",
+  "settings.general.capture.label": "نمایش Halo در تصویربرداری",
+  "settings.general.capture.desc": "پیل در اسکرین‌شات‌ها و ضبط‌ها دیده شود",
+  "settings.general.follow.label": "دنبال‌کردن اپ فعال",
+  "settings.general.follow.desc": "سطح مرتبط را خودکار جلو بیاور",
+  "settings.general.reset.label": "جای پیل",
+  "settings.general.reset.desc": "پیل را به وسط نمایشگر فعال برگردان",
+  "settings.feature.media.label": "رسانه",
+  "settings.feature.media.desc": "نشست‌های پخش و کنترل‌های کلاسیک VLC",
+  "settings.media.progress.label": "نمایش نوار زمان",
+  "settings.media.progress.desc": "موقعیت واقعی پخش را روی پیلِ جمع‌شده بکش",
+  "settings.feature.downloads.label": "دانلودها",
+  "settings.feature.downloads.desc": "پیشرفت مرورگر، استور، بازی و اپ",
+  "settings.feature.fileTray.label": "سینی فایل",
+  "settings.feature.fileTray.desc": "قفسه‌ی کشیدن‌ورهاکردن و تصویرهای کلیپ‌بورد",
+  "settings.feature.bluetooth.label": "بلوتوث",
+  "settings.feature.bluetooth.desc": "اتصال و باتری دستگاه‌ها",
+  "settings.feature.notifications.label": "بازتاب اعلان‌ها",
+  "settings.feature.notifications.desc": "اعلان‌های ویندوز را در پیل نشان بده",
+  "settings.notifications.silence.label": "خاموش‌کردن بنر خود ویندوز",
+  "settings.notifications.silence.desc": "جلوی بنر خود ویندوز را برای اپ‌هایی که Halo بازتاب می‌دهد بگیر. کاملاً برگشت‌پذیر.",
+  "settings.alert.battery.label": "باتری",
+  "settings.alert.battery.desc": "با یک ضربه برای روشن‌کردن Power Saver. ۱۰٪ همیشه بحرانی است.",
+  "settings.alert.batteryAt.label": "هشدار در",
+  "settings.alert.batteryAt.desc": "اولین هشدار باتری کجا شلیک شود",
+  "settings.alert.cpu.label": "پردازنده‌ی پرمصرف",
+  "settings.alert.cpu.desc": "یک بار در هر سطح، با نام پرمصرف‌ترین پروسه",
+  "settings.alert.cpuAt.label": "شروع هشدار از",
+  "settings.alert.cpuAt.desc": "سطح‌های بالاتر از این باز هم بالا می‌روند",
+  "settings.alert.memory.label": "حافظه‌ی پرمصرف",
+  "settings.alert.memory.desc": "یک بار در هر سطح، با نام پرمصرف‌ترین پروسه",
+  "settings.alert.memoryAt.label": "شروع هشدار از",
+  "settings.alert.memoryAt.desc": "سطح‌های بالاتر از این باز هم بالا می‌روند",
+  "settings.alert.internet.label": "اینترنت",
+  "settings.alert.internet.desc": "کندی، قطعی، و در دسترس نبودن API",
+  "settings.alert.clipboard.label": "اسکرین‌شات و کپی",
+  "settings.alert.clipboard.desc": "یک بنر وقتی چیزی روی کلیپ‌بورد می‌نشیند",
+  "settings.alert.language.label": "چیدمان کیبورد",
+  "settings.alert.language.desc": "یک نگاه یک‌ثانیه‌ای وقتی چیدمان عوض می‌شود",
+  "settings.alert.hourly.label": "زنگ ساعتی",
+  "settings.alert.hourly.desc": "سرِ ساعت، با تاریخ و وضع هوا",
+  "settings.feature.claudeCode.label": "کلاد کد",
+  "settings.feature.claudeCode.desc": "نشست‌های زنده، سقف مصرف و دکمه‌ی لغو",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "نشست‌های Codex Desktop و CLI",
+  "settings.feature.genericAgents.label": "ایجنت‌های دیگر",
+  "settings.feature.genericAgents.desc": "هر ابزاری که در ~/.halo/agents می‌نویسد",
+  "settings.hooks.claude.label": "هوک‌های کلاد کد",
+  "settings.hooks.claude.desc": "هوک‌های Halo در ~/.claude/settings.json، که باعث دیده‌شدن نشست‌ها می‌شوند",
+  "settings.hooks.codex.label": "هوک‌های Codex",
+  "settings.hooks.codex.desc": "هوک‌های Halo در ~/.codex/hooks.json، که باعث دیده‌شدن نشست‌ها می‌شوند",
+  "settings.claude.ask.label": "پاسخ از روی پیل",
+  "settings.claude.ask.desc": "جعبه‌ی پرسش کلاد را بازتاب بده و با کلیک روی یک گزینه جواب بده",
+  "settings.alert.context.label": "نزدیک پرشدن کانتکست",
+  "settings.alert.context.desc": "یک بار در هر نشست",
+  "settings.alert.contextAt.label": "هشدار کانتکست در",
+  "settings.alert.contextAt.desc": "همین‌جا حلقه‌ی ایجنت هم کهربایی می‌شود",
+  "settings.alert.limit.label": "سقف مصرف",
+  "settings.alert.limit.desc": "یک بار در هر بازه",
+  "settings.alert.limitAt.label": "هشدار مصرف در",
+  "settings.alert.limitAt.desc": "سهمی از بازه‌ی پنج‌ساعته یا هفتگی",
+  "settings.api.enabled.label": "API محلی",
+  "settings.api.enabled.desc": "روی 127.0.0.1 برای برنامه‌های محلی گوش می‌دهد. هیچ چیزی از بیرون این دستگاه به آن نمی‌رسد.",
+  "settings.api.port.label": "پورت",
+  "settings.api.port.desc": "فقط اگر چیز دیگری این پورت را گرفته باشد عوضش کن",
+  "settings.api.token.label": "توکن",
+  "settings.api.token.desc": "بار اولی که API را روشن کنی ساخته می‌شود. آن را در هدر Authorization: Bearer بفرست.",
+  "settings.api.notify.label": "ارسال اعلان",
+  "settings.api.notify.desc": "POST /notify — عنوان، متن، و یک کد یا فایل اختیاری برای بازکردن",
+  "settings.api.ask.label": "پرسیدن سؤال",
+  "settings.api.ask.desc": "POST /ask با گزینه‌ها، بعد /ask/{nonce} را برای جواب بپرس",
+  "settings.api.state.label": "خواندن آنچه روی صفحه است",
+  "settings.api.state.desc": "GET /state، /media، /agents، /tray",
+  "settings.api.control.label": "فشردن دکمه‌ها",
+  "settings.api.control.desc": "POST /media، /pill و /tray: پخش، رد کردن، بازکردن، سنجاق، افزودن فایل",
+  "settings.api.settings.label": "خواندن و تغییر تنظیمات",
+  "settings.api.settings.desc": "GET و PATCH /settings. این یعنی همه‌ی سوییچ‌های همین پنجره.",
+  "settings.access.notifications.label": "دسترسی به اعلان‌ها",
+  "settings.access.notifications.desc": "برای بازتاب اعلان‌های ویندوز لازم است",
+  "settings.reset.everything.label": "بازنشانی همه‌چیز",
+  "settings.reset.everything.desc": "بنر اعلان هر اپ را برگردان، هر دو ایجنت را قطع کن، و وضعیت ذخیره‌شده‌ی Halo را پاک کن",
+  "settings.about.version.label": "نسخه",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "پوشه‌ی وضعیت",
+  "settings.about.state.desc": "فایل‌هایی که Halo نگه می‌دارد: موقعیت، سنجاق، سینی، اعلان‌های دیده‌شده",
+  "settings.report.problem.label": "گزارش مشکل",
+  "settings.report.problem.desc": "بنویس، دقیقاً ببین چه چیزی درش هست، بعد ارسال را بزن. بدون آن دکمه هیچ چیزی بیرون نمی‌رود.",
+  "settings.report.autoCrash.label": "ارسال کرش‌ها بدون پرسیدن",
+  "settings.report.autoCrash.desc": "فقط خودِ گزارش کرش، فقط وقتی Halo واقعاً کرش کرده، و فقط همان فیلدهایی که پنجره‌ی گزارش نشانت می‌دهد",
+  "settings.about.repo.label": "مخزن",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "خانه",
+  "page.Home.desc": "جای آرام‌تری برای شروع",
+  "page.General.label": "عمومی",
+  "page.General.desc": "رفتار و ظاهر پایه‌ی سطح Halo",
+  "page.Features.label": "قابلیت‌ها",
+  "page.Features.desc": "پیل اجازه دارد چه چیزی را، و کِی، نشان دهد",
+  "page.Agents.label": "ایجنت‌ها",
+  "page.Agents.desc": "کلاد کد، Codex، و هر چیز دیگری که گزارش می‌دهد",
+  "page.Api.label": "API",
+  "page.Api.desc": "بگذار برنامه‌های دیگر پیل را کنترل کنند",
+  "page.Access.label": "دسترسی‌ها",
+  "page.Access.desc": "آنچه Halo برای کارش از ویندوز لازم دارد",
+  "page.DocsAbout.label": "مستندات و درباره",
+  "page.DocsAbout.desc": "جایی که همه‌چیز نوشته شده",
+  "section.appearance": "ظاهر",
+  "section.startup": "شروع خودکار",
+  "section.behaviour": "رفتار",
+  "section.surfaces": "سطح‌ها",
+  "section.notifications": "اعلان‌ها",
+  "section.alertsaboutthismachine": "هشدارهای این دستگاه",
+  "section.sessions": "نشست‌ها",
+  "section.connection": "اتصال",
+  "section.questions": "پرسش‌ها",
+  "section.alerts": "هشدارها",
+  "section.endpoint": "نقطه‌ی اتصال",
+  "section.whatcallersmaydo": "فراخوان‌ها چه اجازه‌ای دارند",
+  "section.permissions": "مجوزها",
+  "section.removal": "حذف",
+  "section.halo": "Halo",
+  "section.problems": "مشکلات",
+  "section.project": "پروژه",
+  "nav.settings": "تنظیمات",
+  "nav.system": "سیستم",
+  "nav.reference": "مرجع",
+  "settings.access.startup.label": "ورودی شروع خودکار",
+  "settings.access.startup.packaged.desc": "ویندوز تصمیم می‌گیرد Halo موقع ورود شما اجرا شود یا نه",
+  "settings.access.startup.task.desc": "وظیفه‌ی زمان‌بندی‌شده‌ای که Halo را موقع ورود اجرا می‌کند",
+  "settings.access.startup.action.packaged": "بازکردن تنظیمات Startup",
+  "settings.access.startup.action.task": "بازکردن Task Scheduler",
+  "settings.api.docs.label": "چطور صدایش بزنیم",
+  "settings.api.docs.desc": "نقطه‌های اتصال، توکن، و اینکه هر سوییچ پایین چه اجازه‌ای می‌دهد — قبل از روشن‌کردن هرکدام این را بخوان",
+  "agent.row.fiveHour": "۵ ساعته",
+  "agent.row.weekly": "هفتگی",
+  "agent.row.context": "کانتکست",
+  "agent.left": "{0} مانده",
+  "agent.resets": "بازنشانی {0}",
+  "agent.notFetched": "دریافت نشده",
+  "agent.noSession": "بدون نشست",
+  "agent.noActiveSession": "نشست فعالی نیست",
+  "agent.contextOf": "از {0}  ·  {1}٪ مصرف",
+  "agent.contextShort": "کانتکست  ·  {0}K از {1}K",
+  "agent.refresh": "تازه‌سازی",
+  "agent.neverFetched": "هرگز دریافت نشده",
+  "agent.updated": "به‌روزرسانی {0}",
+  "agent.neverRead": "هرگز خوانده نشده",
+  "agent.read": "خوانده {0}",
+  "mood.idle": [
+    "بزن بریم :)",
+    "در خدمتم",
+    "آماده",
+    "میز خالی",
+    "منتظرم",
+    "بی‌کارم",
+    "چیزی نیست",
+    "هر وقت خواستی"
+  ],
+  "mood.offline": [
+    "آفلاین :(",
+    "بی‌سیگنال",
+    "قطع",
+    "بی‌ارتباط",
+    "خط رفته"
+  ],
+  "mood.apiDown": [
+    "ای‌پی‌آی خوابه :(",
+    "جوابی نیست",
+    "بالادست ساکته",
+    "در دسترس نیست"
+  ],
+  "mood.retrying": [
+    "دوباره می‌زنم",
+    "یه بار دیگه",
+    "هنوز در می‌زنم",
+    "ول‌کن نیستم",
+    "منتظر ای‌پی‌آی"
+  ],
+  "mood.netError": [
+    "خطای شبکه :(",
+    "قطع شد",
+    "خط خوابید",
+    "ارتباط پرید"
+  ],
+  "mood.apiError": [
+    "خطای ای‌پی‌آی :(",
+    "رد کرد",
+    "جواب بد",
+    "نپذیرفت"
+  ],
+  "mood.compacted": [
+    "جا باز شد :)",
+    "سبک شدم",
+    "مرتب شد",
+    "نفس کشیدم"
+  ],
+  "mood.outOfCredit": [
+    "شارژ تمام :(",
+    "اعتبار نمانده",
+    "ته کشید"
+  ],
+  "mood.writing": [
+    "می‌نویسم…",
+    "در حال نوشتن…",
+    "قلم دستمه…",
+    "تایپ می‌کنم…"
+  ],
+  "mood.reading": [
+    "می‌خوانم…",
+    "دارم می‌خوانم…",
+    "چشم می‌اندازم…",
+    "مرور می‌کنم…"
+  ],
+  "mood.running": [
+    "اجرا می‌کنم…",
+    "در حال اجرا…",
+    "دستور می‌زنم…"
+  ],
+  "mood.digging": [
+    "می‌گردم…",
+    "کند و کاو…",
+    "زیرورو می‌کنم…"
+  ],
+  "mood.fetching": [
+    "می‌آورم…",
+    "در حال گرفتن…",
+    "دانلود…"
+  ],
+  "mood.searching": [
+    "جست‌وجو…",
+    "می‌گردم دنبالش…",
+    "سرچ می‌کنم :P"
+  ],
+  "mood.delegating": [
+    "واگذار کردم…",
+    "سپردم به یکی…",
+    "کمک گرفتم…"
+  ],
+  "mood.planning": [
+    "نقشه می‌کشم…",
+    "برنامه می‌ریزم…",
+    "فکر می‌کنم…"
+  ],
+  "mood.skill": [
+    "مهارت می‌زنم…",
+    "ابزار مخصوص…"
+  ],
+  "mood.asking": [
+    "نظرت چیه؟",
+    "با تو‌ام",
+    "یه سؤال دارم"
+  ],
+  "mood.unknown": [
+    "مشغولم…",
+    "یه کاری می‌کنم…",
+    "سرم شلوغه…"
+  ],
+  "mood.compacting": [
+    "جمع می‌کنم…",
+    "فشرده می‌کنم…",
+    "مرتب می‌کنم…"
+  ],
+  "mood.patching": [
+    "وصله می‌زنم…",
+    "اصلاح می‌کنم…",
+    "تعمیر…"
+  ],
+  "mood.plotting": [
+    "نمودار می‌کشم…",
+    "رسم می‌کنم…"
+  ],
+  "mood.watching": [
+    "نگاه می‌کنم…",
+    "زیر نظر دارم…"
+  ],
+  "mood.reviewing": [
+    "بازبینی…",
+    "مرور می‌کنم…"
+  ],
+  "mood.publishing": [
+    "منتشر می‌کنم…",
+    "می‌فرستم بالا…"
+  ],
+  "mood.consulting": [
+    "مشورت می‌کنم…",
+    "می‌پرسم…"
+  ],
+  "mood.peeking": [
+    "یه نگاه…",
+    "سرک می‌کشم…"
+  ],
+  "mood.writing@long": [
+    "هنوز می‌نویسم…",
+    "دارد طول می‌کشد…"
+  ],
+  "mood.reading@long": [
+    "هنوز می‌خوانم…",
+    "متن زیاد است…"
+  ],
+  "mood.running@long": [
+    "هنوز در حال اجرا…",
+    "طول کشید…"
+  ],
+  "mood.digging@long": [
+    "هنوز می‌گردم…",
+    "عمیق شد…"
+  ],
+  "mood.fetching@long": [
+    "هنوز می‌آورم…",
+    "کند می‌آید…"
+  ],
+  "mood.searching@long": [
+    "هنوز جست‌وجو…",
+    "پیدا نشد هنوز…"
+  ],
+  "mood.delegating@long": [
+    "هنوز سپرده…",
+    "منتظر جوابم…"
+  ],
+  "mood.planning@long": [
+    "هنوز نقشه…",
+    "فکرم درگیر است…"
+  ],
+  "mood.skill@long": [
+    "هنوز مشغول…"
+  ],
+  "mood.unknown@long": [
+    "هنوز مشغولم…",
+    "طول کشید…"
+  ],
+  "mood.compacting@long": [
+    "هنوز جمع می‌کنم…"
+  ],
+  "mood.patching@long": [
+    "هنوز وصله…"
+  ],
+  "mood.plotting@long": [
+    "هنوز رسم…"
+  ],
+  "mood.writing@ages": [
+    "خیلی طول کشید…",
+    "قلم نمی‌ایستد…"
+  ],
+  "mood.reading@ages": [
+    "خیلی طول کشید…",
+    "هنوز درگیرم…"
+  ],
+  "mood.running@ages": [
+    "خیلی طول کشید…",
+    "صبور باش…"
+  ],
+  "mood.digging@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.fetching@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.searching@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.delegating@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.planning@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.skill@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.unknown@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.compacting@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.patching@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.plotting@ages": [
+    "خیلی طول کشید…"
+  ],
+  "mood.idle@tight": [
+    "آماده",
+    "بی‌کار"
+  ],
+  "mood.unknown@tight": [
+    "مشغول"
+  ],
+  "mood.running@tight": [
+    "اجرا…"
+  ],
+  "mood.writing@tight": [
+    "نوشتن…"
+  ],
+  "mood.reading@tight": [
+    "خواندن…"
+  ],
+  "mood.digging@tight": [
+    "گشتن…"
+  ],
+  "mood.idle@thin": [
+    "آماده"
+  ],
+  "mood.unknown@thin": [
+    "مشغول"
+  ],
+  "mood.running@thin": [
+    "اجرا…"
+  ],
+  "mood.writing@thin": [
+    "نوشتن…"
+  ],
+  "mood.unknown@again": [
+    "باز هم…",
+    "دوباره…"
+  ],
+  "mood.running@again": [
+    "باز اجرا…"
+  ],
+  "mood.digging@again": [
+    "باز می‌گردم…"
+  ],
+  "mood.writing@again": [
+    "باز می‌نویسم…"
+  ],
+  "mood.patching@again": [
+    "باز وصله…"
+  ],
+  "mood.unknown@heavy": [
+    "کار سنگین…"
+  ],
+  "mood.running@heavy": [
+    "اجرای سنگین…"
+  ],
+  "mood.reading@heavy": [
+    "متن سنگین…"
+  ],
+  "mood.writing@heavy": [
+    "نوشتن سنگین…"
+  ],
+  "mood.idle@late": [
+    "شب به‌خیر :)",
+    "دیروقت است"
+  ],
+  "mood.unknown@late": [
+    "هنوز بیدارم…"
+  ],
+  "mood.running@late": [
+    "شبانه اجرا…"
+  ],
+  "mood.writing@late": [
+    "شبانه می‌نویسم…"
+  ],
+  "mood.idle@early": [
+    "صبح به‌خیر :)",
+    "سحرخیز"
+  ],
+  "mood.unknown@early": [
+    "زود شروع شد…"
+  ],
+  "mood.running@early": [
+    "سحرخیزی…"
+  ],
+  "time.justNow": "همین حالا",
+  "time.minsAgo": "{0} دقیقه پیش",
+  "time.hoursAgo": "{0} ساعت پیش",
+  "time.daysAgo": "{0} روز پیش",
+  "time.now": "الان",
+  "hooks.connected.title": "{0} وصل شد",
+  "hooks.connected.body": "هوک‌ها به {0} اضافه شدند. فایل قبلی‌ات با نام ‎.halo-bak ذخیره شد.",
+  "hooks.failed.title": "{0} وصل نشد",
+  "hooks.failed.write": "Halo نتوانست تنظیمات هوک را بنویسد",
+  "hooks.failed.run": "Halo نتوانست هلپر هوکش را اجرا کند",
+  "hooks.failed.body": "{0}. چیزی تغییر نکرد.",
+  "hooks.failed.bodyWhy": "{0}: {1}. چیزی تغییر نکرد.",
+  "limit.title": "مصرف {0} {1}٪",
+  "limit.body": "{0}٪ از سهم {1}‌ات را مصرف کرده‌ای.",
+  "limit.window.weekly": "هفتگی",
+  "limit.window.5-hour": "پنج‌ساعته",
+  "limit.window.primary": "اصلی",
+  "limit.window.secondary": "فرعی",
+  "state.checking": "در حال بررسی...",
+  "state.connected": "وصل",
+  "state.notConnected": "وصل نیست",
+  "state.disconnected": "قطع شد",
+  "state.on": "روشن",
+  "state.off": "خاموش",
+  "state.missing": "موجود نیست",
+  "state.unavailable": "نامشخص",
+  "state.turnedOffInWindows": "در ویندوز خاموش شده",
+  "state.managedByWindows": "توسط ویندوز مدیریت می‌شود",
+  "state.notGeneratedYet": "هنوز ساخته نشده",
+  "state.notMeasuredYet": "هنوز اندازه‌گیری نشده",
+  "state.reversesEverything": "همه‌چیز را برمی‌گرداند",
+  "action.open": "بازکردن",
+  "action.openFolder": "بازکردن پوشه",
+  "action.openSettings": "بازکردن تنظیمات",
+  "action.copy": "کپی",
+  "action.reset": "بازنشانی",
+  "action.resetPosition": "بازنشانی جای پیل",
+  "action.connect": "اتصال",
+  "action.disconnect": "قطع اتصال",
+  "action.retry": "تلاش دوباره",
+  "pill.copied": "کپی شد",
+  "tray.title": "سینی فایل",
+  "tray.releaseToAdd": "رها کن تا اضافه شود",
+  "tray.remove": "حذف {0}",
+  "ask.typeSomething": "چیزی بنویس",
+  "agent.sampling": "نمونه‌برداری…",
+  "home.tagline": "اپ‌ها، فعالیت‌ها و ایجنت‌هایت — همان وقتی که مهم می‌شوند.",
+  "home.explore": "گشت‌وگذار",
+  "home.state": "وضعیت",
+  "home.card.general": "رفتار و ظاهر",
+  "home.card.features": "سطح‌های نمایش",
+  "home.card.agents": "نشست‌های کدنویسی",
+  "home.card.access": "کنترل‌های ویندوز",
+  "home.waiting": "تغییرها منتظر اعمال‌اند",
+  "home.waitingBody": "تا وقتی پایین صفحه «اعمال» را نزنی هیچ‌چیز به Halo نمی‌رسد. «بازنشانی» همه‌چیز را به حالت اولش برمی‌گرداند.",
+  "home.restore": "بازگرداندن پیش‌فرض‌ها",
+  "chrome.title": "تنظیمات Halo",
+  "chrome.apply": "اعمال",
+  "chrome.reset": "بازنشانی",
+  "chrome.unapplied": "تغییرهای اعمال‌نشده داری",
+  "chrome.keepEditing": "ادامه‌ی ویرایش",
+  "chrome.discard": "بی‌خیال شو و ببند",
+  "report.write": "نوشتن گزارش",
+  "draft.one": "۱ تغییر در انتظار",
+  "draft.many": "{0} تغییر در انتظار",
+  "guard.one": "یک تغییر هنوز اعمال نشده. Halo هنوز با تنظیمات قبلی کار می‌کند.",
+  "guard.many": "{0} تغییر هنوز اعمال نشده. Halo هنوز با تنظیمات قبلی کار می‌کند.",
+  "home.card.api": "Halo را از کد کنترل کن",
+  "opt.light": "کم",
+  "opt.balanced": "متعادل",
+  "opt.strong": "زیاد",
+  "opt.reduced": "کاهش‌یافته",
+  "opt.soft": "نرم",
+  "opt.standard": "استاندارد",
+  "tray.openSettings": "بازکردن تنظیمات",
+  "tray.restart": "راه‌اندازی دوباره‌ی Halo",
+  "tray.quit": "بستن Halo",
+  "opt.auto": "خودکار",
+  "net.label": "شبکه",
+  "net.api": "ای‌پی‌آی",
+  "net.loss": "افت",
+  "net.ms": "میلی‌ثانیه",
+  "net.dropped": "قطع",
+  "net.locating": "مکان‌یابی…",
+  "net.checkingExit": "بررسی خروجی…",
+  "net.testingDns": "آزمایش دی‌ان‌اس…",
+  "net.dnsOk": "دی‌ان‌اس سالم",
+  "net.dnsLeak": "نشتِ دی‌ان‌اس",
+  "net.residential": "خانگی",
+  "net.datacenter": "دیتاسنتر",
+  "net.vpnExit": "خروجی وی‌پی‌ان",
+  "report.title": "گزارش مشکل",
+  "report.create": "ساختن گزارش",
+  "report.intro": "این خودِ گزارش است، دقیقاً همان‌طور که روی دیسک نشسته. هنوز چیزی ارسال نشده.",
+  "report.whatGetsSent": "چه چیزی ارسال می‌شود؟",
+  "report.hideDetails": "پنهان‌کردن جزئیات",
+  "report.send": "ارسال گزارش",
+  "report.sending": "در حال ارسال...",
+  "report.copy": "کپی",
+  "report.saveAs": "ذخیره به‌عنوان...",
+  "report.openNotepad": "بازکردن در Notepad",
+  "report.openIssue": "بازکردن یک issue در گیت‌هاب",
+  "report.copied": "کپی شد. هیچ‌جا نزدیک شبکه نرفت.",
+  "report.saved": "ذخیره شد. اگر می‌خواهی به دستم برسد، خودت ضمیمه‌ی ایمیل کن.",
+  "report.openedGitHub": "گیت‌هاب باز شد. تا آنجا submit نزنی چیزی ثبت نمی‌شود.",
+  "report.sendFailed": "ارسال ناموفق: ",
+  "report.stillOnDisk": "گزارش هنوز روی دیسک هست.",
+  "report.notWritten": "گزارش نوشته نشد.",
+  "report.blurb": "هالو اعلان‌های برنامه‌های دیگر، چیزی که پخش می‌کنی و نام فایل‌های سینی‌ات را بازتاب می‌دهد، پس یک گزارش فهرستی نام‌دار از واقعیت‌های این دستگاه دارد و نه چیز دیگری. اول کل فایل را با «چه چیزی ارسال می‌شود؟» بخوان — همان فایل است در هر دو حالت.",
+  "report.sentOnDisk": "ارسال شد. روی دیسک هم هست، در ‎%LOCALAPPDATA%\\Halo\\reports.",
+  "report.noExe": "فایل Halo.App.exe کنار این پنجره نیست.",
+  "report.noStart": "نتوانستم Halo.App را اجرا کنم.",
+  "ask.freeTextSub": "با کلمه‌های خودت جواب بده",
+  "ask.chat": "درباره‌اش حرف بزنیم",
+  "ask.chatSub": "سؤال را رها کن و گفت‌وگو کن"
+}

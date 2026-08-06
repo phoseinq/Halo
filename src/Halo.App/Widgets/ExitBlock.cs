@@ -168,7 +168,7 @@ internal static class ExitBlock
 
         string who = IpCountry.Cc is { Length: > 0 } cc
             ? (IpCountry.Isp is { Length: > 0 } isp ? $"{cc}  ·  {isp}" : cc)
-            : "locating…";
+            : Halo.Localization.Strings.Get("net.locating");
         using (var wb = new SolidBrush(Mul(White, a * 0.9f)))
         {
             using var sf = new StringFormat(StringFormat.GenericTypographic)
@@ -203,7 +203,7 @@ internal static class ExitBlock
             bool repFresh = string.Equals(IpRep.ForIp, scored, StringComparison.Ordinal) && IpRep.Verdict != null;
             bool dnsFresh = string.Equals(DnsLeak.ForIp, scored, StringComparison.Ordinal) && DnsLeak.Done;
 
-            if (!repFresh) rows.Add(("checking exit\u2026", Dim, 0.6f, null));
+            if (!repFresh) rows.Add((Halo.Localization.Strings.Get("net.checkingExit"), Dim, 0.6f, null));
             else
             {
 
@@ -219,12 +219,12 @@ internal static class ExitBlock
 
             dnsRow = rows.Count;
             if (!dnsFresh)
-                rows.Add((DnsLeak.Running ? "testing dns\u2026" : "dns \u2014", Dim, 0.6f, null));
+                rows.Add((DnsLeak.Running ? Halo.Localization.Strings.Get("net.testingDns") : "dns \u2014", Dim, 0.6f, null));
             else
                 rows.Add((DnsLeak.Leaking
                         ? $"dns leak \u00b7 {DnsLeak.Resolvers} resolvers in {DnsLeak.Where}"
                         : $"dns ok \u00b7 {DnsLeak.Resolvers} resolvers in {DnsLeak.Where}",
-                    DnsLeak.Leaking ? Red : Green, 0.95f, DnsLeak.Leaking ? "dns leak" : "dns ok"));
+                    DnsLeak.Leaking ? Red : Green, 0.95f, DnsLeak.Leaking ? Halo.Localization.Strings.Get("net.dnsLeak") : Halo.Localization.Strings.Get("net.dnsOk")));
         }
 
         DnsRowRect = dnsRow >= 0 && DnsLeak.ForIp != null
@@ -269,7 +269,7 @@ internal static class ExitBlock
         int dropped = 0, seen = 0, last = empty;
         foreach (var v in api) { if (v == empty) continue; seen++; if (v == lost) dropped++; }
         for (int k = api.Length - 1; k >= 0; k--) if (api[k] != empty) { last = api[k]; break; }
-        string ms = last == empty ? "…" : last == lost ? "dropped" : $"{last} ms";
+        string ms = last == empty ? "…" : last == lost ? Halo.Localization.Strings.Get("net.dropped") : $"{last} ms";
         return seen == 0 ? ms : $"{ms}  ·  {dropped}/{seen} lost";
     }
 }

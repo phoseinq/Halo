@@ -198,9 +198,9 @@ internal static class IpRep
             : bogon ? ("flagged: bogon", 3)
             : vpn ? ("vpn, recognised", 2)
             : proxy ? ("proxy, recognised", 2)
-            : datacenter ? ("datacenter", 1)
+            : datacenter ? (Halo.Localization.Strings.Get("net.datacenter"), 1)
             : mobile ? ("mobile", 0)
-            : ("residential", 0);
+            : (Halo.Localization.Strings.Get("net.residential"), 0);
 
         if (sev < 2 && abuse is "high" or "very high") sev = 2;
         return (verdict, sev);

@@ -1,0 +1,578 @@
+{
+  "_readme": "वह सारा टेक्स्ट जो Halo दिखाता है। केवल मान अनुवाद करें; कुंजियाँ वैसी ही रहें।",
+  "_placeholders": "{0} और {1} को Halo इसी क्रम में भरता है। इन्हें कहीं भी रखें, पर जोड़ें या हटाएँ नहीं।",
+  "_missing": "कोई भी छूटी कुंजी अंग्रेज़ी पर लौट आती है। अधूरा अनुवाद भी चलता है।",
+  "reports.off": "रिपोर्ट बंद हैं: settings.json में report.endpoint खाली है।",
+  "reports.customNotHttps": "settings.json में report.endpoint एक वैध https:// पता नहीं है।",
+  "reports.builtInNotHttps": "अंतर्निहित पता वैध https:// नहीं है।",
+  "notice.app.system": "सिस्टम",
+  "notice.app.network": "नेटवर्क",
+  "notice.app.battery": "बैटरी",
+  "notice.app.claude": "Claude",
+  "notice.app.screenshot": "स्क्रीनशॉट",
+  "notice.app.clipboard": "क्लिपबोर्ड",
+  "notice.screenshot.title": "स्क्रीनशॉट लिया गया",
+  "notice.clipboard.title": "छवि कॉपी हुई",
+  "notice.load.cpu": "CPU",
+  "notice.load.memory": "मेमोरी",
+  "notice.load.title": "{0} का उपयोग अधिक — {1}%",
+  "notice.load.body": "सबसे ज़्यादा {0} खपत कर रहा है।",
+  "notice.load.ramFallback": "मेमोरी कम पड़ रही है।",
+  "notice.context.title": "कॉन्टेक्स्ट {0}% भरा",
+  "notice.context.body": "यहाँ से उत्तर धुँधले होते जाएँगे — मौका मिले तो /compact चलाएँ।",
+  "notice.battery.low": "कम",
+  "notice.battery.critical": "गंभीर",
+  "notice.battery.title": "बैटरी {0} — {1}%",
+  "notice.battery.body": "पावर सेवर चालू करने के लिए दबाएँ।",
+  "notice.net.down.title": "इंटरनेट नहीं है",
+  "notice.net.down.body": "अभी कुछ भी बाहर नहीं जा रहा।",
+  "notice.net.slow.title": "खराब इंटरनेट",
+  "notice.api.down.title": "Claude तक पहुँच नहीं",
+  "notice.api.down.body": "आपका कनेक्शन ठीक है — उनका नहीं।",
+  "settings.appearance.scale.label": "पिल का आकार",
+  "settings.appearance.scale.desc": "ज्यामिति, टेक्स्ट और टैप क्षेत्र एक साथ बढ़ाता है",
+  "settings.appearance.glass.label": "काँच की तीव्रता",
+  "settings.appearance.glass.desc": "वॉलपेपर की बारीकी और कंट्रास्ट के बीच संतुलन",
+  "settings.appearance.motion.label": "गति",
+  "settings.appearance.motion.desc": "हिलने के बाद पिल कितनी जल्दी थमता है",
+  "settings.appearance.fps.label": "फ्रेम दर",
+  "settings.appearance.fps.desc": "पिल के चलते समय Halo जिस दर तक पहुँचना चाहता है। Auto इसी डिस्प्ले की रिफ्रेश दर का अनुसरण करता है, और मशीन व्यस्त होने पर हर सेटिंग खुद नीचे आ जाती है।",
+  "settings.appearance.fpsMeasured.label": "मापी गई दर",
+  "settings.appearance.fpsMeasured.desc": "पिल वास्तव में जो दर पाता है — चलते समय, और खुला-स्थिर रहते समय — साथ में यह डिस्प्ले जो दिखा सकता है",
+  "settings.general.startup.label": "विंडोज़ के साथ चालू",
+  "settings.general.startup.desc": "साइन इन के बाद Halo खोलें",
+  "settings.general.fullscreen.label": "फुलस्क्रीन के ऊपर दिखे",
+  "settings.general.fullscreen.desc": "पिल को गेम और वीडियो के ऊपर रखें",
+  "settings.general.language.label": "भाषा",
+  "settings.general.language.desc": "Halo अपना टेक्स्ट जिस भाषा में दिखाता है",
+  "settings.general.capture.label": "कैप्चर में Halo शामिल करें",
+  "settings.general.capture.desc": "स्क्रीनशॉट और रिकॉर्डिंग में पिल दिखाएँ",
+  "settings.general.follow.label": "सक्रिय ऐप का अनुसरण",
+  "settings.general.follow.desc": "संबंधित सतह को अपने आप आगे लाएँ",
+  "settings.general.reset.label": "पिल की जगह",
+  "settings.general.reset.desc": "सक्रिय डिस्प्ले के बीच में लौटाएँ",
+  "settings.feature.media.label": "मीडिया",
+  "settings.feature.media.desc": "प्लेबैक सत्र और VLC के क्लासिक नियंत्रण",
+  "settings.media.progress.label": "टाइमलाइन दिखाएँ",
+  "settings.media.progress.desc": "सिमटे पिल पर असली प्लेबैक स्थिति बनाएँ",
+  "settings.feature.downloads.label": "डाउनलोड",
+  "settings.feature.downloads.desc": "ब्राउज़र, स्टोर, गेम और ऐप की प्रगति",
+  "settings.feature.fileTray.label": "फ़ाइल ट्रे",
+  "settings.feature.fileTray.desc": "ड्रैग-एंड-ड्रॉप शेल्फ़ और क्लिपबोर्ड छवियाँ",
+  "settings.feature.bluetooth.label": "ब्लूटूथ",
+  "settings.feature.bluetooth.desc": "डिवाइस कनेक्शन और बैटरी",
+  "settings.feature.notifications.label": "सूचनाएँ मिरर करें",
+  "settings.feature.notifications.desc": "विंडोज़ की सूचनाएँ पिल में दिखाएँ",
+  "settings.notifications.silence.label": "सिस्टम बैनर चुप कराएँ",
+  "settings.notifications.silence.desc": "जिन ऐप को Halo मिरर करता है, उनके लिए विंडोज़ का अपना बैनर रोकें। पूरी तरह वापस लिया जा सकता है।",
+  "settings.alert.battery.label": "बैटरी",
+  "settings.alert.battery.desc": "पावर सेवर चालू करने के लिए एक टैप। 10% हमेशा गंभीर है।",
+  "settings.alert.batteryAt.label": "चेतावनी यहाँ",
+  "settings.alert.batteryAt.desc": "पहली बैटरी चेतावनी कहाँ आती है",
+  "settings.alert.cpu.label": "उच्च CPU",
+  "settings.alert.cpu.desc": "हर स्तर पर एक बार, सबसे अधिक खपत वाली प्रक्रिया के नाम के साथ",
+  "settings.alert.cpuAt.label": "यहाँ से चेतावनी शुरू",
+  "settings.alert.cpuAt.desc": "इससे ऊपर के स्तर फिर भी बढ़ते हैं",
+  "settings.alert.memory.label": "उच्च मेमोरी",
+  "settings.alert.memory.desc": "हर स्तर पर एक बार, सबसे अधिक खपत वाली प्रक्रिया के नाम के साथ",
+  "settings.alert.memoryAt.label": "यहाँ से चेतावनी शुरू",
+  "settings.alert.memoryAt.desc": "इससे ऊपर के स्तर फिर भी बढ़ते हैं",
+  "settings.alert.internet.label": "इंटरनेट",
+  "settings.alert.internet.desc": "धीमा, ऑफ़लाइन, और API तक पहुँच न होना",
+  "settings.alert.clipboard.label": "स्क्रीनशॉट और कॉपी",
+  "settings.alert.clipboard.desc": "क्लिपबोर्ड पर कुछ आने पर एक बैनर",
+  "settings.alert.language.label": "कीबोर्ड लेआउट",
+  "settings.alert.language.desc": "बदलने पर एक सेकंड की झलक",
+  "settings.alert.hourly.label": "घंटे की सूचना",
+  "settings.alert.hourly.desc": "पूरे घंटे पर, तारीख और मौसम के साथ",
+  "settings.feature.claudeCode.label": "Claude Code",
+  "settings.feature.claudeCode.desc": "लाइव सत्र, सीमाएँ और रद्द बटन",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "Codex Desktop और CLI सत्र",
+  "settings.feature.genericAgents.label": "अन्य एजेंट",
+  "settings.feature.genericAgents.desc": "कोई भी टूल जो ~/.halo/agents में लिखता है",
+  "settings.hooks.claude.label": "Claude Code हुक",
+  "settings.hooks.claude.desc": "~/.claude/settings.json में Halo के हुक, इन्हीं से सत्र दिखाई देते हैं",
+  "settings.hooks.codex.label": "Codex हुक",
+  "settings.hooks.codex.desc": "~/.codex/hooks.json में Halo के हुक, इन्हीं से सत्र दिखाई देते हैं",
+  "settings.claude.ask.label": "पिल से उत्तर दें",
+  "settings.claude.ask.desc": "Claude का प्रश्न मिरर करें और एक क्लिक से उत्तर दें",
+  "settings.alert.context.label": "कॉन्टेक्स्ट लगभग भरा",
+  "settings.alert.context.desc": "हर सत्र में एक बार",
+  "settings.alert.contextAt.label": "कॉन्टेक्स्ट चेतावनी",
+  "settings.alert.contextAt.desc": "यहीं एजेंट का छल्ला भी अंबर हो जाता है",
+  "settings.alert.limit.label": "उपयोग सीमाएँ",
+  "settings.alert.limit.desc": "हर विंडो में एक बार",
+  "settings.alert.limitAt.label": "उपयोग चेतावनी",
+  "settings.alert.limitAt.desc": "पाँच घंटे या साप्ताहिक विंडो का हिस्सा",
+  "settings.api.enabled.label": "लोकल API",
+  "settings.api.enabled.desc": "लोकल प्रोग्राम के लिए 127.0.0.1 पर सुनता है। इस मशीन के बाहर से कुछ भी नहीं पहुँच सकता।",
+  "settings.api.port.label": "पोर्ट",
+  "settings.api.port.desc": "बदलें तभी जब यह पहले से किसी और के पास हो",
+  "settings.api.token.label": "टोकन",
+  "settings.api.token.desc": "API पहली बार चालू करने पर बनता है। इसे Authorization: Bearer हेडर में भेजें।",
+  "settings.api.notify.label": "सूचना भेजें",
+  "settings.api.notify.desc": "POST /notify — शीर्षक, विवरण, और वैकल्पिक कोड या फ़ाइल",
+  "settings.api.ask.label": "प्रश्न पूछें",
+  "settings.api.ask.desc": "विकल्पों के साथ POST /ask, फिर उत्तर के लिए /ask/{nonce} देखें",
+  "settings.api.state.label": "स्क्रीन पर जो है वह पढ़ें",
+  "settings.api.state.desc": "GET /state, /media, /agents, /tray",
+  "settings.api.control.label": "बटन दबाएँ",
+  "settings.api.control.desc": "POST /media, /pill और /tray: चलाएँ, छोड़ें, खोलें, पिन करें, फ़ाइल जोड़ें",
+  "settings.api.settings.label": "सेटिंग्स पढ़ें और बदलें",
+  "settings.api.settings.desc": "GET और PATCH /settings। यानी इस विंडो का हर स्विच।",
+  "settings.access.notifications.label": "सूचना पहुँच",
+  "settings.access.notifications.desc": "विंडोज़ की सूचनाएँ मिरर करने के लिए ज़रूरी",
+  "settings.reset.everything.label": "सब कुछ रीसेट करें",
+  "settings.reset.everything.desc": "हर ऐप का सूचना बैनर लौटाएँ, दोनों एजेंट अलग करें, और Halo की सहेजी स्थिति मिटाएँ",
+  "settings.about.version.label": "संस्करण",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "स्थिति फ़ोल्डर",
+  "settings.about.state.desc": "Halo जो फ़ाइलें रखता है: स्थिति, पिन, ट्रे, देखी गई सूचनाएँ",
+  "settings.report.problem.label": "समस्या बताएँ",
+  "settings.report.problem.desc": "लिखें, ठीक-ठीक देखें कि उसमें क्या है, फिर भेजें दबाएँ। बटन के बिना कुछ भी बाहर नहीं जाता।",
+  "settings.report.autoCrash.label": "क्रैश बिना पूछे भेजें",
+  "settings.report.autoCrash.desc": "केवल क्रैश रिपोर्ट, केवल तब जब Halo सचमुच क्रैश हुआ हो, और केवल वे फ़ील्ड जो रिपोर्ट विंडो आपको दिखाती है",
+  "settings.about.repo.label": "रिपॉज़िटरी",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "होम",
+  "page.Home.desc": "शुरू करने के लिए एक शांत जगह",
+  "page.General.label": "सामान्य",
+  "page.General.desc": "Halo की सतह का व्यवहार और रूप",
+  "page.Features.label": "सुविधाएँ",
+  "page.Features.desc": "पिल क्या दिखा सकता है, और कब",
+  "page.Agents.label": "एजेंट",
+  "page.Agents.desc": "Claude Code, Codex, और जो भी और रिपोर्ट करे",
+  "page.Api.label": "API",
+  "page.Api.desc": "दूसरे प्रोग्राम को पिल चलाने दें",
+  "page.Access.label": "अनुमतियाँ",
+  "page.Access.desc": "काम करने के लिए Halo को विंडोज़ से क्या चाहिए",
+  "page.DocsAbout.label": "दस्तावेज़ और परिचय",
+  "page.DocsAbout.desc": "जहाँ सब कुछ लिखा है",
+  "section.appearance": "रूप",
+  "section.startup": "स्टार्टअप",
+  "section.behaviour": "व्यवहार",
+  "section.surfaces": "सतहें",
+  "section.notifications": "सूचनाएँ",
+  "section.alertsaboutthismachine": "इस मशीन की चेतावनियाँ",
+  "section.sessions": "सत्र",
+  "section.connection": "कनेक्शन",
+  "section.questions": "प्रश्न",
+  "section.alerts": "चेतावनियाँ",
+  "section.endpoint": "एंडपॉइंट",
+  "section.whatcallersmaydo": "कॉलर क्या कर सकते हैं",
+  "section.permissions": "अनुमतियाँ",
+  "section.removal": "हटाना",
+  "section.halo": "HALO",
+  "section.problems": "समस्याएँ",
+  "section.project": "प्रोजेक्ट",
+  "nav.settings": "सेटिंग्स",
+  "nav.system": "सिस्टम",
+  "nav.reference": "संदर्भ",
+  "settings.access.startup.label": "स्टार्टअप प्रविष्टि",
+  "settings.access.startup.packaged.desc": "विंडोज़ तय करता है कि साइन इन पर Halo चले या नहीं",
+  "settings.access.startup.task.desc": "वह निर्धारित कार्य जो साइन इन पर Halo चलाता है",
+  "settings.access.startup.action.packaged": "स्टार्टअप सेटिंग्स खोलें",
+  "settings.access.startup.action.task": "टास्क शेड्यूलर खोलें",
+  "settings.api.docs.label": "इसे कैसे बुलाएँ",
+  "settings.api.docs.desc": "एंडपॉइंट, टोकन, और नीचे का हर स्विच कॉलर को क्या करने देता है — किसी को भी चालू करने से पहले यह पढ़ें",
+  "agent.row.fiveHour": "5 घंटे",
+  "agent.row.weekly": "साप्ताहिक",
+  "agent.row.context": "कॉन्टेक्स्ट",
+  "agent.left": "{0} बचा",
+  "agent.resets": "{0} रीसेट",
+  "agent.notFetched": "नहीं मिला",
+  "agent.noSession": "कोई सत्र नहीं",
+  "agent.noActiveSession": "कोई सक्रिय सत्र नहीं",
+  "agent.contextOf": "{0} में से  ·  {1}% उपयोग",
+  "agent.contextShort": "कॉन्टेक्स्ट  ·  {1}K में से {0}K",
+  "agent.refresh": "ताज़ा करें",
+  "agent.neverFetched": "कभी नहीं मिला",
+  "agent.updated": "{0} अपडेट",
+  "agent.neverRead": "कभी नहीं पढ़ा",
+  "agent.read": "{0} पढ़ा",
+  "time.justNow": "अभी",
+  "time.minsAgo": "{0} मिनट पहले",
+  "time.hoursAgo": "{0} घंटे पहले",
+  "time.daysAgo": "{0} दिन पहले",
+  "time.now": "अभी",
+  "hooks.connected.title": "{0} जुड़ गया",
+  "hooks.connected.body": "{0} में हुक जोड़े गए। आपकी पिछली फ़ाइल .halo-bak के नाम से सहेजी गई।",
+  "hooks.failed.title": "{0} नहीं जुड़ सका",
+  "hooks.failed.write": "Halo हुक सेटिंग्स नहीं लिख सका",
+  "hooks.failed.run": "Halo अपना हुक हेल्पर नहीं चला सका",
+  "hooks.failed.body": "{0}। कुछ भी नहीं बदला।",
+  "hooks.failed.bodyWhy": "{0}: {1}। कुछ भी नहीं बदला।",
+  "limit.title": "{0} उपयोग {1}%",
+  "limit.body": "आपने अपनी {1} सीमा का {0}% उपयोग कर लिया है।",
+  "limit.window.weekly": "साप्ताहिक",
+  "limit.window.5-hour": "पाँच घंटे की",
+  "limit.window.primary": "प्राथमिक",
+  "limit.window.secondary": "द्वितीयक",
+  "state.checking": "जाँच हो रही है...",
+  "state.connected": "जुड़ा",
+  "state.notConnected": "जुड़ा नहीं",
+  "state.disconnected": "अलग किया",
+  "state.on": "चालू",
+  "state.off": "बंद",
+  "state.missing": "मौजूद नहीं",
+  "state.unavailable": "अज्ञात",
+  "state.turnedOffInWindows": "विंडोज़ में बंद",
+  "state.managedByWindows": "विंडोज़ द्वारा प्रबंधित",
+  "state.notGeneratedYet": "अभी बना नहीं",
+  "state.notMeasuredYet": "अभी मापा नहीं",
+  "state.reversesEverything": "सब कुछ पलट देता है",
+  "action.open": "खोलें",
+  "action.openFolder": "फ़ोल्डर खोलें",
+  "action.openSettings": "सेटिंग्स खोलें",
+  "action.copy": "कॉपी",
+  "action.reset": "रीसेट",
+  "action.resetPosition": "स्थिति रीसेट करें",
+  "action.connect": "जोड़ें",
+  "action.disconnect": "अलग करें",
+  "action.retry": "फिर कोशिश करें",
+  "pill.copied": "कॉपी हुआ",
+  "tray.title": "फ़ाइल ट्रे",
+  "tray.releaseToAdd": "जोड़ने के लिए छोड़ें",
+  "tray.remove": "{0} हटाएँ",
+  "ask.typeSomething": "कुछ लिखें",
+  "agent.sampling": "नमूना ले रहे हैं…",
+  "home.tagline": "आपके ऐप, गतिविधि और एजेंट — ठीक तब, जब वे मायने रखें।",
+  "home.explore": "देखें",
+  "home.state": "स्थिति",
+  "home.card.general": "व्यवहार और रूप",
+  "home.card.features": "ऐप सतहें",
+  "home.card.agents": "कोडिंग सत्र",
+  "home.card.access": "विंडोज़ नियंत्रण",
+  "home.waiting": "बदलाव लागू होने की प्रतीक्षा में",
+  "home.waitingBody": "पेज के नीचे «लागू करें» दबाने तक यहाँ का कुछ भी Halo तक नहीं पहुँचता। «रीसेट» सब कुछ पहले जैसा कर देता है।",
+  "home.restore": "डिफ़ॉल्ट लौटाएँ",
+  "chrome.title": "Halo सेटिंग्स",
+  "chrome.apply": "लागू करें",
+  "chrome.reset": "रीसेट",
+  "chrome.unapplied": "आपके कुछ बदलाव लागू नहीं हुए",
+  "chrome.keepEditing": "संपादन जारी रखें",
+  "chrome.discard": "छोड़ें और बंद करें",
+  "report.write": "रिपोर्ट लिखें",
+  "draft.one": "1 बदलाव प्रतीक्षित",
+  "draft.many": "{0} बदलाव प्रतीक्षित",
+  "guard.one": "एक बदलाव अभी लागू नहीं हुआ। Halo अब भी पिछली सेटिंग्स पर चल रहा है।",
+  "guard.many": "{0} बदलाव अभी लागू नहीं हुए। Halo अब भी पिछली सेटिंग्स पर चल रहा है।",
+  "home.card.api": "कोड से Halo चलाएँ",
+  "mood.idle": [
+    "चलिए शुरू करें :)",
+    "हाज़िर हूँ",
+    "तैयार",
+    "मेज़ खाली है",
+    "इंतज़ार में",
+    "खाली हूँ"
+  ],
+  "mood.offline": [
+    "ऑफ़लाइन :(",
+    "कोई सिग्नल नहीं",
+    "कटा हुआ"
+  ],
+  "mood.apiDown": [
+    "api बंद है :(",
+    "कोई जवाब नहीं",
+    "ऊपर सन्नाटा"
+  ],
+  "mood.retrying": [
+    "फिर कोशिश",
+    "एक बार और",
+    "अब भी खटखटा रहा हूँ",
+    "हार नहीं मानी"
+  ],
+  "mood.netError": [
+    "नेटवर्क त्रुटि :(",
+    "कट गया",
+    "लाइन गिर गई"
+  ],
+  "mood.apiError": [
+    "api त्रुटि :(",
+    "मना कर दिया",
+    "गलत जवाब"
+  ],
+  "mood.compacted": [
+    "जगह बन गई :)",
+    "हल्का हुआ",
+    "सब सँवर गया"
+  ],
+  "mood.outOfCredit": [
+    "क्रेडिट खत्म :(",
+    "चुक गया"
+  ],
+  "mood.writing": [
+    "लिख रहा हूँ…",
+    "टाइप कर रहा हूँ…"
+  ],
+  "mood.reading": [
+    "पढ़ रहा हूँ…",
+    "देख रहा हूँ…"
+  ],
+  "mood.running": [
+    "चला रहा हूँ…",
+    "चल रहा है…"
+  ],
+  "mood.digging": [
+    "खोद रहा हूँ…",
+    "गहराई में…"
+  ],
+  "mood.fetching": [
+    "ला रहा हूँ…",
+    "डाउनलोड…"
+  ],
+  "mood.searching": [
+    "खोज रहा हूँ…",
+    "ढूँढ रहा हूँ :P"
+  ],
+  "mood.delegating": [
+    "सौंप दिया…",
+    "किसी और को दिया…"
+  ],
+  "mood.planning": [
+    "योजना बना रहा हूँ…",
+    "सोच रहा हूँ…"
+  ],
+  "mood.skill": [
+    "स्किल चला रहा हूँ…"
+  ],
+  "mood.asking": [
+    "आप क्या कहते हैं?",
+    "एक सवाल है",
+    "आपकी बारी ;)"
+  ],
+  "mood.unknown": [
+    "व्यस्त हूँ…",
+    "कुछ कर रहा हूँ…"
+  ],
+  "mood.compacting": [
+    "सिकोड़ रहा हूँ…",
+    "सँवार रहा हूँ…"
+  ],
+  "mood.patching": [
+    "पैच लगा रहा हूँ…",
+    "ठीक कर रहा हूँ…"
+  ],
+  "mood.plotting": [
+    "ग्राफ़ बना रहा हूँ…"
+  ],
+  "mood.watching": [
+    "देख रहा हूँ…"
+  ],
+  "mood.reviewing": [
+    "समीक्षा…"
+  ],
+  "mood.publishing": [
+    "प्रकाशित…"
+  ],
+  "mood.consulting": [
+    "सलाह ले रहा हूँ…"
+  ],
+  "mood.peeking": [
+    "झाँक रहा हूँ…"
+  ],
+  "mood.writing@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.reading@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.running@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.digging@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.fetching@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.searching@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.delegating@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.planning@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.skill@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.unknown@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.compacting@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.patching@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.plotting@long": [
+    "अब भी उसी में…"
+  ],
+  "mood.writing@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.reading@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.running@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.digging@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.fetching@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.searching@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.delegating@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.planning@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.skill@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.unknown@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.compacting@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.patching@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.plotting@ages": [
+    "यह लंबा चलेगा…"
+  ],
+  "mood.idle@tight": [
+    "खाली"
+  ],
+  "mood.unknown@tight": [
+    "व्यस्त"
+  ],
+  "mood.running@tight": [
+    "चला…"
+  ],
+  "mood.writing@tight": [
+    "लिख…"
+  ],
+  "mood.reading@tight": [
+    "पढ़…"
+  ],
+  "mood.digging@tight": [
+    "खोज…"
+  ],
+  "mood.idle@thin": [
+    "खाली"
+  ],
+  "mood.unknown@thin": [
+    "व्यस्त"
+  ],
+  "mood.running@thin": [
+    "चला…"
+  ],
+  "mood.writing@thin": [
+    "लिख…"
+  ],
+  "mood.unknown@again": [
+    "फिर से…"
+  ],
+  "mood.running@again": [
+    "फिर से…"
+  ],
+  "mood.digging@again": [
+    "फिर से…"
+  ],
+  "mood.writing@again": [
+    "फिर से…"
+  ],
+  "mood.patching@again": [
+    "फिर से…"
+  ],
+  "mood.unknown@heavy": [
+    "भारी काम…"
+  ],
+  "mood.running@heavy": [
+    "भारी काम…"
+  ],
+  "mood.reading@heavy": [
+    "भारी काम…"
+  ],
+  "mood.writing@heavy": [
+    "भारी काम…"
+  ],
+  "mood.idle@late": [
+    "शुभ रात्रि :)"
+  ],
+  "mood.unknown@late": [
+    "अब भी जगा हूँ…"
+  ],
+  "mood.running@late": [
+    "रात में…"
+  ],
+  "mood.writing@late": [
+    "रात में…"
+  ],
+  "mood.idle@early": [
+    "सुप्रभात :)"
+  ],
+  "mood.unknown@early": [
+    "जल्दी शुरू…"
+  ],
+  "mood.running@early": [
+    "तड़के…"
+  ],
+  "opt.light": "हल्का",
+  "opt.balanced": "संतुलित",
+  "opt.strong": "तेज़",
+  "opt.reduced": "कम",
+  "opt.soft": "मुलायम",
+  "opt.standard": "मानक",
+  "tray.openSettings": "सेटिंग्स खोलें",
+  "tray.restart": "Halo पुनः चालू करें",
+  "tray.quit": "Halo बंद करें",
+  "opt.auto": "स्वतः",
+  "net.label": "नेट",
+  "net.api": "api",
+  "net.loss": "हानि",
+  "net.ms": "मि.से.",
+  "net.dropped": "गिरा",
+  "net.locating": "पता लगा रहे…",
+  "net.checkingExit": "निकास जाँच…",
+  "net.testingDns": "dns जाँच…",
+  "net.dnsOk": "dns ठीक",
+  "net.dnsLeak": "dns रिसाव",
+  "net.residential": "आवासीय",
+  "net.datacenter": "डेटा सेंटर",
+  "net.vpnExit": "vpn निकास",
+  "report.title": "समस्या बताएँ",
+  "report.create": "रिपोर्ट बनाएँ",
+  "report.intro": "यही रिपोर्ट है, ठीक वैसी जैसी डिस्क पर है। अभी कुछ भी नहीं भेजा गया।",
+  "report.whatGetsSent": "क्या-क्या भेजा जाता है?",
+  "report.hideDetails": "विवरण छिपाएँ",
+  "report.send": "रिपोर्ट भेजें",
+  "report.sending": "भेजा जा रहा है...",
+  "report.copy": "कॉपी",
+  "report.saveAs": "इस रूप में सहेजें...",
+  "report.openNotepad": "Notepad में खोलें",
+  "report.openIssue": "GitHub पर issue खोलें",
+  "report.copied": "कॉपी हुआ। यह नेटवर्क के पास तक नहीं गया।",
+  "report.saved": "सहेजा गया। मुझ तक पहुँचाना हो तो स्वयं ईमेल से संलग्न करें।",
+  "report.openedGitHub": "GitHub खुल गया। वहाँ सबमिट दबाने तक कुछ भी दर्ज नहीं होता।",
+  "report.sendFailed": "भेजना विफल: ",
+  "report.stillOnDisk": "रिपोर्ट अब भी डिस्क पर है।",
+  "report.notWritten": "रिपोर्ट लिखी नहीं गई।",
+  "report.blurb": "Halo दूसरे प्रोग्राम की सूचनाएँ, आप जो चला रहे हैं और आपकी ट्रे की फ़ाइलों के नाम मिरर करता है, इसलिए रिपोर्ट में इस मशीन के तथ्यों की एक नामित सूची होती है और कुछ नहीं। पहले «क्या-क्या भेजा जाता है?» से पूरी फ़ाइल पढ़ें — दोनों तरह से वही फ़ाइल है।",
+  "report.sentOnDisk": "भेज दिया गया। डिस्क पर भी है, %LOCALAPPDATA%\\Halo\\reports में।",
+  "report.noExe": "Halo.App.exe इस विंडो के पास नहीं है।",
+  "report.noStart": "Halo.App शुरू नहीं हो सका।",
+  "ask.freeTextSub": "अपने शब्दों में उत्तर दें",
+  "ask.chat": "इस पर बात करें",
+  "ask.chatSub": "प्रश्न छोड़ें और बात करें"
+}

@@ -57,14 +57,13 @@ internal static class Destination
     {
         var kind = Decide(rawEndpoint, builtInEndpoint);
         if (kind == Kind.Off)
-            return new Route(kind, "", null, "Reports are switched off: report.endpoint in settings.json is empty.");
+            return new Route(kind, "", null, Halo.Localization.Strings.Get("reports.off"));
 
         string target = kind == Kind.Custom ? rawEndpoint!.Trim() : builtInEndpoint;
         string? bearer = Key(kind, builtInKey, rawKey);
         if (!Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-            return new Route(kind, target, bearer, kind == Kind.Custom
-                ? "report.endpoint in settings.json is not a valid https:// address."
-                : "The built-in endpoint is not a valid https:// address.");
+            return new Route(kind, target, bearer, Halo.Localization.Strings.Get(
+                kind == Kind.Custom ? "reports.customNotHttps" : "reports.builtInNotHttps"));
 
         return new Route(kind, target, bearer, null);
     }

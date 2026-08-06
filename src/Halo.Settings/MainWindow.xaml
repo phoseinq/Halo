@@ -41,7 +41,7 @@
                  the taskbar. The drawn ring stays on Home, where 84px is past what the .ico holds. -->
             <Image Source="halo.ico" Width="20" Height="20" VerticalAlignment="Center"
                    RenderOptions.BitmapScalingMode="HighQuality" />
-            <TextBlock Grid.Column="1" Text="Halo settings" Foreground="{StaticResource Ink}"
+            <TextBlock x:Name="TitleText" Grid.Column="1" Text="Halo settings" Foreground="{StaticResource Ink}"
                        FontFamily="Segoe UI Variable Display, Segoe UI" FontWeight="SemiBold"
                        FontSize="13" VerticalAlignment="Center" Margin="10,0,0,0" />
         </Grid>
@@ -123,7 +123,7 @@
                     </LinearGradientBrush>
                 </Border.BorderBrush>
                 <StackPanel>
-                    <TextBlock Text="You have unapplied changes" Foreground="{StaticResource Ink}"
+                    <TextBlock x:Name="UnappliedText" Text="You have unapplied changes" Foreground="{StaticResource Ink}"
                                FontFamily="Segoe UI Variable Display, Segoe UI" FontWeight="SemiBold"
                                FontSize="17" />
                     <TextBlock x:Name="GuardDetail" Foreground="{StaticResource Secondary}" FontSize="12"
@@ -132,9 +132,9 @@
                          making: applying is a deliberate press on the footer, and offering it on the way
                          out turns a closing window into a way to commit changes by accident. -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                        <Button Style="{StaticResource Glass}" Content="Keep editing" Width="118" Height="38"
+                        <Button x:Name="KeepEditingButton" Style="{StaticResource Glass}" Content="Keep editing" Width="118" Height="38"
                                 HorizontalContentAlignment="Center" Click="GuardCancel_Click" />
-                        <Button Style="{StaticResource Glass}" Content="Discard and close" Width="152"
+                        <Button x:Name="DiscardButton" Style="{StaticResource Glass}" Content="Discard and close" Width="152"
                                 Height="38" Margin="9,0,0,0" HorizontalContentAlignment="Center"
                                 Background="#12FF9A8B" BorderBrush="#66FF9A8B" Click="GuardDiscard_Click" />
                     </StackPanel>

@@ -118,6 +118,10 @@ internal static class Actions
                     Open("https://github.com/phoseinq/Halo");
                     break;
 
+                case "api.docs":
+                    Open("https://github.com/phoseinq/Halo/blob/main/docs/api.md");
+                    break;
+
                 case "report.problem":
                     ReportWindow.Open(System.Windows.Application.Current?.MainWindow);
                     break;

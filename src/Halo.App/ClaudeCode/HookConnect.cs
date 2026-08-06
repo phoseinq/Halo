@@ -43,17 +43,18 @@ internal static class HookConnect
 
     internal static (string App, string Title, string Body) Notice(string agent, string settingsPath) =>
         (agent,
-         $"{agent} connected",
-         $"Hooks added to {Short(settingsPath)}. Your previous file is saved as .halo-bak.");
+         Halo.Localization.Strings.Format("hooks.connected.title", agent),
+         Halo.Localization.Strings.Format("hooks.connected.body", Short(settingsPath)));
 
     internal static (string App, string Title, string Body) Failed(string agent, string why, bool wrote = true)
     {
-        string what = wrote ? "Halo could not write the hook settings" : "Halo could not run its hook helper";
+
+        string what = Halo.Localization.Strings.Get(wrote ? "hooks.failed.write" : "hooks.failed.run");
         return (agent,
-                $"Could not connect {agent}",
+                Halo.Localization.Strings.Format("hooks.failed.title", agent),
                 string.IsNullOrWhiteSpace(why)
-                    ? $"{what}. Nothing was changed."
-                    : $"{what}: {why}. Nothing was changed.");
+                    ? Halo.Localization.Strings.Format("hooks.failed.body", what)
+                    : Halo.Localization.Strings.Format("hooks.failed.bodyWhy", what, why));
     }
 
     private static readonly (string Agent, string[] Processes)[] Agents =
@@ -112,7 +113,7 @@ internal static class HookConnect
         catch { }
     }
 
-    private static void NoteFailure(string agent, string why, Action<string, string, string> notify,
+    private static void NoteFailure(string agent, string why, Action<string, string, string, bool> notify,
         bool wrote = true)
     {
         int attempt;
@@ -125,7 +126,7 @@ internal static class HookConnect
         }
         if (!ShouldReport(attempt)) return;
         var (a, t, b) = Failed(agent, why, wrote);
-        notify(a, t, b);
+        notify(a, t, b, false);
     }
 
     private static void NoteSuccess(string agent)
@@ -160,7 +161,7 @@ internal static class HookConnect
         return false;
     }
 
-    internal static void Tick(Action<string, string, string> notify)
+    internal static void Tick(Action<string, string, string, bool> notify)
     {
         long now = Environment.TickCount64;
         lock (Gate)
@@ -227,7 +228,7 @@ internal static class HookConnect
                         {
                             NoteSuccess(agent);
                             var (a, t, b) = Notice(agent, path);
-                            notify(a, t, b);
+                            notify(a, t, b, true);
                         }
                         else NoteFailure(agent, why, notify);
                     }

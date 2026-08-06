@@ -104,10 +104,10 @@ internal sealed class TrayIcon : IDisposable
         {
             menu = Win32.CreatePopupMenu();
             if (menu == IntPtr.Zero) return;
-            Win32.AppendMenu(menu, Win32.MF_STRING, IdSettings, "Open settings");
+            Win32.AppendMenu(menu, Win32.MF_STRING, IdSettings, Halo.Localization.Strings.Get("tray.openSettings"));
             Win32.AppendMenu(menu, Win32.MF_SEPARATOR, 0, null);
-            Win32.AppendMenu(menu, Win32.MF_STRING, IdRestart, "Restart Halo");
-            Win32.AppendMenu(menu, Win32.MF_STRING, IdQuit, "Quit Halo");
+            Win32.AppendMenu(menu, Win32.MF_STRING, IdRestart, Halo.Localization.Strings.Get("tray.restart"));
+            Win32.AppendMenu(menu, Win32.MF_STRING, IdQuit, Halo.Localization.Strings.Get("tray.quit"));
 
             Win32.SetForegroundWindow(_hwnd);
             int picked = Win32.TrackPopupMenuEx(menu,

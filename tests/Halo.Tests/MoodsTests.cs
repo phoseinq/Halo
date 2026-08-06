@@ -8,6 +8,11 @@ namespace Halo.Tests;
 // The table is written by hand and read on the render path, so the things that can go wrong with it
 // are all shape: a line too long for the pill, an empty set, a duration band with no slot behind it.
 // None of those would throw - they would just look broken on a widget that cannot be screenshotted.
+// Serialised against the other classes that touch it: Strings.Use switches the ACTIVE LANGUAGE for
+// the whole process, so a test that reads a localized string while another has just moved to
+// Persian reads the wrong one. It failed one run in three before this - a settings label, a mood
+// set and a report route, never the same one twice, which is what a shared global looks like.
+[Collection("locale")]
 public class MoodsTests
 {
     [Fact]
@@ -217,5 +222,77 @@ public class MoodsTests
         foreach (var key in Moods.Keys)
             foreach (var line in Moods.Set(key))
                 Assert.DoesNotContain(line.Trim().ToLowerInvariant(), states);
+    }
+
+    // The English table is the fallback and a locale OVERRIDES a slot. Nothing is duplicated - the English
+    // lives only in Moods.cs, the translation only in the locale file - so the two cannot drift.
+    [Fact]
+    public void A_locale_overrides_a_slot_and_leaves_the_rest_in_english()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "halo-moods-" + Guid.NewGuid().ToString("n"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "fa.json"),
+                "{\"mood.idle\": [\"AAA\", \"BBB\"]}");
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("Persian", dir);
+
+            Assert.Equal(new[] { "AAA", "BBB" }, Moods.Set("idle"));
+            Assert.Equal(Moods.Set("offline").Length, Moods.Set("offline").Length);
+            Assert.DoesNotContain("AAA", Moods.Set("offline"));   // untranslated slots stay English
+        }
+        finally
+        {
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("English");
+            try { System.IO.Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    // A translator may not change which slots exist: the ladder picks a rung by asking whether a slot is
+    // in the table, so an added or missing key would change WHEN a line is chosen, not just what it says.
+    [Fact]
+    public void A_locale_cannot_add_or_remove_a_slot()
+    {
+        var before = new System.Collections.Generic.List<string>(Moods.Keys);
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "halo-moods-" + Guid.NewGuid().ToString("n"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "fa.json"),
+                "{\"mood.invented\": [\"nope\"]}");
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("Persian", dir);
+            Assert.Equal(before, new System.Collections.Generic.List<string>(Moods.Keys));
+            Assert.Empty(Moods.Set("invented"));
+        }
+        finally
+        {
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("English");
+            try { System.IO.Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    // An emptied list is an omission, not an instruction to show nothing.
+    [Fact]
+    public void An_empty_list_falls_back_rather_than_blanking_the_pill()
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "halo-moods-" + Guid.NewGuid().ToString("n"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "fa.json"), "{\"mood.idle\": []}");
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("Persian", dir);
+            Assert.NotEmpty(Moods.Set("idle"));
+        }
+        finally
+        {
+            Halo.Localization.Strings.Forget();
+            Halo.Localization.Strings.Use("English");
+            try { System.IO.Directory.Delete(dir, true); } catch { }
+        }
     }
 }

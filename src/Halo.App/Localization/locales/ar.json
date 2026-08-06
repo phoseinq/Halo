@@ -1,0 +1,578 @@
+{
+  "_readme": "كل نص يعرضه Halo. ترجم القيم فقط؛ المفاتيح تبقى كما هي.",
+  "_placeholders": "‏{0} و{1} يملؤهما Halo بهذا الترتيب. ضعهما حيث تحتاج الجملة، دون إضافة أو حذف.",
+  "_missing": "أي مفتاح ناقص يعود إلى الإنجليزية. الترجمة الجزئية تعمل أيضًا.",
+  "reports.off": "التقارير معطّلة: قيمة report.endpoint في settings.json فارغة.",
+  "reports.customNotHttps": "قيمة report.endpoint في settings.json ليست عنوان https:// صالحًا.",
+  "reports.builtInNotHttps": "العنوان المدمج ليس https:// صالحًا.",
+  "notice.app.system": "النظام",
+  "notice.app.network": "الشبكة",
+  "notice.app.battery": "البطارية",
+  "notice.app.claude": "كلود",
+  "notice.app.screenshot": "لقطة الشاشة",
+  "notice.app.clipboard": "الحافظة",
+  "notice.screenshot.title": "تم التقاط الشاشة",
+  "notice.clipboard.title": "تم نسخ الصورة",
+  "notice.load.cpu": "المعالج",
+  "notice.load.memory": "الذاكرة",
+  "notice.load.title": "استهلاك {0} مرتفع — {1}%",
+  "notice.load.body": "{0} هو الأكثر استهلاكًا.",
+  "notice.load.ramFallback": "الذاكرة تُوشك على النفاد.",
+  "notice.context.title": "السياق ممتلئ بنسبة {0}%",
+  "notice.context.body": "ستصبح الإجابات أقل دقة من هنا — استخدم ‎/compact متى أمكن.",
+  "notice.battery.low": "منخفضة",
+  "notice.battery.critical": "حرجة",
+  "notice.battery.title": "البطارية {0} — {1}%",
+  "notice.battery.body": "اضغط لتشغيل موفّر الطاقة.",
+  "notice.net.down.title": "لا يوجد إنترنت",
+  "notice.net.down.body": "لا شيء يخرج الآن.",
+  "notice.net.slow.title": "إنترنت ضعيف",
+  "notice.api.down.title": "تعذّر الوصول إلى كلود",
+  "notice.api.down.body": "اتصالك سليم — اتصالهم ليس كذلك.",
+  "settings.appearance.scale.label": "حجم الحبّة",
+  "settings.appearance.scale.desc": "يقيس الشكل والنص ومناطق اللمس معًا",
+  "settings.appearance.glass.label": "قوة الزجاج",
+  "settings.appearance.glass.desc": "يوازن بين تفاصيل الخلفية والتباين",
+  "settings.appearance.motion.label": "الحركة",
+  "settings.appearance.motion.desc": "سرعة استقرار الحبّة بعد تحركها",
+  "settings.appearance.fps.label": "معدل الإطارات",
+  "settings.appearance.fps.desc": "ما يسعى إليه Halo أثناء حركة الحبّة. يتبع Auto معدل تحديث هذه الشاشة، وكل إعداد ينخفض تلقائيًا عندما يكون الجهاز مشغولًا.",
+  "settings.appearance.fpsMeasured.label": "المعدل المقاس",
+  "settings.appearance.fpsMeasured.desc": "ما تبلغه الحبّة فعلًا — أثناء الحركة، وأثناء بقائها مفتوحة وساكنة — إلى جانب ما تستطيع هذه الشاشة عرضه",
+  "settings.general.startup.label": "التشغيل مع ويندوز",
+  "settings.general.startup.desc": "فتح Halo بعد تسجيل الدخول",
+  "settings.general.fullscreen.label": "الظهور فوق ملء الشاشة",
+  "settings.general.fullscreen.desc": "إبقاء الحبّة فوق الألعاب والفيديو",
+  "settings.general.language.label": "اللغة",
+  "settings.general.language.desc": "اللغة التي يعرض بها Halo نصوصه",
+  "settings.general.capture.label": "إظهار Halo في التسجيلات",
+  "settings.general.capture.desc": "إظهار الحبّة في لقطات الشاشة والتسجيلات",
+  "settings.general.follow.label": "متابعة التطبيق النشط",
+  "settings.general.follow.desc": "إحضار السطح المناسب إلى الأمام تلقائيًا",
+  "settings.general.reset.label": "موضع الحبّة",
+  "settings.general.reset.desc": "إعادتها إلى منتصف الشاشة النشطة",
+  "settings.feature.media.label": "الوسائط",
+  "settings.feature.media.desc": "جلسات التشغيل وأدوات VLC الكلاسيكية",
+  "settings.media.progress.label": "إظهار شريط الوقت",
+  "settings.media.progress.desc": "رسم موضع التشغيل الحقيقي على الحبّة المطوية",
+  "settings.feature.downloads.label": "التنزيلات",
+  "settings.feature.downloads.desc": "تقدّم المتصفح والمتجر والألعاب والتطبيقات",
+  "settings.feature.fileTray.label": "درج الملفات",
+  "settings.feature.fileTray.desc": "رفّ السحب والإفلات وصور الحافظة",
+  "settings.feature.bluetooth.label": "بلوتوث",
+  "settings.feature.bluetooth.desc": "الاتصال وبطارية الأجهزة",
+  "settings.feature.notifications.label": "عكس الإشعارات",
+  "settings.feature.notifications.desc": "عرض إشعارات ويندوز داخل الحبّة",
+  "settings.notifications.silence.label": "كتم إشعار ويندوز الأصلي",
+  "settings.notifications.silence.desc": "منع ويندوز من رسم إشعاره الخاص للتطبيقات التي يعكسها Halo. قابل للتراجع تمامًا.",
+  "settings.alert.battery.label": "البطارية",
+  "settings.alert.battery.desc": "بضغطة لتشغيل موفّر الطاقة. نسبة 10% حرجة دائمًا.",
+  "settings.alert.batteryAt.label": "التنبيه عند",
+  "settings.alert.batteryAt.desc": "أين يظهر أول تنبيه للبطارية",
+  "settings.alert.cpu.label": "ارتفاع المعالج",
+  "settings.alert.cpu.desc": "مرة لكل مستوى، مع تسمية أكثر العمليات استهلاكًا",
+  "settings.alert.cpuAt.label": "بدء التنبيه عند",
+  "settings.alert.cpuAt.desc": "المستويات الأعلى تتصاعد كذلك",
+  "settings.alert.memory.label": "ارتفاع الذاكرة",
+  "settings.alert.memory.desc": "مرة لكل مستوى، مع تسمية أكثر العمليات استهلاكًا",
+  "settings.alert.memoryAt.label": "بدء التنبيه عند",
+  "settings.alert.memoryAt.desc": "المستويات الأعلى تتصاعد كذلك",
+  "settings.alert.internet.label": "الإنترنت",
+  "settings.alert.internet.desc": "البطء والانقطاع وتعذّر الوصول إلى الـAPI",
+  "settings.alert.clipboard.label": "اللقطات والنسخ",
+  "settings.alert.clipboard.desc": "إشعار عندما يصل شيء إلى الحافظة",
+  "settings.alert.language.label": "تخطيط لوحة المفاتيح",
+  "settings.alert.language.desc": "لمحة لثانية واحدة عند تبديله",
+  "settings.alert.hourly.label": "دقّة الساعة",
+  "settings.alert.hourly.desc": "عند رأس الساعة، مع التاريخ والطقس",
+  "settings.feature.claudeCode.label": "Claude Code",
+  "settings.feature.claudeCode.desc": "الجلسات الحية والحدود وزر الإلغاء",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "جلسات Codex Desktop وسطر الأوامر",
+  "settings.feature.genericAgents.label": "وكلاء آخرون",
+  "settings.feature.genericAgents.desc": "أي أداة تكتب في ‎~/.halo/agents",
+  "settings.hooks.claude.label": "خطافات Claude Code",
+  "settings.hooks.claude.desc": "خطافات Halo في ‎~/.claude/settings.json، وهي ما يجعل الجلسات تظهر",
+  "settings.hooks.codex.label": "خطافات Codex",
+  "settings.hooks.codex.desc": "خطافات Halo في ‎~/.codex/hooks.json، وهي ما يجعل الجلسات تظهر",
+  "settings.claude.ask.label": "الإجابة من الحبّة",
+  "settings.claude.ask.desc": "عكس سؤال كلود والإجابة عليه بنقرة",
+  "settings.alert.context.label": "السياق يوشك على الامتلاء",
+  "settings.alert.context.desc": "مرة واحدة لكل جلسة",
+  "settings.alert.contextAt.label": "تنبيه السياق عند",
+  "settings.alert.contextAt.desc": "وهنا أيضًا تتحول حلقة الوكيل إلى الكهرماني",
+  "settings.alert.limit.label": "حدود الاستخدام",
+  "settings.alert.limit.desc": "مرة واحدة لكل نافذة",
+  "settings.alert.limitAt.label": "تنبيه الاستخدام عند",
+  "settings.alert.limitAt.desc": "حصة من نافذة الخمس ساعات أو الأسبوع",
+  "settings.api.enabled.label": "واجهة محلية",
+  "settings.api.enabled.desc": "تستمع على 127.0.0.1 للبرامج المحلية. لا شيء من خارج هذا الجهاز يصل إليها.",
+  "settings.api.port.label": "المنفذ",
+  "settings.api.port.desc": "غيّره فقط إذا كان شيء آخر يستخدمه",
+  "settings.api.token.label": "الرمز",
+  "settings.api.token.desc": "يُنشأ عند تشغيل الواجهة أول مرة. أرسله في ترويسة Authorization: Bearer.",
+  "settings.api.notify.label": "إرسال إشعار",
+  "settings.api.notify.desc": "POST /notify — عنوان ونص ورمز أو ملف اختياري",
+  "settings.api.ask.label": "طرح سؤال",
+  "settings.api.ask.desc": "POST /ask مع الخيارات، ثم اسأل ‎/ask/{nonce} عن الإجابة",
+  "settings.api.state.label": "قراءة ما على الشاشة",
+  "settings.api.state.desc": "GET /state و/media و/agents و/tray",
+  "settings.api.control.label": "الضغط على الأزرار",
+  "settings.api.control.desc": "POST /media و/pill و/tray: تشغيل وتخطٍ وفتح وتثبيت وإضافة ملفات",
+  "settings.api.settings.label": "قراءة الإعدادات وتغييرها",
+  "settings.api.settings.desc": "GET وPATCH ‎/settings. أي أنها كل مفتاح في هذه النافذة.",
+  "settings.access.notifications.label": "الوصول إلى الإشعارات",
+  "settings.access.notifications.desc": "مطلوب لعكس إشعارات ويندوز",
+  "settings.reset.everything.label": "إعادة ضبط كل شيء",
+  "settings.reset.everything.desc": "إعادة إشعار كل تطبيق، وفصل الوكيلين، وحذف الحالة المحفوظة لHalo",
+  "settings.about.version.label": "الإصدار",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "مجلد الحالة",
+  "settings.about.state.desc": "ملفات يحتفظ بها Halo: الموضع والتثبيت والدرج والإشعارات المقروءة",
+  "settings.report.problem.label": "الإبلاغ عن مشكلة",
+  "settings.report.problem.desc": "اكتبها، واقرأ بالضبط ما تحتويه، ثم اضغط إرسال. لا شيء يخرج بدون الزر.",
+  "settings.report.autoCrash.label": "إرسال الأعطال دون سؤال",
+  "settings.report.autoCrash.desc": "تقرير العطل فقط، وفقط عند حدوث عطل فعلي، وفقط الحقول التي تعرضها نافذة التقرير",
+  "settings.about.repo.label": "المستودع",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "الرئيسية",
+  "page.Home.desc": "مكان أهدأ للبداية",
+  "page.General.label": "عام",
+  "page.General.desc": "سلوك واجهة Halo ومظهرها",
+  "page.Features.label": "الميزات",
+  "page.Features.desc": "ما يُسمح للحبّة بعرضه، ومتى",
+  "page.Agents.label": "الوكلاء",
+  "page.Agents.desc": "Claude Code وCodex وكل ما يُبلّغ غيرهما",
+  "page.Api.label": "API",
+  "page.Api.desc": "دع البرامج الأخرى تتحكم بالحبّة",
+  "page.Access.label": "الأذونات",
+  "page.Access.desc": "ما يحتاجه Halo من ويندوز ليعمل",
+  "page.DocsAbout.label": "التوثيق وحول",
+  "page.DocsAbout.desc": "حيث كُتب كل شيء",
+  "section.appearance": "المظهر",
+  "section.startup": "بدء التشغيل",
+  "section.behaviour": "السلوك",
+  "section.surfaces": "الأسطح",
+  "section.notifications": "الإشعارات",
+  "section.alertsaboutthismachine": "تنبيهات هذا الجهاز",
+  "section.sessions": "الجلسات",
+  "section.connection": "الاتصال",
+  "section.questions": "الأسئلة",
+  "section.alerts": "التنبيهات",
+  "section.endpoint": "نقطة الوصول",
+  "section.whatcallersmaydo": "ما يُسمح للمستدعين به",
+  "section.permissions": "الأذونات",
+  "section.removal": "الإزالة",
+  "section.halo": "Halo",
+  "section.problems": "المشكلات",
+  "section.project": "المشروع",
+  "nav.settings": "الإعدادات",
+  "nav.system": "النظام",
+  "nav.reference": "المرجع",
+  "settings.access.startup.label": "مدخل بدء التشغيل",
+  "settings.access.startup.packaged.desc": "ويندوز هو من يقرر تشغيل Halo عند تسجيل الدخول",
+  "settings.access.startup.task.desc": "المهمة المجدولة التي تشغّل Halo عند تسجيل الدخول",
+  "settings.access.startup.action.packaged": "فتح إعدادات بدء التشغيل",
+  "settings.access.startup.action.task": "فتح جدولة المهام",
+  "settings.api.docs.label": "كيفية الاستدعاء",
+  "settings.api.docs.desc": "نقاط الوصول والرمز وما يسمح به كل مفتاح أدناه — اقرأ هذا قبل تشغيل أي منها",
+  "agent.row.fiveHour": "٥ ساعات",
+  "agent.row.weekly": "أسبوعي",
+  "agent.row.context": "السياق",
+  "agent.left": "بقي {0}",
+  "agent.resets": "يُعاد الضبط {0}",
+  "agent.notFetched": "لم تُجلب",
+  "agent.noSession": "لا جلسة",
+  "agent.noActiveSession": "لا توجد جلسة نشطة",
+  "agent.contextOf": "من {0}  ·  {1}% مستخدم",
+  "agent.contextShort": "السياق  ·  {0}K من {1}K",
+  "agent.refresh": "تحديث",
+  "agent.neverFetched": "لم تُجلب قط",
+  "agent.updated": "حُدّثت {0}",
+  "agent.neverRead": "لم تُقرأ قط",
+  "agent.read": "قُرئت {0}",
+  "time.justNow": "الآن",
+  "time.minsAgo": "قبل {0} دقيقة",
+  "time.hoursAgo": "قبل {0} ساعة",
+  "time.daysAgo": "قبل {0} يوم",
+  "time.now": "الآن",
+  "hooks.connected.title": "تم توصيل {0}",
+  "hooks.connected.body": "أُضيفت الخطافات إلى {0}. حُفظ ملفك السابق باسم ‎.halo-bak.",
+  "hooks.failed.title": "تعذّر توصيل {0}",
+  "hooks.failed.write": "لم يتمكن Halo من كتابة إعدادات الخطافات",
+  "hooks.failed.run": "لم يتمكن Halo من تشغيل مساعد الخطافات",
+  "hooks.failed.body": "{0}. لم يتغير شيء.",
+  "hooks.failed.bodyWhy": "{0}: {1}. لم يتغير شيء.",
+  "limit.title": "استخدام {0} {1}%",
+  "limit.body": "استهلكت {0}% من حدّك {1}.",
+  "limit.window.weekly": "الأسبوعي",
+  "limit.window.5-hour": "لخمس ساعات",
+  "limit.window.primary": "الأساسي",
+  "limit.window.secondary": "الثانوي",
+  "state.checking": "جارٍ الفحص...",
+  "state.connected": "متصل",
+  "state.notConnected": "غير متصل",
+  "state.disconnected": "مفصول",
+  "state.on": "مفعّل",
+  "state.off": "معطّل",
+  "state.missing": "غير موجود",
+  "state.unavailable": "غير معروف",
+  "state.turnedOffInWindows": "معطّل في ويندوز",
+  "state.managedByWindows": "يديره ويندوز",
+  "state.notGeneratedYet": "لم يُنشأ بعد",
+  "state.notMeasuredYet": "لم يُقس بعد",
+  "state.reversesEverything": "يتراجع عن كل شيء",
+  "action.open": "فتح",
+  "action.openFolder": "فتح المجلد",
+  "action.openSettings": "فتح الإعدادات",
+  "action.copy": "نسخ",
+  "action.reset": "إعادة ضبط",
+  "action.resetPosition": "إعادة ضبط الموضع",
+  "action.connect": "توصيل",
+  "action.disconnect": "فصل",
+  "action.retry": "إعادة المحاولة",
+  "pill.copied": "تم النسخ",
+  "tray.title": "درج الملفات",
+  "tray.releaseToAdd": "أفلت للإضافة",
+  "tray.remove": "إزالة {0}",
+  "ask.typeSomething": "اكتب شيئًا",
+  "agent.sampling": "جارٍ القياس…",
+  "home.tagline": "تطبيقاتك ونشاطك ووكلاؤك — حين تصبح مهمة.",
+  "home.explore": "استكشاف",
+  "home.state": "الحالة",
+  "home.card.general": "السلوك والمظهر",
+  "home.card.features": "أسطح التطبيقات",
+  "home.card.agents": "جلسات البرمجة",
+  "home.card.access": "عناصر تحكم ويندوز",
+  "home.waiting": "التغييرات تنتظر التطبيق",
+  "home.waitingBody": "لا شيء هنا يصل إلى Halo حتى تضغط «تطبيق» أسفل الصفحة. «إعادة الضبط» تُرجع كل شيء كما كان.",
+  "home.restore": "استعادة الافتراضيات",
+  "chrome.title": "إعدادات Halo",
+  "chrome.apply": "تطبيق",
+  "chrome.reset": "إعادة ضبط",
+  "chrome.unapplied": "لديك تغييرات غير مطبَّقة",
+  "chrome.keepEditing": "متابعة التحرير",
+  "chrome.discard": "تجاهل وإغلاق",
+  "report.write": "كتابة تقرير",
+  "draft.one": "تغيير واحد في الانتظار",
+  "draft.many": "{0} تغييرات في الانتظار",
+  "guard.one": "تغيير واحد لم يُطبَّق بعد. لا يزال Halo يعمل بالإعدادات السابقة.",
+  "guard.many": "{0} تغييرات لم تُطبَّق بعد. لا يزال Halo يعمل بالإعدادات السابقة.",
+  "home.card.api": "تحكّم بHalo من الكود",
+  "mood.idle": [
+    "هيا نبدأ :)",
+    "تحت أمرك",
+    "جاهز",
+    "الطاولة خالية",
+    "بانتظارك",
+    "فارغ"
+  ],
+  "mood.offline": [
+    "غير متصل :(",
+    "لا إشارة",
+    "مقطوع"
+  ],
+  "mood.apiDown": [
+    "الـapi متوقفة :(",
+    "لا جواب",
+    "صمت من الأعلى"
+  ],
+  "mood.retrying": [
+    "أعيد المحاولة",
+    "مرة أخرى",
+    "ما زلت أطرق",
+    "لم أستسلم"
+  ],
+  "mood.netError": [
+    "خطأ في الشبكة :(",
+    "انقطع",
+    "سقط الخط"
+  ],
+  "mood.apiError": [
+    "خطأ في الـapi :(",
+    "رفضت",
+    "رد غير سليم"
+  ],
+  "mood.compacted": [
+    "اتسع المجال :)",
+    "صرت أخف",
+    "رُتِّب"
+  ],
+  "mood.outOfCredit": [
+    "نفد الرصيد :(",
+    "انتهى"
+  ],
+  "mood.writing": [
+    "أكتب…",
+    "أطبع…"
+  ],
+  "mood.reading": [
+    "أقرأ…",
+    "أطالع…"
+  ],
+  "mood.running": [
+    "أنفّذ…",
+    "قيد التشغيل…"
+  ],
+  "mood.digging": [
+    "أنقّب…",
+    "أبحث بعمق…"
+  ],
+  "mood.fetching": [
+    "أجلب…",
+    "أنزّل…"
+  ],
+  "mood.searching": [
+    "أبحث…",
+    "أفتّش :P"
+  ],
+  "mood.delegating": [
+    "فوّضت…",
+    "أسندتها لغيري…"
+  ],
+  "mood.planning": [
+    "أخطّط…",
+    "أفكّر…"
+  ],
+  "mood.skill": [
+    "أستخدم مهارة…"
+  ],
+  "mood.asking": [
+    "ما رأيك؟",
+    "عندي سؤال",
+    "دورك ;)"
+  ],
+  "mood.unknown": [
+    "مشغول…",
+    "أعمل على شيء…"
+  ],
+  "mood.compacting": [
+    "أضغط…",
+    "أرتّب…"
+  ],
+  "mood.patching": [
+    "أرقّع…",
+    "أصلح…"
+  ],
+  "mood.plotting": [
+    "أرسم…"
+  ],
+  "mood.watching": [
+    "أراقب…"
+  ],
+  "mood.reviewing": [
+    "أراجع…"
+  ],
+  "mood.publishing": [
+    "أنشر…"
+  ],
+  "mood.consulting": [
+    "أستشير…"
+  ],
+  "mood.peeking": [
+    "ألقي نظرة…"
+  ],
+  "mood.writing@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.reading@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.running@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.digging@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.fetching@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.searching@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.delegating@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.planning@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.skill@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.unknown@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.compacting@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.patching@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.plotting@long": [
+    "ما زلت فيها…"
+  ],
+  "mood.writing@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.reading@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.running@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.digging@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.fetching@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.searching@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.delegating@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.planning@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.skill@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.unknown@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.compacting@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.patching@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.plotting@ages": [
+    "هذا سيطول…"
+  ],
+  "mood.idle@tight": [
+    "فارغ"
+  ],
+  "mood.unknown@tight": [
+    "مشغول"
+  ],
+  "mood.running@tight": [
+    "ينفّذ…"
+  ],
+  "mood.writing@tight": [
+    "يكتب…"
+  ],
+  "mood.reading@tight": [
+    "يقرأ…"
+  ],
+  "mood.digging@tight": [
+    "يبحث…"
+  ],
+  "mood.idle@thin": [
+    "فارغ"
+  ],
+  "mood.unknown@thin": [
+    "مشغول"
+  ],
+  "mood.running@thin": [
+    "ينفّذ…"
+  ],
+  "mood.writing@thin": [
+    "يكتب…"
+  ],
+  "mood.unknown@again": [
+    "مرة أخرى…"
+  ],
+  "mood.running@again": [
+    "مرة أخرى…"
+  ],
+  "mood.digging@again": [
+    "مرة أخرى…"
+  ],
+  "mood.writing@again": [
+    "مرة أخرى…"
+  ],
+  "mood.patching@again": [
+    "مرة أخرى…"
+  ],
+  "mood.unknown@heavy": [
+    "عمل ثقيل…"
+  ],
+  "mood.running@heavy": [
+    "عمل ثقيل…"
+  ],
+  "mood.reading@heavy": [
+    "عمل ثقيل…"
+  ],
+  "mood.writing@heavy": [
+    "عمل ثقيل…"
+  ],
+  "mood.idle@late": [
+    "تصبح على خير :)"
+  ],
+  "mood.unknown@late": [
+    "ما زلت مستيقظًا…"
+  ],
+  "mood.running@late": [
+    "ليلًا…"
+  ],
+  "mood.writing@late": [
+    "ليلًا…"
+  ],
+  "mood.idle@early": [
+    "صباح الخير :)"
+  ],
+  "mood.unknown@early": [
+    "بدأت مبكرًا…"
+  ],
+  "mood.running@early": [
+    "باكرًا…"
+  ],
+  "opt.light": "خفيف",
+  "opt.balanced": "متوازن",
+  "opt.strong": "قوي",
+  "opt.reduced": "مخفَّف",
+  "opt.soft": "ناعم",
+  "opt.standard": "قياسي",
+  "tray.openSettings": "فتح الإعدادات",
+  "tray.restart": "إعادة تشغيل Halo",
+  "tray.quit": "إغلاق Halo",
+  "opt.auto": "تلقائي",
+  "net.label": "الشبكة",
+  "net.api": "api",
+  "net.loss": "فقد",
+  "net.ms": "مللي",
+  "net.dropped": "منقطع",
+  "net.locating": "جارٍ التحديد…",
+  "net.checkingExit": "فحص المخرج…",
+  "net.testingDns": "فحص dns…",
+  "net.dnsOk": "dns سليم",
+  "net.dnsLeak": "تسرّب dns",
+  "net.residential": "منزلي",
+  "net.datacenter": "مركز بيانات",
+  "net.vpnExit": "مخرج vpn",
+  "report.title": "الإبلاغ عن مشكلة",
+  "report.create": "إنشاء تقرير",
+  "report.intro": "هذا هو التقرير نفسه، تمامًا كما هو على القرص. لم يُرسل شيء بعد.",
+  "report.whatGetsSent": "ما الذي يُرسل؟",
+  "report.hideDetails": "إخفاء التفاصيل",
+  "report.send": "إرسال التقرير",
+  "report.sending": "جارٍ الإرسال...",
+  "report.copy": "نسخ",
+  "report.saveAs": "حفظ باسم...",
+  "report.openNotepad": "فتح في Notepad",
+  "report.openIssue": "فتح issue على GitHub",
+  "report.copied": "تم النسخ. لم يقترب من الشبكة إطلاقًا.",
+  "report.saved": "حُفظ. أرفقه ببريد بنفسك إن أردت أن يصلني.",
+  "report.openedGitHub": "فُتح GitHub. لا يُسجَّل شيء حتى تضغط إرسال هناك.",
+  "report.sendFailed": "فشل الإرسال: ",
+  "report.stillOnDisk": "التقرير ما زال على القرص.",
+  "report.notWritten": "لم يُكتب التقرير.",
+  "report.blurb": "يعكس Halo إشعارات البرامج الأخرى وما تشغّله وأسماء ملفات درجك، لذا يحمل التقرير قائمة مسمّاة بحقائق عن هذا الجهاز ولا شيء غير ذلك. اقرأ الملف كاملًا أولًا عبر «ما الذي يُرسل؟» — إنه الملف نفسه في الحالتين.",
+  "report.sentOnDisk": "أُرسل. وهو على القرص أيضًا، في %LOCALAPPDATA%\\Halo\\reports.",
+  "report.noExe": "الملف Halo.App.exe ليس بجوار هذه النافذة.",
+  "report.noStart": "تعذّر تشغيل Halo.App.",
+  "ask.freeTextSub": "أجب بكلماتك",
+  "ask.chat": "لنتحدث عن هذا",
+  "ask.chatSub": "اترك السؤال وتحدّث بدلًا منه"
+}

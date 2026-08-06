@@ -23,6 +23,14 @@ internal sealed record NavGroup(string Header, IReadOnlyList<PageId> Pages);
 
 internal static class Catalog
 {
+
+    private static string L(string key) => Halo.Localization.Strings.Get("settings." + key + ".label");
+    private static string D(string key) => Halo.Localization.Strings.Get("settings." + key + ".desc");
+    private static string P(string id) => Halo.Localization.Strings.Get("page." + id + ".label");
+    private static string PD(string id) => Halo.Localization.Strings.Get("page." + id + ".desc");
+    private static string S(string id) => Halo.Localization.Strings.Get("section." + id);
+    private static string G(string id) => Halo.Localization.Strings.Get("nav." + id);
+
     private static Row Toggle(string key, string label, string description, bool on = true)
         => new(key, label, description, RowKind.Toggle, on ? "on" : "off", ["off", "on"]);
 
@@ -35,159 +43,180 @@ internal static class Catalog
     private static Row Action(string key, string label, string description, string action)
         => new(key, label, description, RowKind.Action, "", [], action);
 
-    internal static readonly NavGroup[] Nav =
+    internal static string LanguageRowFallback => Halo.Localization.Strings.SystemLabel;
+
+    internal static NavGroup[] Nav
+    {
+        get
+        {
+            if (_navFor != Halo.Localization.Strings.Version) { _nav = BuildNav(); _navFor = Halo.Localization.Strings.Version; }
+            return _nav!;
+        }
+    }
+
+    internal static Page[] Pages
+    {
+        get
+        {
+            if (_pagesFor != Halo.Localization.Strings.Version) { _pages = BuildPages(); _pagesFor = Halo.Localization.Strings.Version; }
+            return _pages!;
+        }
+    }
+
+    private static NavGroup[]? _nav;
+    private static Page[]? _pages;
+    private static int _navFor = -1, _pagesFor = -1;
+
+    private static NavGroup[] BuildNav() =>
     [
         new("", [PageId.Home]),
-        new("SETTINGS", [PageId.General, PageId.Features, PageId.Agents]),
-        new("SYSTEM", [PageId.Api, PageId.Access]),
-        new("REFERENCE", [PageId.DocsAbout]),
+        new(G("settings"), [PageId.General, PageId.Features, PageId.Agents]),
+        new(G("system"), [PageId.Api, PageId.Access]),
+        new(G("reference"), [PageId.DocsAbout]),
     ];
 
-    internal static readonly Page[] Pages =
+    private static Page[] BuildPages() =>
     [
 
-        new(PageId.Home, "Home", "A quieter place to begin", []),
-        new(PageId.General, "General", "Core behaviour and appearance for the Halo surface",
+        new(PageId.Home, P("Home"), PD("Home"), []),
+        new(PageId.General, P("General"), PD("General"),
         [
-            new("APPEARANCE", "\uE790", [
-                Slider("appearance.scale", "Pill scale", "Scale geometry, type and hit targets together",
+            new(S("appearance"), "\uE790", [
+                Slider("appearance.scale", L("appearance.scale"), D("appearance.scale"),
                     "100%", "90%", "95%", "100%", "105%", "110%"),
-                Choice("appearance.glass", "Glass strength", "Balance wallpaper detail against contrast",
+                Choice("appearance.glass", L("appearance.glass"), D("appearance.glass"),
                     "Balanced", "Light", "Balanced", "Strong"),
-                Choice("appearance.motion", "Motion", "How quickly the pill settles after it moves",
+                Choice("appearance.motion", L("appearance.motion"), D("appearance.motion"),
                     "Soft", "Reduced", "Soft", "Standard"),
-                Choice("appearance.fps", "Frame rate", "What Halo reaches for while the pill is moving. Auto follows this display's refresh rate, and every setting still drops below itself when the machine is busy.",
+                Choice("appearance.fps", L("appearance.fps"), D("appearance.fps"),
                     "Auto", "Auto", "280", "240", "144", "120", "60", "30"),
 
-                new("appearance.fpsMeasured", "Measured rate", "What the last movement actually reached, beside what this display can show",
+                new("appearance.fpsMeasured", L("appearance.fpsMeasured"), D("appearance.fpsMeasured"),
                     RowKind.Status, "", []),
             ]),
-            new("STARTUP", "\uE7E8", [
+            new(S("startup"), "\uE7E8", [
 
-                Toggle("general.startup", "Start with Windows", "Launch Halo after you sign in"),
-                Toggle("general.fullscreen", "Stay visible over fullscreen", "Keep the pill above games and video", true),
+                Toggle("general.startup", L("general.startup"), D("general.startup")),
+                Toggle("general.fullscreen", L("general.fullscreen"), D("general.fullscreen"), true),
             ]),
-            new("BEHAVIOUR", "\uE945", [
-                Toggle("general.capture", "Include Halo in captures", "Show the pill in screenshots and recordings", false),
-                Toggle("general.follow", "Follow focused apps", "Bring the relevant surface forward automatically"),
-                Action("general.reset", "Pill position", "Return the pill to the active display centre", "Reset position"),
+            new(S("behaviour"), "\uE945", [
+
+                Choice("general.language", L("general.language"), D("general.language"),
+                    LanguageRowFallback, [.. Halo.Localization.Strings.Available()]),
+                Toggle("general.capture", L("general.capture"), D("general.capture"), false),
+                Toggle("general.follow", L("general.follow"), D("general.follow")),
+                Action("general.reset", L("general.reset"), D("general.reset"), "Reset position"),
             ]),
         ]),
-        new(PageId.Features, "Features", "What the pill is allowed to show, and when",
+        new(PageId.Features, P("Features"), PD("Features"),
         [
-            new("SURFACES", "\uE7F4", [
-                Toggle("feature.media", "Media", "Playback sessions and classic VLC controls"),
-                Toggle("media.progress", "Show the timeline", "Draw the real playback position across the collapsed pill"),
-                Toggle("feature.downloads", "Downloads", "Browser, store, game and app progress"),
-                Toggle("feature.fileTray", "File Tray", "The drag-and-drop shelf and clipboard images"),
-                Toggle("feature.bluetooth", "Bluetooth", "Connection and battery takeovers"),
+            new(S("surfaces"), "\uE7F4", [
+                Toggle("feature.media", L("feature.media"), D("feature.media")),
+                Toggle("media.progress", L("media.progress"), D("media.progress")),
+                Toggle("feature.downloads", L("feature.downloads"), D("feature.downloads")),
+                Toggle("feature.fileTray", L("feature.fileTray"), D("feature.fileTray")),
+                Toggle("feature.bluetooth", L("feature.bluetooth"), D("feature.bluetooth")),
             ]),
-            new("NOTIFICATIONS", "\uE8BD", [
-                Toggle("feature.notifications", "Mirror notifications", "Show Windows toasts in the pill"),
-                Toggle("notifications.silence", "Silence the native banner",
-                    "Stop Windows drawing its own banner for apps Halo mirrors. Fully reversible.", false),
+            new(S("notifications"), "\uE8BD", [
+                Toggle("feature.notifications", L("feature.notifications"), D("feature.notifications")),
+                Toggle("notifications.silence", L("notifications.silence"), D("notifications.silence"), false),
             ]),
-            new("ALERTS ABOUT THIS MACHINE", "\uE9D9", [
-                Toggle("alert.battery", "Battery", "With a tap to turn on Power Saver. 10% is always critical."),
-                Slider("alert.batteryAt", "Warn me at", "Where the first battery warning fires",
+            new(S("alertsaboutthismachine"), "\uE9D9", [
+                Toggle("alert.battery", L("alert.battery"), D("alert.battery")),
+                Slider("alert.batteryAt", L("alert.batteryAt"), D("alert.batteryAt"),
                     "20%", "10%", "15%", "20%", "25%", "30%", "40%"),
-                Toggle("alert.cpu", "High CPU", "Once per tier, naming the process using the most"),
-                Slider("alert.cpuAt", "Start warning at", "Higher tiers above this one still escalate",
+                Toggle("alert.cpu", L("alert.cpu"), D("alert.cpu")),
+                Slider("alert.cpuAt", L("alert.cpuAt"), D("alert.cpuAt"),
                     "50%", "40%", "50%", "60%", "70%", "80%", "90%"),
-                Toggle("alert.memory", "High memory", "Once per tier, naming the process using the most"),
-                Slider("alert.memoryAt", "Start warning at", "Higher tiers above this one still escalate",
+                Toggle("alert.memory", L("alert.memory"), D("alert.memory")),
+                Slider("alert.memoryAt", L("alert.memoryAt"), D("alert.memoryAt"),
                     "70%", "50%", "60%", "70%", "80%", "90%"),
-                Toggle("alert.internet", "Internet", "Slow, offline, and the API being unreachable"),
-                Toggle("alert.clipboard", "Screenshots and copies", "A banner when something lands on the clipboard"),
-                Toggle("alert.language", "Keyboard layout", "A one-second glance when the layout flips"),
-                Toggle("alert.hourly", "Hourly chime", "On the hour, with the date and the sky", false),
+                Toggle("alert.internet", L("alert.internet"), D("alert.internet")),
+                Toggle("alert.clipboard", L("alert.clipboard"), D("alert.clipboard")),
+                Toggle("alert.language", L("alert.language"), D("alert.language")),
+                Toggle("alert.hourly", L("alert.hourly"), D("alert.hourly"), false),
             ]),
         ]),
-        new(PageId.Agents, "Agents", "Claude Code, Codex, and anything else that reports in",
+        new(PageId.Agents, P("Agents"), PD("Agents"),
         [
-            new("SESSIONS", "\uE716", [
-                Toggle("feature.claudeCode", "Claude Code", "Live sessions, limits and the cancel button"),
-                Toggle("feature.codex", "Codex", "Codex Desktop and CLI sessions"),
-                Toggle("feature.genericAgents", "Other agents", "Any tool writing ~/.halo/agents"),
+            new(S("sessions"), "\uE716", [
+                Toggle("feature.claudeCode", L("feature.claudeCode"), D("feature.claudeCode")),
+                Toggle("feature.codex", L("feature.codex"), D("feature.codex")),
+                Toggle("feature.genericAgents", L("feature.genericAgents"), D("feature.genericAgents")),
             ]),
 
-            new("CONNECTION", "\uE703", [
+            new(S("connection"), "\uE703", [
 
-                new("hooks.claude", "Claude Code hooks",
-                    "Halo's hooks in ~/.claude/settings.json, which is what makes sessions appear",
+                new("hooks.claude", L("hooks.claude"), D("hooks.claude"),
                     RowKind.Status, "", [], "Disconnect"),
-                new("hooks.codex", "Codex hooks",
-                    "Halo's hooks in ~/.codex/hooks.json, which is what makes sessions appear",
+                new("hooks.codex", L("hooks.codex"), D("hooks.codex"),
                     RowKind.Status, "", [], "Disconnect"),
             ]),
-            new("QUESTIONS", "\uE9CE", [
-                Toggle("claude.ask", "Answer from the pill",
-                    "Mirror Claude's question box and answer it by clicking a row"),
+            new(S("questions"), "\uE9CE", [
+                Toggle("claude.ask", L("claude.ask"), D("claude.ask")),
             ]),
-            new("ALERTS", "\uEA80", [
-                Toggle("alert.context", "Context nearly full", "Once per session"),
-                Slider("alert.contextAt", "Context warning at", "Also where the agent ring turns amber",
+            new(S("alerts"), "\uEA80", [
+                Toggle("alert.context", L("alert.context"), D("alert.context")),
+                Slider("alert.contextAt", L("alert.contextAt"), D("alert.contextAt"),
                     "80%", "60%", "70%", "75%", "80%", "85%", "90%"),
-                Toggle("alert.limit", "Usage limits", "Once per window"),
-                Slider("alert.limitAt", "Usage warning at", "Share of a five-hour or weekly window",
+                Toggle("alert.limit", L("alert.limit"), D("alert.limit")),
+                Slider("alert.limitAt", L("alert.limitAt"), D("alert.limitAt"),
                     "80%", "60%", "70%", "80%", "90%", "95%"),
             ]),
         ]),
-        new(PageId.Api, "API", "Let other programs drive the pill",
+        new(PageId.Api, P("Api"), PD("Api"),
         [
-            new("ENDPOINT", "\uE968", [
-                Toggle("api.enabled", "Local API", "Listen on 127.0.0.1 for local programs. Nothing off this machine can reach it.", false),
-                Choice("api.port", "Port", "Change it only if something else already has this one",
+            new(S("endpoint"), "\uE968", [
+
+                new("api.docs", L("api.docs"), D("api.docs"), RowKind.Status, "", [], "Open"),
+                Toggle("api.enabled", L("api.enabled"), D("api.enabled"), false),
+                Choice("api.port", L("api.port"), D("api.port"),
                     "7317", "7317", "7318", "8317", "9317"),
-                new("api.token", "Token", "Generated when you first switch the API on. Send it as an Authorization: Bearer header.",
+                new("api.token", L("api.token"), D("api.token"),
                     RowKind.Status, "", [], "Copy"),
             ]),
-            new("WHAT CALLERS MAY DO", "\uE8D7", [
-                Toggle("api.notify", "Post a notification", "POST /notify - title, body, and an optional code or file to open"),
-                Toggle("api.ask", "Ask a question", "POST /ask with options, then poll /ask/{nonce} for the answer"),
-                Toggle("api.state", "Read what is on screen", "GET /state, /media, /agents, /tray", false),
-                Toggle("api.control", "Press buttons", "POST /media, /pill and /tray: play, skip, expand, pin, add files", false),
-                Toggle("api.settings", "Read and change settings", "GET and PATCH /settings. This is every switch in this window.", false),
+            new(S("whatcallersmaydo"), "\uE8D7", [
+                Toggle("api.notify", L("api.notify"), D("api.notify")),
+                Toggle("api.ask", L("api.ask"), D("api.ask")),
+                Toggle("api.state", L("api.state"), D("api.state"), false),
+                Toggle("api.control", L("api.control"), D("api.control"), false),
+                Toggle("api.settings", L("api.settings"), D("api.settings"), false),
             ]),
         ]),
-        new(PageId.Access, "Access", "What Halo needs from Windows to do its job",
+        new(PageId.Access, P("Access"), PD("Access"),
         [
-            new("PERMISSIONS", "\uE890", [
-                new("access.notifications", "Notification access", "Required to mirror Windows toasts",
+            new(S("permissions"), "\uE890", [
+                new("access.notifications", L("access.notifications"), D("access.notifications"),
                     RowKind.Status, "", [], "Open settings"),
 
-                new("access.startup", "Startup entry",
-                    Halo.Interop.AppModel.IsPackaged
-                        ? "Windows decides whether Halo starts when you sign in"
-                        : "The scheduled task that launches Halo when you sign in",
+                new("access.startup", L("access.startup"),
+                    D("access.startup." + (Halo.Interop.AppModel.IsPackaged ? "packaged" : "task")),
                     RowKind.Status, "", [],
-                    Halo.Interop.AppModel.IsPackaged ? "Open Startup settings" : "Open Task Scheduler"),
+                    Halo.Localization.Strings.Get("settings.access.startup.action."
+                        + (Halo.Interop.AppModel.IsPackaged ? "packaged" : "task"))),
             ]),
 
-            new("REMOVAL", "\uE74D", [
-                new("reset.everything", "Reset everything",
-                    "Put every app's notification banner back, disconnect both agents, and delete Halo's stored state",
+            new(S("removal"), "\uE74D", [
+                new("reset.everything", L("reset.everything"), D("reset.everything"),
                     RowKind.Status, "", [], "Reset"),
             ]),
         ]),
-        new(PageId.DocsAbout, "Docs & About", "Where things are written down",
+        new(PageId.DocsAbout, P("DocsAbout"), PD("DocsAbout"),
         [
-            new("HALO", "\uE946", [
-                new("about.version", "Version", "", RowKind.Status, "", []),
-                new("about.state", "State folder", "Loose files Halo keeps: position, pin, tray, seen notifications",
+            new(S("halo"), "\uE946", [
+                new("about.version", L("about.version"), D("about.version"), RowKind.Status, "", []),
+                new("about.state", L("about.state"), D("about.state"),
                     RowKind.Status, "", [], "Open folder"),
             ]),
 
-            new("PROBLEMS", "\uE730", [
-                Action("report.problem", "Report a problem",
-                    "Write it, read exactly what it contains, then press send. Nothing leaves without the button.",
+            new(S("problems"), "\uE730", [
+                Action("report.problem", L("report.problem"), D("report.problem"),
                     "Write a report"),
-                Toggle("report.autoCrash", "Send crashes without asking",
-                    "Only the crash report itself, only when Halo has actually crashed, and only the fields the report window shows you",
+                Toggle("report.autoCrash", L("report.autoCrash"), D("report.autoCrash"),
                     false),
             ]),
-            new("PROJECT", "\uE943", [
-                new("about.repo", "Repository", "github.com/phoseinq/Halo", RowKind.Status, "", [], "Open"),
+            new(S("project"), "\uE943", [
+                new("about.repo", L("about.repo"), D("about.repo"), RowKind.Status, "", [], "Open"),
             ]),
         ]),
     ];
@@ -199,11 +228,11 @@ internal static class Catalog
 
     internal static string Sub(PageId page) => page switch
     {
-        PageId.General => "Behaviour and appearance",
-        PageId.Features => "App surfaces",
-        PageId.Agents => "Coding sessions",
-        PageId.Api => "Drive Halo from code",
-        _ => "Windows controls",
+        PageId.General => Halo.Localization.Strings.Get("home.card.general"),
+        PageId.Features => Halo.Localization.Strings.Get("home.card.features"),
+        PageId.Agents => Halo.Localization.Strings.Get("home.card.agents"),
+        PageId.Api => Halo.Localization.Strings.Get("home.card.api"),
+        _ => Halo.Localization.Strings.Get("home.card.access"),
     };
 
     internal static string Glyph(PageId page) => page switch

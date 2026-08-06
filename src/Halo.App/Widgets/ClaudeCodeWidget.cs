@@ -139,6 +139,8 @@ internal sealed class ClaudeCodeWidget : IWidget
         string el0 = LimitHit ? LimitReset() : Elapsed(st);
         if (Compacting(st) && !LimitHit && CompactPct(st!) is { Length: > 0 } done)
             el0 = el0.Length > 0 ? done + " · " + Coarse(el0) : done;
+
+        if (Retrying(st) && !LimitHit && ApiRetry.Caption() is { Length: > 0 } wait) el0 = wait;
         float textX0 = x + sz + 11;
         if (st?.State == "waiting_input") textX0 += 16;
         using var elFont = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
@@ -148,7 +150,7 @@ internal sealed class ClaudeCodeWidget : IWidget
 
         int fit = fade > 0.99f ? Fx.FitChars(g, avail0, MinVerbPx) : 0;
         var mood = Mood(st) with { MaxChars = fit >= 8 ? fit : 0 };
-        string verb = OutageText() ?? (LimitHit ? "outta juice :(" : Shown(st) switch
+        string verb = OutageText() ?? (LimitHit ? "outta juice :(" : Retrying(st) ? Moods.Line("retrying", mood) : Shown(st) switch
         {
             "working" => ToolVerb(Glow(st).Tool, mood),
             "compacting" when Compacting(st) => Moods.Line("compacting", mood),
@@ -214,16 +216,32 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     internal const int SettleAfterSeconds = 180;
 
-        internal static bool TurnOver(CcStatus? st, DateTimeOffset now)
+        internal static bool TurnOver(CcStatus? st, DateTimeOffset now, bool retrying = false)
     {
         if (st is not { State: "working" }) return false;
         if (st.StartedAt is { Length: > 0 } && st.StartedAt == _cancelledTurnKey) return true;
         if (!string.IsNullOrEmpty(st.CurrentTool)) return false;
-        return ParseTime(st.UpdatedAt) is { } u && now - u > TimeSpan.FromSeconds(SettleAfterSeconds);
+
+        if (retrying) return false;
+        return QuietFor(st, now) > SettleAfterSeconds;
     }
 
+        internal static int QuietFor(CcStatus? st, DateTimeOffset now)
+        => ParseTime(st?.UpdatedAt) is { } u ? (int)Math.Max(0, (now - u).TotalSeconds) : -1;
+
+        internal static bool WatchForRetry(CcStatus? st, DateTimeOffset now, bool retrying)
+    {
+        int quiet = QuietFor(st, now);
+        if (quiet < QuietBeforeWatch) return false;
+        return retrying || quiet <= SettleAfterSeconds;
+    }
+
+    internal const int QuietBeforeWatch = 12;
+
     private static string? Shown(CcStatus? st) =>
-        TurnOver(st, DateTimeOffset.UtcNow) ? "idle" : st?.State;
+        TurnOver(st, DateTimeOffset.UtcNow, Retrying(st)) ? "idle" : st?.State;
+
+    internal static bool Retrying(CcStatus? st) => st is { Pid: > 0 } && ApiRetry.LiveFor(st.Pid);
 
     internal static bool Compacting(CcStatus? st) =>
         st?.State == "compacting" && st.StartedAt != _cancelledCompactKey
@@ -377,12 +395,14 @@ internal sealed class ClaudeCodeWidget : IWidget
             string big = rf < 0 ? "\u2014" : $"{Math.Clamp(rf, 0f, 1f) * 100:0}%";
             string cap2 = shown switch
             {
-                0 => Limits.FiveHour < 0 ? "5-hour  \u00b7  not fetched"
-                    : Limits.CreditsUsed > 0 ? $"5-hour  \u00b7  {ResetIn(Limits.FiveHourReset)} left  \u00b7  ${Limits.CreditsUsed:0.00}"
-                    : $"5-hour  \u00b7  {ResetIn(Limits.FiveHourReset)} left",
-                1 => Limits.Week >= 0 ? $"weekly  \u00b7  {ResetIn(Limits.WeekReset)} left" : "weekly  \u00b7  not fetched",
+                0 => Limits.FiveHour < 0 ? Row("agent.row.fiveHour", Halo.Localization.Strings.Get("agent.notFetched"))
+                    : Limits.CreditsUsed > 0 ? Row("agent.row.fiveHour", Left(Limits.FiveHourReset) + Dot + $"${Limits.CreditsUsed:0.00}")
+                    : Row("agent.row.fiveHour", Left(Limits.FiveHourReset)),
+                1 => Limits.Week >= 0 ? Row("agent.row.weekly", Left(Limits.WeekReset))
+                    : Row("agent.row.weekly", Halo.Localization.Strings.Get("agent.notFetched")),
                 _ => st?.Session is { ContextMax: > 0 } ses
-                    ? $"context  \u00b7  {ses.ContextUsed / 1000}K of {ses.ContextMax / 1000}K" : "context  \u00b7  no session",
+                    ? Halo.Localization.Strings.Format("agent.contextShort", ses.ContextUsed / 1000, ses.ContextMax / 1000)
+                    : Row("agent.row.context", Halo.Localization.Strings.Get("agent.noSession")),
             };
 
             float hole = RingOuter - 2 * RingStep - RingBand / 2f - 2f;
@@ -447,27 +467,25 @@ internal sealed class ClaudeCodeWidget : IWidget
         if (Limits.FiveHour >= 0)
         {
             int s = slot++;
-            string sub = KeyHover(s) ? $"resets {Limits.FiveHourReset.ToLocalTime():ddd HH:mm}"
-                                     : $"{ResetIn(Limits.FiveHourReset)} left";
+            string sub = KeyHover(s) ? Resets(Limits.FiveHourReset) : Left(Limits.FiveHourReset);
 
             if (Limits.CreditsUsed > 0 && KeyHover(s))
                 sub += Limits.CreditsBalance >= 0 ? $"  ·  ${Limits.CreditsBalance:0.00} left"
                      : Limits.CreditsLimit > 0 ? $"  ·  ${Math.Max(0, Limits.CreditsLimit - Limits.CreditsUsed):0.00} of ${Limits.CreditsLimit:0}"
                      : $"  ·  ${Limits.CreditsUsed:0.00} used";
-            Key(s, UsageColor(Limits.FiveHour), "5-hour",
+            Key(s, UsageColor(Limits.FiveHour), Halo.Localization.Strings.Get("agent.row.fiveHour"),
                 KeyHover(s) ? $"{Limits.FiveHour * 100:0.#}%" : Pct(Limits.FiveHour), sub,
                 UsageColor(Limits.FiveHour));
         }
 
-        else Key(slot++, Dim, "5-hour", "\u2014", "");
+        else Key(slot++, Dim, Halo.Localization.Strings.Get("agent.row.fiveHour"), "\u2014", "");
 
         if (Limits.Week >= 0)
         {
             int s = slot++;
-            Key(s, UsageColor(Limits.Week), "weekly",
+            Key(s, UsageColor(Limits.Week), Halo.Localization.Strings.Get("agent.row.weekly"),
                 KeyHover(s) ? $"{Limits.Week * 100:0.#}%" : Pct(Limits.Week),
-                KeyHover(s) ? $"resets {Limits.WeekReset.ToLocalTime():ddd HH:mm}"
-                            : $"{ResetIn(Limits.WeekReset)} left",
+                KeyHover(s) ? Resets(Limits.WeekReset) : Left(Limits.WeekReset),
                 UsageColor(Limits.Week));
         }
 
@@ -475,10 +493,11 @@ internal sealed class ClaudeCodeWidget : IWidget
         {
             long maxK = sess.ContextMax / 1000, usedK = Math.Min(sess.ContextUsed / 1000, maxK);
             string maxLabel = maxK >= 1000 ? $"{maxK / 1000f:0.#}M" : $"{maxK}K";
-            Key(slot, ctxCol, "context", $"{usedK}K", $"of {maxLabel}  ·  {ctxFrac * 100:0}% used", ctxCol,
+            Key(slot, ctxCol, Halo.Localization.Strings.Get("agent.row.context"), $"{usedK}K",
+                Halo.Localization.Strings.Format("agent.contextOf", maxLabel, (ctxFrac * 100).ToString("0")), ctxCol,
                 $"{ctxFrac * 100:0}%");
         }
-        else Key(slot, Dim, "context", "\u2014", "no active session");
+        else Key(slot, Dim, Halo.Localization.Strings.Get("agent.row.context"), "\u2014", Halo.Localization.Strings.Get("agent.noActiveSession"));
 
         DrawNet(g, ColR, 74, RightEdge - ColR, 38, a);
         ExitBlock.Draw(g, a, keySub, keyCap, ColR, RightEdge,
@@ -490,10 +509,14 @@ internal sealed class ClaudeCodeWidget : IWidget
         using (var rsf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap })
         {
+
+            string glyph = "\u27f3 " + Halo.Localization.Strings.Get("agent.refresh");
             string label = rHover
-                ? (Limits.LastSuccess == DateTime.MinValue ? "never fetched  ·  \u27f3 refresh"
-                   : $"updated {AgeText(DateTime.UtcNow - Limits.LastSuccess)}  ·  \u27f3 refresh")
-                : "\u27f3 refresh";
+                ? (Limits.LastSuccess == DateTime.MinValue
+                    ? Halo.Localization.Strings.Get("agent.neverFetched") + Dot + glyph
+                    : Halo.Localization.Strings.Format(
+                        "agent.updated", AgeText(DateTime.UtcNow - Limits.LastSuccess)) + Dot + glyph)
+                : glyph;
             g.DrawString(label, keySub, rb, rr, rsf);
         }
 
@@ -549,7 +572,7 @@ internal sealed class ClaudeCodeWidget : IWidget
             using var wb = new SolidBrush(Mul(Dim, a * 0.7f));
             using var wsf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("sampling…", wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
+            g.DrawString(Halo.Localization.Strings.Get("agent.sampling"), wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
             return;
         }
 
@@ -689,10 +712,10 @@ internal sealed class ClaudeCodeWidget : IWidget
     private static RectangleF RefreshRect(int w, int h) => new(RightEdge - 210, 22, 210, 20);
 
     private static string AgeText(TimeSpan d) =>
-        d.TotalMinutes < 1 ? "just now"
-        : d.TotalHours < 1 ? $"{(int)d.TotalMinutes}m ago"
-        : d.TotalDays < 1 ? $"{(int)d.TotalHours}h ago"
-        : $"{(int)d.TotalDays}d ago";
+        d.TotalMinutes < 1 ? Halo.Localization.Strings.Get("time.justNow")
+        : d.TotalHours < 1 ? Halo.Localization.Strings.Format("time.minsAgo", (int)d.TotalMinutes)
+        : d.TotalDays < 1 ? Halo.Localization.Strings.Format("time.hoursAgo", (int)d.TotalHours)
+        : Halo.Localization.Strings.Format("time.daysAgo", (int)d.TotalDays);
 
     public IReadOnlyList<(RectangleF rect, Action<PointF> onClick)> Buttons(int w, int h)
     {
@@ -840,6 +863,16 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     private static bool LimitHit =>
         (Limits.FiveHour >= 0.99f || Limits.Week >= 0.99f) && !Limits.ExtraUsageOn && Limits.CreditsUsed >= 0;
+
+    internal const string Dot = "  \u00b7  ";
+
+    private static string Row(string key, string tail) => Halo.Localization.Strings.Get(key) + Dot + tail;
+
+    private static string Left(DateTimeOffset reset)
+        => Halo.Localization.Strings.Format("agent.left", ResetIn(reset));
+
+    private static string Resets(DateTimeOffset reset)
+        => Halo.Localization.Strings.Format("agent.resets", reset.ToLocalTime().ToString("ddd HH:mm"));
 
     private static string LimitReset()
     {

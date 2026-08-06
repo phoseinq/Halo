@@ -12,6 +12,11 @@ namespace Halo.Tests;
 // the pill is saying, the ring is the colour of that. So the things worth pinning are that the mapping is
 // one mapping, that the colours are actually distinguishable from each other, and that the warm
 // modulation no longer washes them all into one orange.
+// Serialised against the other classes that touch it: Strings.Use switches the ACTIVE LANGUAGE for
+// the whole process, so a test that reads a localized string while another has just moved to
+// Persian reads the wrong one. It failed one run in three before this - a settings label, a mood
+// set and a report route, never the same one twice, which is what a shared global looks like.
+[Collection("locale")]
 public class SlotColorTests
 {
     private static readonly string[] Slots =

@@ -1,0 +1,579 @@
+{
+  "_readme": "Весь текст, который показывает Halo. Переводите только ЗНАЧЕНИЯ; ключи не трогайте.",
+  "_placeholders": "{0} и {1} подставляет Halo, в этом порядке. Ставьте их там, где нужно фразе, но не добавляйте и не убирайте.",
+  "_missing": "Любой отсутствующий ключ вернётся к английскому. Частичный перевод тоже работает.",
+  "reports.off": "Отчёты выключены: report.endpoint в settings.json пуст.",
+  "reports.customNotHttps": "report.endpoint в settings.json не является корректным адресом https://.",
+  "reports.builtInNotHttps": "Встроенный адрес не является корректным https://.",
+  "notice.app.system": "Система",
+  "notice.app.network": "Сеть",
+  "notice.app.battery": "Батарея",
+  "notice.app.claude": "Claude",
+  "notice.app.screenshot": "Снимок",
+  "notice.app.clipboard": "Буфер обмена",
+  "notice.screenshot.title": "Снимок сделан",
+  "notice.clipboard.title": "Изображение скопировано",
+  "notice.load.cpu": "ЦП",
+  "notice.load.memory": "память",
+  "notice.load.title": "Высокая нагрузка на {0} — {1}%",
+  "notice.load.body": "Больше всех потребляет {0}.",
+  "notice.load.ramFallback": "Память заканчивается.",
+  "notice.context.title": "Контекст заполнен на {0}%",
+  "notice.context.body": "Дальше ответы будут расплывчатее — сделайте /compact, когда сможете.",
+  "notice.battery.low": "низкий",
+  "notice.battery.critical": "критический",
+  "notice.battery.title": "Батарея {0} — {1}%",
+  "notice.battery.body": "Нажмите, чтобы включить экономию энергии.",
+  "notice.net.down.title": "Нет интернета",
+  "notice.net.down.body": "Сейчас ничего не проходит наружу.",
+  "notice.net.slow.title": "Плохой интернет",
+  "notice.api.down.title": "Claude недоступен",
+  "notice.api.down.body": "С вашим соединением всё в порядке — с их нет.",
+  "settings.appearance.scale.label": "Размер пилюли",
+  "settings.appearance.scale.desc": "Масштабирует геометрию, текст и области нажатия вместе",
+  "settings.appearance.glass.label": "Сила стекла",
+  "settings.appearance.glass.desc": "Баланс между деталями обоев и контрастом",
+  "settings.appearance.motion.label": "Движение",
+  "settings.appearance.motion.desc": "Как быстро пилюля успокаивается после перемещения",
+  "settings.appearance.fps.label": "Частота кадров",
+  "settings.appearance.fps.desc": "К чему стремится Halo, пока пилюля движется. Auto следует за частотой этого экрана, и любая настройка сама опускается ниже, когда машина занята.",
+  "settings.appearance.fpsMeasured.label": "Измеренная частота",
+  "settings.appearance.fpsMeasured.desc": "Что пилюля на самом деле выдаёт — в движении и открытой в покое — рядом с тем, что может показать этот экран",
+  "settings.general.startup.label": "Запускать с Windows",
+  "settings.general.startup.desc": "Открывать Halo после входа в систему",
+  "settings.general.fullscreen.label": "Поверх полноэкранных окон",
+  "settings.general.fullscreen.desc": "Держать пилюлю над играми и видео",
+  "settings.general.language.label": "Язык",
+  "settings.general.language.desc": "Язык, на котором Halo показывает свои надписи",
+  "settings.general.capture.label": "Показывать Halo в записи",
+  "settings.general.capture.desc": "Показывать пилюлю на снимках и в записях экрана",
+  "settings.general.follow.label": "Следовать за активным приложением",
+  "settings.general.follow.desc": "Автоматически выводить нужную поверхность вперёд",
+  "settings.general.reset.label": "Положение пилюли",
+  "settings.general.reset.desc": "Вернуть в центр активного экрана",
+  "settings.feature.media.label": "Медиа",
+  "settings.feature.media.desc": "Сессии воспроизведения и классические кнопки VLC",
+  "settings.media.progress.label": "Показывать шкалу времени",
+  "settings.media.progress.desc": "Рисовать реальную позицию на свёрнутой пилюле",
+  "settings.feature.downloads.label": "Загрузки",
+  "settings.feature.downloads.desc": "Прогресс браузера, магазина, игр и приложений",
+  "settings.feature.fileTray.label": "Лоток файлов",
+  "settings.feature.fileTray.desc": "Полка для перетаскивания и изображения из буфера обмена",
+  "settings.feature.bluetooth.label": "Bluetooth",
+  "settings.feature.bluetooth.desc": "Подключение и заряд устройств",
+  "settings.feature.notifications.label": "Зеркалить уведомления",
+  "settings.feature.notifications.desc": "Показывать уведомления Windows в пилюле",
+  "settings.notifications.silence.label": "Заглушить системный баннер",
+  "settings.notifications.silence.desc": "Не давать Windows рисовать свой баннер для приложений, которые зеркалит Halo. Полностью обратимо.",
+  "settings.alert.battery.label": "Батарея",
+  "settings.alert.battery.desc": "С нажатием для экономии энергии. 10% всегда критично.",
+  "settings.alert.batteryAt.label": "Предупреждать на",
+  "settings.alert.batteryAt.desc": "Где срабатывает первое предупреждение о батарее",
+  "settings.alert.cpu.label": "Высокая нагрузка ЦП",
+  "settings.alert.cpu.desc": "Один раз на уровень, с именем самого прожорливого процесса",
+  "settings.alert.cpuAt.label": "Начинать предупреждать с",
+  "settings.alert.cpuAt.desc": "Уровни выше продолжают нарастать",
+  "settings.alert.memory.label": "Высокий расход памяти",
+  "settings.alert.memory.desc": "Один раз на уровень, с именем самого прожорливого процесса",
+  "settings.alert.memoryAt.label": "Начинать предупреждать с",
+  "settings.alert.memoryAt.desc": "Уровни выше продолжают нарастать",
+  "settings.alert.internet.label": "Интернет",
+  "settings.alert.internet.desc": "Медленно, офлайн и недоступный API",
+  "settings.alert.clipboard.label": "Снимки и копирование",
+  "settings.alert.clipboard.desc": "Баннер, когда что-то попадает в буфер обмена",
+  "settings.alert.language.label": "Раскладка клавиатуры",
+  "settings.alert.language.desc": "Секундный взгляд при переключении",
+  "settings.alert.hourly.label": "Бой часов",
+  "settings.alert.hourly.desc": "Ровно в час, с датой и погодой",
+  "settings.feature.claudeCode.label": "Claude Code",
+  "settings.feature.claudeCode.desc": "Живые сессии, лимиты и кнопка отмены",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "Сессии Codex Desktop и CLI",
+  "settings.feature.genericAgents.label": "Другие агенты",
+  "settings.feature.genericAgents.desc": "Любой инструмент, который пишет в ~/.halo/agents",
+  "settings.hooks.claude.label": "Хуки Claude Code",
+  "settings.hooks.claude.desc": "Хуки Halo в ~/.claude/settings.json — именно они заставляют сессии появляться",
+  "settings.hooks.codex.label": "Хуки Codex",
+  "settings.hooks.codex.desc": "Хуки Halo в ~/.codex/hooks.json — именно они заставляют сессии появляться",
+  "settings.claude.ask.label": "Отвечать прямо из пилюли",
+  "settings.claude.ask.desc": "Зеркалить вопрос Claude и отвечать щелчком по строке",
+  "settings.alert.context.label": "Контекст почти заполнен",
+  "settings.alert.context.desc": "Один раз за сессию",
+  "settings.alert.contextAt.label": "Предупреждать о контексте на",
+  "settings.alert.contextAt.desc": "Здесь же кольцо агента становится янтарным",
+  "settings.alert.limit.label": "Лимиты использования",
+  "settings.alert.limit.desc": "Один раз за окно",
+  "settings.alert.limitAt.label": "Предупреждать об использовании на",
+  "settings.alert.limitAt.desc": "Доля пятичасового или недельного окна",
+  "settings.api.enabled.label": "Локальный API",
+  "settings.api.enabled.desc": "Слушает 127.0.0.1 для локальных программ. Извне этой машины до него не добраться.",
+  "settings.api.port.label": "Порт",
+  "settings.api.port.desc": "Меняйте, только если этот уже занят",
+  "settings.api.token.label": "Токен",
+  "settings.api.token.desc": "Создаётся при первом включении API. Отправляйте в заголовке Authorization: Bearer.",
+  "settings.api.notify.label": "Отправить уведомление",
+  "settings.api.notify.desc": "POST /notify — заголовок, текст и необязательный код или файл",
+  "settings.api.ask.label": "Задать вопрос",
+  "settings.api.ask.desc": "POST /ask с вариантами, затем опрашивайте /ask/{nonce}",
+  "settings.api.state.label": "Читать то, что на экране",
+  "settings.api.state.desc": "GET /state, /media, /agents, /tray",
+  "settings.api.control.label": "Нажимать кнопки",
+  "settings.api.control.desc": "POST /media, /pill и /tray: воспроизведение, перемотка, раскрытие, закрепление, добавление файлов",
+  "settings.api.settings.label": "Читать и менять настройки",
+  "settings.api.settings.desc": "GET и PATCH /settings. Это каждый переключатель в этом окне.",
+  "settings.access.notifications.label": "Доступ к уведомлениям",
+  "settings.access.notifications.desc": "Нужен, чтобы зеркалить уведомления Windows",
+  "settings.reset.everything.label": "Сбросить всё",
+  "settings.reset.everything.desc": "Вернуть баннер каждому приложению, отключить обоих агентов и стереть сохранённое состояние Halo",
+  "settings.about.version.label": "Версия",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "Папка состояния",
+  "settings.about.state.desc": "Отдельные файлы Halo: положение, закрепление, лоток, просмотренные уведомления",
+  "settings.report.problem.label": "Сообщить о проблеме",
+  "settings.report.problem.desc": "Напишите, прочтите, что именно там есть, и нажмите отправить. Без кнопки ничего не уходит.",
+  "settings.report.autoCrash.label": "Отправлять сбои без спроса",
+  "settings.report.autoCrash.desc": "Только сам отчёт о сбое, только когда Halo действительно упал, и только те поля, что показывает окно отчёта",
+  "settings.about.repo.label": "Репозиторий",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "Главная",
+  "page.Home.desc": "Место потише, чтобы начать",
+  "page.General.label": "Общие",
+  "page.General.desc": "Поведение и вид поверхности Halo",
+  "page.Features.label": "Возможности",
+  "page.Features.desc": "Что пилюля может показывать и когда",
+  "page.Agents.label": "Агенты",
+  "page.Agents.desc": "Claude Code, Codex и всё, что ещё отчитывается",
+  "page.Api.label": "API",
+  "page.Api.desc": "Пусть другие программы управляют пилюлей",
+  "page.Access.label": "Доступы",
+  "page.Access.desc": "Что Halo нужно от Windows для работы",
+  "page.DocsAbout.label": "Документы и о программе",
+  "page.DocsAbout.desc": "Где всё записано",
+  "section.appearance": "ВНЕШНИЙ ВИД",
+  "section.startup": "АВТОЗАПУСК",
+  "section.behaviour": "ПОВЕДЕНИЕ",
+  "section.surfaces": "ПОВЕРХНОСТИ",
+  "section.notifications": "УВЕДОМЛЕНИЯ",
+  "section.alertsaboutthismachine": "ОПОВЕЩЕНИЯ ОБ ЭТОМ КОМПЬЮТЕРЕ",
+  "section.sessions": "СЕССИИ",
+  "section.connection": "ПОДКЛЮЧЕНИЕ",
+  "section.questions": "ВОПРОСЫ",
+  "section.alerts": "ОПОВЕЩЕНИЯ",
+  "section.endpoint": "ТОЧКА ДОСТУПА",
+  "section.whatcallersmaydo": "ЧТО РАЗРЕШЕНО ВЫЗЫВАЮЩИМ",
+  "section.permissions": "РАЗРЕШЕНИЯ",
+  "section.removal": "УДАЛЕНИЕ",
+  "section.halo": "HALO",
+  "section.problems": "ПРОБЛЕМЫ",
+  "section.project": "ПРОЕКТ",
+  "nav.settings": "НАСТРОЙКИ",
+  "nav.system": "СИСТЕМА",
+  "nav.reference": "СПРАВКА",
+  "settings.access.startup.label": "Запись автозапуска",
+  "settings.access.startup.packaged.desc": "Windows решает, запускать ли Halo при входе",
+  "settings.access.startup.task.desc": "Запланированная задача, которая запускает Halo при входе",
+  "settings.access.startup.action.packaged": "Открыть параметры автозапуска",
+  "settings.access.startup.action.task": "Открыть планировщик заданий",
+  "settings.api.docs.label": "Как обращаться",
+  "settings.api.docs.desc": "Endpoints, токен и что разрешает каждый переключатель ниже — прочтите до того, как включать любой из них",
+  "agent.row.fiveHour": "5 часов",
+  "agent.row.weekly": "неделя",
+  "agent.row.context": "контекст",
+  "agent.left": "осталось {0}",
+  "agent.resets": "сброс {0}",
+  "agent.notFetched": "нет данных",
+  "agent.noSession": "нет сессии",
+  "agent.noActiveSession": "нет активной сессии",
+  "agent.contextOf": "из {0}  ·  {1}% занято",
+  "agent.contextShort": "контекст  ·  {0}K из {1}K",
+  "agent.refresh": "обновить",
+  "agent.neverFetched": "ни разу не получено",
+  "agent.updated": "обновлено {0}",
+  "agent.neverRead": "ни разу не прочитано",
+  "agent.read": "прочитано {0}",
+  "time.justNow": "только что",
+  "time.minsAgo": "{0} мин назад",
+  "time.hoursAgo": "{0} ч назад",
+  "time.daysAgo": "{0} дн назад",
+  "time.now": "сейчас",
+  "hooks.connected.title": "{0} подключён",
+  "hooks.connected.body": "Хуки добавлены в {0}. Прежний файл сохранён как .halo-bak.",
+  "hooks.failed.title": "Не удалось подключить {0}",
+  "hooks.failed.write": "Halo не смог записать настройки хуков",
+  "hooks.failed.run": "Halo не смог запустить свой вспомогательный процесс",
+  "hooks.failed.body": "{0}. Ничего не изменено.",
+  "hooks.failed.bodyWhy": "{0}: {1}. Ничего не изменено.",
+  "limit.title": "Использование {0} {1}%",
+  "limit.body": "Вы израсходовали {0}% {1} лимита.",
+  "limit.window.weekly": "недельного",
+  "limit.window.5-hour": "пятичасового",
+  "limit.window.primary": "основного",
+  "limit.window.secondary": "дополнительного",
+  "state.checking": "Проверка...",
+  "state.connected": "Подключено",
+  "state.notConnected": "Не подключено",
+  "state.disconnected": "Отключено",
+  "state.on": "Вкл",
+  "state.off": "Выкл",
+  "state.missing": "Отсутствует",
+  "state.unavailable": "Недоступно",
+  "state.turnedOffInWindows": "Отключено в Windows",
+  "state.managedByWindows": "Управляется Windows",
+  "state.notGeneratedYet": "Ещё не создано",
+  "state.notMeasuredYet": "Ещё не измерено",
+  "state.reversesEverything": "Отменяет всё",
+  "action.open": "Открыть",
+  "action.openFolder": "Открыть папку",
+  "action.openSettings": "Открыть параметры",
+  "action.copy": "Копировать",
+  "action.reset": "Сбросить",
+  "action.resetPosition": "Сбросить положение",
+  "action.connect": "Подключить",
+  "action.disconnect": "Отключить",
+  "action.retry": "Повторить",
+  "pill.copied": "Скопировано",
+  "tray.title": "Лоток файлов",
+  "tray.releaseToAdd": "Отпустите, чтобы добавить",
+  "tray.remove": "Убрать {0}",
+  "ask.typeSomething": "Напишите что-нибудь",
+  "agent.sampling": "замер…",
+  "home.tagline": "Ваши приложения, активность и агенты — тогда, когда это важно.",
+  "home.explore": "ОБЗОР",
+  "home.state": "СОСТОЯНИЕ",
+  "home.card.general": "Поведение и внешний вид",
+  "home.card.features": "Поверхности приложений",
+  "home.card.agents": "Сессии программирования",
+  "home.card.access": "Элементы управления Windows",
+  "home.waiting": "Изменения ждут применения",
+  "home.waitingBody": "Ничего из этого не дойдёт до Halo, пока вы не нажмёте «Применить» внизу страницы. «Сбросить» вернёт всё как было.",
+  "home.restore": "Восстановить значения",
+  "chrome.title": "Настройки Halo",
+  "chrome.apply": "Применить",
+  "chrome.reset": "Сбросить",
+  "chrome.unapplied": "Есть непринятые изменения",
+  "chrome.keepEditing": "Продолжить правку",
+  "chrome.discard": "Отменить и закрыть",
+  "report.write": "Написать отчёт",
+  "draft.one": "1 изменение ждёт",
+  "draft.many": "изменений в ожидании: {0}",
+  "guard.one": "Одно изменение ещё не применено. Halo продолжает работать с прежними настройками.",
+  "guard.many": "Изменений, ещё не применённых: {0}. Halo продолжает работать с прежними настройками.",
+  "home.card.api": "Управлять Halo из кода",
+  "mood.idle": [
+    "поехали :)",
+    "к вашим услугам",
+    "готов",
+    "стол пуст",
+    "жду",
+    "свободен"
+  ],
+  "mood.offline": [
+    "офлайн :(",
+    "нет сигнала",
+    "отключено",
+    "вне сети"
+  ],
+  "mood.apiDown": [
+    "api лежит :(",
+    "нет ответа",
+    "наверху тишина"
+  ],
+  "mood.retrying": [
+    "пробую снова",
+    "ещё раз",
+    "продолжаю стучать",
+    "не сдаюсь"
+  ],
+  "mood.netError": [
+    "ошибка сети :(",
+    "оборвалось",
+    "линия упала"
+  ],
+  "mood.apiError": [
+    "ошибка api :(",
+    "отказала",
+    "плохой ответ"
+  ],
+  "mood.compacted": [
+    "стало просторнее :)",
+    "легче",
+    "прибрано"
+  ],
+  "mood.outOfCredit": [
+    "кредиты кончились :(",
+    "всё вышло"
+  ],
+  "mood.writing": [
+    "пишу…",
+    "печатаю…"
+  ],
+  "mood.reading": [
+    "читаю…",
+    "просматриваю…"
+  ],
+  "mood.running": [
+    "выполняю…",
+    "запускаю…"
+  ],
+  "mood.digging": [
+    "копаю…",
+    "ищу вглубь…"
+  ],
+  "mood.fetching": [
+    "забираю…",
+    "качаю…"
+  ],
+  "mood.searching": [
+    "ищу…",
+    "гуглю :P"
+  ],
+  "mood.delegating": [
+    "передал…",
+    "поручил другому…"
+  ],
+  "mood.planning": [
+    "планирую…",
+    "думаю…"
+  ],
+  "mood.skill": [
+    "применяю навык…"
+  ],
+  "mood.asking": [
+    "как думаешь?",
+    "есть вопрос",
+    "твой ход ;)"
+  ],
+  "mood.unknown": [
+    "занят…",
+    "чем-то занят…"
+  ],
+  "mood.compacting": [
+    "уплотняю…",
+    "прибираю…"
+  ],
+  "mood.patching": [
+    "латаю…",
+    "чиню…"
+  ],
+  "mood.plotting": [
+    "рисую график…"
+  ],
+  "mood.watching": [
+    "наблюдаю…"
+  ],
+  "mood.reviewing": [
+    "просматриваю…"
+  ],
+  "mood.publishing": [
+    "публикую…"
+  ],
+  "mood.consulting": [
+    "советуюсь…"
+  ],
+  "mood.peeking": [
+    "подглядываю…"
+  ],
+  "mood.writing@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.reading@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.running@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.digging@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.fetching@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.searching@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.delegating@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.planning@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.skill@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.unknown@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.compacting@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.patching@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.plotting@long": [
+    "всё ещё этим занят…"
+  ],
+  "mood.writing@ages": [
+    "это надолго…"
+  ],
+  "mood.reading@ages": [
+    "это надолго…"
+  ],
+  "mood.running@ages": [
+    "это надолго…"
+  ],
+  "mood.digging@ages": [
+    "это надолго…"
+  ],
+  "mood.fetching@ages": [
+    "это надолго…"
+  ],
+  "mood.searching@ages": [
+    "это надолго…"
+  ],
+  "mood.delegating@ages": [
+    "это надолго…"
+  ],
+  "mood.planning@ages": [
+    "это надолго…"
+  ],
+  "mood.skill@ages": [
+    "это надолго…"
+  ],
+  "mood.unknown@ages": [
+    "это надолго…"
+  ],
+  "mood.compacting@ages": [
+    "это надолго…"
+  ],
+  "mood.patching@ages": [
+    "это надолго…"
+  ],
+  "mood.plotting@ages": [
+    "это надолго…"
+  ],
+  "mood.idle@tight": [
+    "свободен"
+  ],
+  "mood.unknown@tight": [
+    "занят"
+  ],
+  "mood.running@tight": [
+    "выполн…"
+  ],
+  "mood.writing@tight": [
+    "пишу…"
+  ],
+  "mood.reading@tight": [
+    "читаю…"
+  ],
+  "mood.digging@tight": [
+    "ищу…"
+  ],
+  "mood.idle@thin": [
+    "свободен"
+  ],
+  "mood.unknown@thin": [
+    "занят"
+  ],
+  "mood.running@thin": [
+    "выполн…"
+  ],
+  "mood.writing@thin": [
+    "пишу…"
+  ],
+  "mood.unknown@again": [
+    "снова…"
+  ],
+  "mood.running@again": [
+    "снова…"
+  ],
+  "mood.digging@again": [
+    "снова…"
+  ],
+  "mood.writing@again": [
+    "снова…"
+  ],
+  "mood.patching@again": [
+    "снова…"
+  ],
+  "mood.unknown@heavy": [
+    "тяжёлая работа…"
+  ],
+  "mood.running@heavy": [
+    "тяжёлая работа…"
+  ],
+  "mood.reading@heavy": [
+    "тяжёлая работа…"
+  ],
+  "mood.writing@heavy": [
+    "тяжёлая работа…"
+  ],
+  "mood.idle@late": [
+    "доброй ночи :)"
+  ],
+  "mood.unknown@late": [
+    "ещё не сплю…"
+  ],
+  "mood.running@late": [
+    "ночью…"
+  ],
+  "mood.writing@late": [
+    "ночью…"
+  ],
+  "mood.idle@early": [
+    "доброе утро :)"
+  ],
+  "mood.unknown@early": [
+    "начал рано…"
+  ],
+  "mood.running@early": [
+    "спозаранку…"
+  ],
+  "opt.light": "Слабое",
+  "opt.balanced": "Сбалансированное",
+  "opt.strong": "Сильное",
+  "opt.reduced": "Уменьшенная",
+  "opt.soft": "Мягкая",
+  "opt.standard": "Стандартная",
+  "tray.openSettings": "Открыть настройки",
+  "tray.restart": "Перезапустить Halo",
+  "tray.quit": "Выйти из Halo",
+  "opt.auto": "Авто",
+  "net.label": "сеть",
+  "net.api": "api",
+  "net.loss": "потери",
+  "net.ms": "мс",
+  "net.dropped": "нет",
+  "net.locating": "определяю…",
+  "net.checkingExit": "проверяю выход…",
+  "net.testingDns": "проверяю dns…",
+  "net.dnsOk": "dns в норме",
+  "net.dnsLeak": "утечка dns",
+  "net.residential": "домашний",
+  "net.datacenter": "дата-центр",
+  "net.vpnExit": "выход vpn",
+  "report.title": "Сообщить о проблеме",
+  "report.create": "Создать отчёт",
+  "report.intro": "Это и есть отчёт, ровно в том виде, в каком он лежит на диске. Ничего не отправлено.",
+  "report.whatGetsSent": "Что именно отправляется?",
+  "report.hideDetails": "Скрыть подробности",
+  "report.send": "Отправить отчёт",
+  "report.sending": "Отправка...",
+  "report.copy": "Копировать",
+  "report.saveAs": "Сохранить как...",
+  "report.openNotepad": "Открыть в Блокноте",
+  "report.openIssue": "Открыть issue на GitHub",
+  "report.copied": "Скопировано. Ничего не уходило в сеть.",
+  "report.saved": "Сохранено. Приложите к письму сами, если хотите, чтобы отчёт дошёл до меня.",
+  "report.openedGitHub": "GitHub открыт. Пока не нажмёте отправить там, ничего не заведено.",
+  "report.sendFailed": "Не удалось отправить: ",
+  "report.stillOnDisk": "Отчёт остался на диске.",
+  "report.notWritten": "Отчёт не был записан.",
+  "report.blurb": "Halo зеркалит уведомления других программ, то, что вы слушаете, и имена файлов в лотке, поэтому отчёт несёт поимённый список фактов об этом компьютере и ничего больше. Сначала прочтите файл целиком через «Что именно отправляется?» - это один и тот же файл в обоих случаях.",
+  "report.sentOnDisk": "Отправлено. Копия осталась на диске, в %LOCALAPPDATA%\\Halo\\reports.",
+  "report.noExe": "Halo.App.exe нет рядом с этим окном.",
+  "report.noStart": "Не удалось запустить Halo.App.",
+  "ask.freeTextSub": "ответьте своими словами",
+  "ask.chat": "Обсудить это",
+  "ask.chatSub": "оставить вопрос и поговорить"
+}

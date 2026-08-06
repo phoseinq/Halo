@@ -1,0 +1,579 @@
+{
+  "_readme": "Todo o texto que o Halo mostra. Traduza apenas os VALORES; as chaves ficam como estão.",
+  "_placeholders": "{0} e {1} são preenchidos pelo Halo, por essa ordem. Mova-os para onde a frase precisar, mas não acrescente nem retire nenhum.",
+  "_missing": "Qualquer chave em falta volta ao inglês. Uma tradução parcial funciona na mesma.",
+  "reports.off": "Os relatórios estão desligados: report.endpoint em settings.json está vazio.",
+  "reports.customNotHttps": "report.endpoint em settings.json não é um endereço https:// válido.",
+  "reports.builtInNotHttps": "O endereço integrado não é um https:// válido.",
+  "notice.app.system": "Sistema",
+  "notice.app.network": "Rede",
+  "notice.app.battery": "Bateria",
+  "notice.app.claude": "Claude",
+  "notice.app.screenshot": "Captura",
+  "notice.app.clipboard": "Área de transferência",
+  "notice.screenshot.title": "Captura feita",
+  "notice.clipboard.title": "Imagem copiada",
+  "notice.load.cpu": "CPU",
+  "notice.load.memory": "memória",
+  "notice.load.title": "Uso alto de {0} — {1}%",
+  "notice.load.body": "{0} é o que mais consome.",
+  "notice.load.ramFallback": "A memória está a acabar.",
+  "notice.context.title": "Contexto a {0}%",
+  "notice.context.body": "As respostas ficam mais vagas daqui — use /compact quando puder.",
+  "notice.battery.low": "baixa",
+  "notice.battery.critical": "crítica",
+  "notice.battery.title": "Bateria {0} — {1}%",
+  "notice.battery.body": "Toque para ligar a poupança de energia.",
+  "notice.net.down.title": "Sem internet",
+  "notice.net.down.body": "Neste momento nada está a sair.",
+  "notice.net.slow.title": "Internet fraca",
+  "notice.api.down.title": "Claude está inacessível",
+  "notice.api.down.body": "A sua ligação está boa — a deles não.",
+  "settings.appearance.scale.label": "Tamanho da pílula",
+  "settings.appearance.scale.desc": "Escala geometria, texto e áreas de toque em conjunto",
+  "settings.appearance.glass.label": "Intensidade do vidro",
+  "settings.appearance.glass.desc": "Equilibra o detalhe do fundo com o contraste",
+  "settings.appearance.motion.label": "Movimento",
+  "settings.appearance.motion.desc": "Com que rapidez a pílula assenta depois de se mover",
+  "settings.appearance.fps.label": "Taxa de fotogramas",
+  "settings.appearance.fps.desc": "O que o Halo procura enquanto a pílula se move. Auto segue a taxa deste ecrã, e qualquer definição desce sozinha quando a máquina está ocupada.",
+  "settings.appearance.fpsMeasured.label": "Taxa medida",
+  "settings.appearance.fpsMeasured.desc": "O que a pílula atinge de facto — em movimento e aberta em repouso — ao lado do que este ecrã consegue mostrar",
+  "settings.general.startup.label": "Iniciar com o Windows",
+  "settings.general.startup.desc": "Abrir o Halo depois de iniciar sessão",
+  "settings.general.fullscreen.label": "Visível sobre ecrã inteiro",
+  "settings.general.fullscreen.desc": "Manter a pílula acima de jogos e vídeo",
+  "settings.general.language.label": "Idioma",
+  "settings.general.language.desc": "O idioma em que o Halo mostra os seus textos",
+  "settings.general.capture.label": "Incluir o Halo nas capturas",
+  "settings.general.capture.desc": "Mostrar a pílula em capturas e gravações",
+  "settings.general.follow.label": "Seguir a app ativa",
+  "settings.general.follow.desc": "Trazer a superfície relevante para a frente",
+  "settings.general.reset.label": "Posição da pílula",
+  "settings.general.reset.desc": "Devolver ao centro do ecrã ativo",
+  "settings.feature.media.label": "Multimédia",
+  "settings.feature.media.desc": "Sessões de reprodução e controlos clássicos do VLC",
+  "settings.media.progress.label": "Mostrar a linha temporal",
+  "settings.media.progress.desc": "Desenhar a posição real na pílula recolhida",
+  "settings.feature.downloads.label": "Transferências",
+  "settings.feature.downloads.desc": "Progresso de navegador, loja, jogos e apps",
+  "settings.feature.fileTray.label": "Tabuleiro de ficheiros",
+  "settings.feature.fileTray.desc": "A prateleira de arrastar e largar e as imagens da área de transferência",
+  "settings.feature.bluetooth.label": "Bluetooth",
+  "settings.feature.bluetooth.desc": "Ligação e bateria dos dispositivos",
+  "settings.feature.notifications.label": "Espelhar notificações",
+  "settings.feature.notifications.desc": "Mostrar os avisos do Windows na pílula",
+  "settings.notifications.silence.label": "Silenciar o aviso nativo",
+  "settings.notifications.silence.desc": "Impedir o Windows de desenhar o seu próprio aviso para as apps que o Halo espelha. Totalmente reversível.",
+  "settings.alert.battery.label": "Bateria",
+  "settings.alert.battery.desc": "Com um toque para ligar a poupança de energia. 10% é sempre crítico.",
+  "settings.alert.batteryAt.label": "Avisar aos",
+  "settings.alert.batteryAt.desc": "Onde dispara o primeiro aviso de bateria",
+  "settings.alert.cpu.label": "CPU alta",
+  "settings.alert.cpu.desc": "Uma vez por nível, nomeando o processo que mais consome",
+  "settings.alert.cpuAt.label": "Começar a avisar aos",
+  "settings.alert.cpuAt.desc": "Os níveis acima continuam a escalar",
+  "settings.alert.memory.label": "Memória alta",
+  "settings.alert.memory.desc": "Uma vez por nível, nomeando o processo que mais consome",
+  "settings.alert.memoryAt.label": "Começar a avisar aos",
+  "settings.alert.memoryAt.desc": "Os níveis acima continuam a escalar",
+  "settings.alert.internet.label": "Internet",
+  "settings.alert.internet.desc": "Lenta, offline, e a API inacessível",
+  "settings.alert.clipboard.label": "Capturas e cópias",
+  "settings.alert.clipboard.desc": "Um aviso quando algo chega à área de transferência",
+  "settings.alert.language.label": "Esquema do teclado",
+  "settings.alert.language.desc": "Um relance de um segundo quando muda",
+  "settings.alert.hourly.label": "Toque de hora",
+  "settings.alert.hourly.desc": "À hora certa, com a data e o céu",
+  "settings.feature.claudeCode.label": "Claude Code",
+  "settings.feature.claudeCode.desc": "Sessões ao vivo, limites e o botão de cancelar",
+  "settings.feature.codex.label": "Codex",
+  "settings.feature.codex.desc": "Sessões do Codex Desktop e CLI",
+  "settings.feature.genericAgents.label": "Outros agentes",
+  "settings.feature.genericAgents.desc": "Qualquer ferramenta que escreva em ~/.halo/agents",
+  "settings.hooks.claude.label": "Hooks do Claude Code",
+  "settings.hooks.claude.desc": "Os hooks do Halo em ~/.claude/settings.json, que são o que faz as sessões aparecerem",
+  "settings.hooks.codex.label": "Hooks do Codex",
+  "settings.hooks.codex.desc": "Os hooks do Halo em ~/.codex/hooks.json, que são o que faz as sessões aparecerem",
+  "settings.claude.ask.label": "Responder a partir da pílula",
+  "settings.claude.ask.desc": "Espelhar a pergunta do Claude e responder com um clique",
+  "settings.alert.context.label": "Contexto quase cheio",
+  "settings.alert.context.desc": "Uma vez por sessão",
+  "settings.alert.contextAt.label": "Avisar do contexto aos",
+  "settings.alert.contextAt.desc": "Também onde o anel do agente fica âmbar",
+  "settings.alert.limit.label": "Limites de uso",
+  "settings.alert.limit.desc": "Uma vez por janela",
+  "settings.alert.limitAt.label": "Avisar do uso aos",
+  "settings.alert.limitAt.desc": "Parte de uma janela de cinco horas ou semanal",
+  "settings.api.enabled.label": "API local",
+  "settings.api.enabled.desc": "Escuta em 127.0.0.1 para programas locais. Nada de fora desta máquina chega lá.",
+  "settings.api.port.label": "Porta",
+  "settings.api.port.desc": "Mude apenas se algo já estiver a usar esta",
+  "settings.api.token.label": "Token",
+  "settings.api.token.desc": "Gerado quando liga a API pela primeira vez. Envie-o no cabeçalho Authorization: Bearer.",
+  "settings.api.notify.label": "Publicar uma notificação",
+  "settings.api.notify.desc": "POST /notify — título, corpo e um código ou ficheiro opcional",
+  "settings.api.ask.label": "Fazer uma pergunta",
+  "settings.api.ask.desc": "POST /ask com opções, depois consulte /ask/{nonce}",
+  "settings.api.state.label": "Ler o que está no ecrã",
+  "settings.api.state.desc": "GET /state, /media, /agents, /tray",
+  "settings.api.control.label": "Carregar em botões",
+  "settings.api.control.desc": "POST /media, /pill e /tray: reproduzir, saltar, abrir, fixar, adicionar ficheiros",
+  "settings.api.settings.label": "Ler e alterar definições",
+  "settings.api.settings.desc": "GET e PATCH /settings. É cada interruptor desta janela.",
+  "settings.access.notifications.label": "Acesso às notificações",
+  "settings.access.notifications.desc": "Necessário para espelhar os avisos do Windows",
+  "settings.reset.everything.label": "Repor tudo",
+  "settings.reset.everything.desc": "Devolver o aviso de cada app, desligar ambos os agentes e apagar o estado guardado do Halo",
+  "settings.about.version.label": "Versão",
+  "settings.about.version.desc": "",
+  "settings.about.state.label": "Pasta de estado",
+  "settings.about.state.desc": "Ficheiros soltos que o Halo guarda: posição, fixação, tabuleiro, notificações vistas",
+  "settings.report.problem.label": "Reportar um problema",
+  "settings.report.problem.desc": "Escreva, leia exatamente o que contém e carregue em enviar. Nada sai sem o botão.",
+  "settings.report.autoCrash.label": "Enviar falhas sem perguntar",
+  "settings.report.autoCrash.desc": "Apenas o relatório da falha, apenas quando o Halo falhou mesmo, e apenas os campos que a janela lhe mostra",
+  "settings.about.repo.label": "Repositório",
+  "settings.about.repo.desc": "github.com/phoseinq/Halo",
+  "page.Home.label": "Início",
+  "page.Home.desc": "Um lugar mais calmo para começar",
+  "page.General.label": "Geral",
+  "page.General.desc": "Comportamento e aspeto da superfície do Halo",
+  "page.Features.label": "Funcionalidades",
+  "page.Features.desc": "O que a pílula pode mostrar, e quando",
+  "page.Agents.label": "Agentes",
+  "page.Agents.desc": "Claude Code, Codex e tudo o mais que reporte",
+  "page.Api.label": "API",
+  "page.Api.desc": "Deixe outros programas controlarem a pílula",
+  "page.Access.label": "Acessos",
+  "page.Access.desc": "O que o Halo precisa do Windows para funcionar",
+  "page.DocsAbout.label": "Docs e sobre",
+  "page.DocsAbout.desc": "Onde está tudo escrito",
+  "section.appearance": "APARÊNCIA",
+  "section.startup": "ARRANQUE",
+  "section.behaviour": "COMPORTAMENTO",
+  "section.surfaces": "SUPERFÍCIES",
+  "section.notifications": "NOTIFICAÇÕES",
+  "section.alertsaboutthismachine": "ALERTAS DESTA MÁQUINA",
+  "section.sessions": "SESSÕES",
+  "section.connection": "LIGAÇÃO",
+  "section.questions": "PERGUNTAS",
+  "section.alerts": "ALERTAS",
+  "section.endpoint": "PONTO DE ACESSO",
+  "section.whatcallersmaydo": "O QUE PODEM FAZER",
+  "section.permissions": "PERMISSÕES",
+  "section.removal": "REMOÇÃO",
+  "section.halo": "HALO",
+  "section.problems": "PROBLEMAS",
+  "section.project": "PROJETO",
+  "nav.settings": "DEFINIÇÕES",
+  "nav.system": "SISTEMA",
+  "nav.reference": "REFERÊNCIA",
+  "settings.access.startup.label": "Entrada de arranque",
+  "settings.access.startup.packaged.desc": "O Windows decide se o Halo abre ao iniciar sessão",
+  "settings.access.startup.task.desc": "A tarefa agendada que abre o Halo ao iniciar sessão",
+  "settings.access.startup.action.packaged": "Abrir definições de arranque",
+  "settings.access.startup.action.task": "Abrir o Agendador de Tarefas",
+  "settings.api.docs.label": "Como chamar",
+  "settings.api.docs.desc": "Endpoints, o token e o que cada interruptor abaixo permite — leia antes de ligar qualquer um",
+  "agent.row.fiveHour": "5 horas",
+  "agent.row.weekly": "semanal",
+  "agent.row.context": "contexto",
+  "agent.left": "faltam {0}",
+  "agent.resets": "reinicia {0}",
+  "agent.notFetched": "sem dados",
+  "agent.noSession": "sem sessão",
+  "agent.noActiveSession": "nenhuma sessão ativa",
+  "agent.contextOf": "de {0}  ·  {1}% usado",
+  "agent.contextShort": "contexto  ·  {0}K de {1}K",
+  "agent.refresh": "atualizar",
+  "agent.neverFetched": "nunca obtido",
+  "agent.updated": "atualizado {0}",
+  "agent.neverRead": "nunca lido",
+  "agent.read": "lido {0}",
+  "time.justNow": "agora mesmo",
+  "time.minsAgo": "há {0} min",
+  "time.hoursAgo": "há {0} h",
+  "time.daysAgo": "há {0} d",
+  "time.now": "agora",
+  "hooks.connected.title": "{0} ligado",
+  "hooks.connected.body": "Hooks adicionados a {0}. O seu ficheiro anterior foi guardado como .halo-bak.",
+  "hooks.failed.title": "Não foi possível ligar {0}",
+  "hooks.failed.write": "O Halo não conseguiu escrever as definições dos hooks",
+  "hooks.failed.run": "O Halo não conseguiu executar o seu auxiliar de hooks",
+  "hooks.failed.body": "{0}. Nada foi alterado.",
+  "hooks.failed.bodyWhy": "{0}: {1}. Nada foi alterado.",
+  "limit.title": "Uso de {0} {1}%",
+  "limit.body": "Já usou {0}% do seu limite {1}.",
+  "limit.window.weekly": "semanal",
+  "limit.window.5-hour": "de cinco horas",
+  "limit.window.primary": "principal",
+  "limit.window.secondary": "secundário",
+  "state.checking": "A verificar...",
+  "state.connected": "Ligado",
+  "state.notConnected": "Não ligado",
+  "state.disconnected": "Desligado",
+  "state.on": "Ativo",
+  "state.off": "Inativo",
+  "state.missing": "Ausente",
+  "state.unavailable": "Indisponível",
+  "state.turnedOffInWindows": "Desativado no Windows",
+  "state.managedByWindows": "Gerido pelo Windows",
+  "state.notGeneratedYet": "Ainda não gerado",
+  "state.notMeasuredYet": "Ainda não medido",
+  "state.reversesEverything": "Reverte tudo",
+  "action.open": "Abrir",
+  "action.openFolder": "Abrir pasta",
+  "action.openSettings": "Abrir definições",
+  "action.copy": "Copiar",
+  "action.reset": "Repor",
+  "action.resetPosition": "Repor posição",
+  "action.connect": "Ligar",
+  "action.disconnect": "Desligar",
+  "action.retry": "Tentar de novo",
+  "pill.copied": "Copiado",
+  "tray.title": "Tabuleiro de ficheiros",
+  "tray.releaseToAdd": "Largue para adicionar",
+  "tray.remove": "Remover {0}",
+  "ask.typeSomething": "Escreva algo",
+  "agent.sampling": "a amostrar…",
+  "home.tagline": "As suas apps, atividade e agentes — quando importam.",
+  "home.explore": "EXPLORAR",
+  "home.state": "ESTADO",
+  "home.card.general": "Comportamento e aspeto",
+  "home.card.features": "Superfícies de apps",
+  "home.card.agents": "Sessões de código",
+  "home.card.access": "Controlos do Windows",
+  "home.waiting": "As alterações esperam por Aplicar",
+  "home.waitingBody": "Nada disto chega ao Halo até carregar em Aplicar no fim da página. Repor devolve tudo ao que estava.",
+  "home.restore": "Restaurar predefinições",
+  "chrome.title": "Definições do Halo",
+  "chrome.apply": "Aplicar",
+  "chrome.reset": "Repor",
+  "chrome.unapplied": "Tem alterações por aplicar",
+  "chrome.keepEditing": "Continuar a editar",
+  "chrome.discard": "Descartar e fechar",
+  "report.write": "Escrever um relatório",
+  "draft.one": "1 alteração pendente",
+  "draft.many": "{0} alterações pendentes",
+  "guard.one": "Uma alteração ainda não foi aplicada. O Halo continua com as definições anteriores.",
+  "guard.many": "{0} alterações ainda não foram aplicadas. O Halo continua com as definições anteriores.",
+  "home.card.api": "Controlar o Halo por código",
+  "mood.idle": [
+    "vamos lá :)",
+    "às ordens",
+    "pronto",
+    "mesa limpa",
+    "à espera",
+    "sem nada"
+  ],
+  "mood.offline": [
+    "offline :(",
+    "sem sinal",
+    "desligado",
+    "fora da rede"
+  ],
+  "mood.apiDown": [
+    "api em baixo :(",
+    "sem resposta",
+    "silêncio lá em cima"
+  ],
+  "mood.retrying": [
+    "a tentar de novo",
+    "mais uma vez",
+    "continuo a bater",
+    "não desisto"
+  ],
+  "mood.netError": [
+    "erro de rede :(",
+    "caiu",
+    "a linha foi-se"
+  ],
+  "mood.apiError": [
+    "erro da api :(",
+    "disse que não",
+    "má resposta"
+  ],
+  "mood.compacted": [
+    "há espaço :)",
+    "mais leve",
+    "arrumado"
+  ],
+  "mood.outOfCredit": [
+    "sem crédito :(",
+    "acabou"
+  ],
+  "mood.writing": [
+    "a escrever…",
+    "a teclar…"
+  ],
+  "mood.reading": [
+    "a ler…",
+    "a rever…"
+  ],
+  "mood.running": [
+    "a executar…",
+    "a correr…"
+  ],
+  "mood.digging": [
+    "a escavar…",
+    "a procurar fundo…"
+  ],
+  "mood.fetching": [
+    "a buscar…",
+    "a descarregar…"
+  ],
+  "mood.searching": [
+    "a pesquisar…",
+    "à procura :P"
+  ],
+  "mood.delegating": [
+    "a delegar…",
+    "passei a outro…"
+  ],
+  "mood.planning": [
+    "a planear…",
+    "a pensar…"
+  ],
+  "mood.skill": [
+    "a usar uma skill…"
+  ],
+  "mood.asking": [
+    "que dizes?",
+    "uma pergunta",
+    "é contigo ;)"
+  ],
+  "mood.unknown": [
+    "ocupado…",
+    "em algo…"
+  ],
+  "mood.compacting": [
+    "a compactar…",
+    "a arrumar…"
+  ],
+  "mood.patching": [
+    "a remendar…",
+    "a corrigir…"
+  ],
+  "mood.plotting": [
+    "a desenhar…"
+  ],
+  "mood.watching": [
+    "a observar…"
+  ],
+  "mood.reviewing": [
+    "a rever…"
+  ],
+  "mood.publishing": [
+    "a publicar…"
+  ],
+  "mood.consulting": [
+    "a consultar…"
+  ],
+  "mood.peeking": [
+    "a espreitar…"
+  ],
+  "mood.writing@long": [
+    "continua nisto…"
+  ],
+  "mood.reading@long": [
+    "continua nisto…"
+  ],
+  "mood.running@long": [
+    "continua nisto…"
+  ],
+  "mood.digging@long": [
+    "continua nisto…"
+  ],
+  "mood.fetching@long": [
+    "continua nisto…"
+  ],
+  "mood.searching@long": [
+    "continua nisto…"
+  ],
+  "mood.delegating@long": [
+    "continua nisto…"
+  ],
+  "mood.planning@long": [
+    "continua nisto…"
+  ],
+  "mood.skill@long": [
+    "continua nisto…"
+  ],
+  "mood.unknown@long": [
+    "continua nisto…"
+  ],
+  "mood.compacting@long": [
+    "continua nisto…"
+  ],
+  "mood.patching@long": [
+    "continua nisto…"
+  ],
+  "mood.plotting@long": [
+    "continua nisto…"
+  ],
+  "mood.writing@ages": [
+    "isto vai longo…"
+  ],
+  "mood.reading@ages": [
+    "isto vai longo…"
+  ],
+  "mood.running@ages": [
+    "isto vai longo…"
+  ],
+  "mood.digging@ages": [
+    "isto vai longo…"
+  ],
+  "mood.fetching@ages": [
+    "isto vai longo…"
+  ],
+  "mood.searching@ages": [
+    "isto vai longo…"
+  ],
+  "mood.delegating@ages": [
+    "isto vai longo…"
+  ],
+  "mood.planning@ages": [
+    "isto vai longo…"
+  ],
+  "mood.skill@ages": [
+    "isto vai longo…"
+  ],
+  "mood.unknown@ages": [
+    "isto vai longo…"
+  ],
+  "mood.compacting@ages": [
+    "isto vai longo…"
+  ],
+  "mood.patching@ages": [
+    "isto vai longo…"
+  ],
+  "mood.plotting@ages": [
+    "isto vai longo…"
+  ],
+  "mood.idle@tight": [
+    "livre"
+  ],
+  "mood.unknown@tight": [
+    "ocupado"
+  ],
+  "mood.running@tight": [
+    "executa…"
+  ],
+  "mood.writing@tight": [
+    "escreve…"
+  ],
+  "mood.reading@tight": [
+    "lê…"
+  ],
+  "mood.digging@tight": [
+    "procura…"
+  ],
+  "mood.idle@thin": [
+    "livre"
+  ],
+  "mood.unknown@thin": [
+    "ocupado"
+  ],
+  "mood.running@thin": [
+    "executa…"
+  ],
+  "mood.writing@thin": [
+    "escreve…"
+  ],
+  "mood.unknown@again": [
+    "outra vez…"
+  ],
+  "mood.running@again": [
+    "outra vez…"
+  ],
+  "mood.digging@again": [
+    "outra vez…"
+  ],
+  "mood.writing@again": [
+    "outra vez…"
+  ],
+  "mood.patching@again": [
+    "outra vez…"
+  ],
+  "mood.unknown@heavy": [
+    "carga pesada…"
+  ],
+  "mood.running@heavy": [
+    "carga pesada…"
+  ],
+  "mood.reading@heavy": [
+    "carga pesada…"
+  ],
+  "mood.writing@heavy": [
+    "carga pesada…"
+  ],
+  "mood.idle@late": [
+    "boa noite :)"
+  ],
+  "mood.unknown@late": [
+    "ainda acordado…"
+  ],
+  "mood.running@late": [
+    "pela noite…"
+  ],
+  "mood.writing@late": [
+    "pela noite…"
+  ],
+  "mood.idle@early": [
+    "bom dia :)"
+  ],
+  "mood.unknown@early": [
+    "começou cedo…"
+  ],
+  "mood.running@early": [
+    "madrugada…"
+  ],
+  "opt.light": "Leve",
+  "opt.balanced": "Equilibrado",
+  "opt.strong": "Forte",
+  "opt.reduced": "Reduzido",
+  "opt.soft": "Suave",
+  "opt.standard": "Padrão",
+  "tray.openSettings": "Abrir definições",
+  "tray.restart": "Reiniciar o Halo",
+  "tray.quit": "Sair do Halo",
+  "opt.auto": "Auto",
+  "net.label": "rede",
+  "net.api": "api",
+  "net.loss": "perda",
+  "net.ms": "ms",
+  "net.dropped": "caiu",
+  "net.locating": "a localizar…",
+  "net.checkingExit": "a verificar saída…",
+  "net.testingDns": "a testar dns…",
+  "net.dnsOk": "dns ok",
+  "net.dnsLeak": "fuga de dns",
+  "net.residential": "residencial",
+  "net.datacenter": "centro de dados",
+  "net.vpnExit": "saída vpn",
+  "report.title": "Reportar um problema",
+  "report.create": "Criar relatório",
+  "report.intro": "Este é o relatório, tal como está no disco. Nada foi enviado.",
+  "report.whatGetsSent": "O que é enviado?",
+  "report.hideDetails": "Ocultar detalhes",
+  "report.send": "Enviar relatório",
+  "report.sending": "A enviar...",
+  "report.copy": "Copiar",
+  "report.saveAs": "Guardar como...",
+  "report.openNotepad": "Abrir no Bloco de Notas",
+  "report.openIssue": "Abrir um issue no GitHub",
+  "report.copied": "Copiado. Nunca chegou perto da rede.",
+  "report.saved": "Guardado. Anexe a um email se quiser que me chegue.",
+  "report.openedGitHub": "GitHub aberto. Nada fica registado até carregar em submeter lá.",
+  "report.sendFailed": "Falha ao enviar: ",
+  "report.stillOnDisk": "O relatório continua no disco.",
+  "report.notWritten": "O relatório não foi escrito.",
+  "report.blurb": "O Halo espelha as notificações de outros programas, o que está a reproduzir e os nomes dos ficheiros do seu tabuleiro, por isso um relatório leva uma lista identificada de factos sobre esta máquina e mais nada. Leia o ficheiro inteiro com «O que é enviado?» - é o mesmo ficheiro em qualquer caso.",
+  "report.sentOnDisk": "Enviado. Também está no disco, em %LOCALAPPDATA%\\Halo\\reports.",
+  "report.noExe": "O Halo.App.exe não está junto a esta janela.",
+  "report.noStart": "Não foi possível iniciar o Halo.App.",
+  "ask.freeTextSub": "responda com as suas palavras",
+  "ask.chat": "Falar sobre isto",
+  "ask.chatSub": "deixe a pergunta e converse"
+}

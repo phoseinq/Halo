@@ -229,13 +229,19 @@ internal sealed partial class NotchController
     private float _greetHeld, _greetWaited;
 
     private readonly StripOrder _stripOrder = StripOrder.Load(StripOrderPath);
+
+    private readonly StripOrder _sessionOrder = StripOrder.Load(SessionOrderPath);
     private List<string> _stripKinds = [];
     private int _dragRow = -1;
     private float _dragFromY;
     private float _dragHeld;
     private float _carryDY;
+    private float _carryDX, _carryWantX;
+    private int _dragSess = -1;
+    private int _dragFromX;
     private float _carryWant;
-    private float _drawnCarryDY;
+    private float _drawnCarryDY, _drawnCarryDX;
+    private float[] _sessShift = [];
     private int _drawnDragRow = -1;
     private float[] _rowShift = [];
     private readonly Halo.Interop.KeyGrab _keys = new();
@@ -314,6 +320,8 @@ internal sealed partial class NotchController
         _settings = new Halo.Settings.SettingsStore();
         Halo.Settings.SettingsStore.Shared = _settings;
         _appliedSettings = _settings.Version;
+
+        ApplyLanguage(_settings.Current);
         _api = new Halo.Api.HaloApi(ApiConfig, this);
         _api.Reconcile();
         _startupApplied = _settings.Current.Bool(Halo.Settings.SettingsKeys.StartWithWindows, true);
@@ -465,8 +473,9 @@ internal sealed partial class NotchController
     internal const int MaxFps = 240;
 
     internal static int Reach(int ceiling) => ceiling > 0 ? ceiling : MaxFps;
+
     internal static int CadenceFps(bool morphing, int tier, int ceiling = 0)
-        => morphing ? Reach(ceiling) : tier;
+        => morphing || tier == MaxFps ? Reach(ceiling) : tier;
 
     internal static double IntervalMs(int fps) => 1000.0 / Math.Max(1, fps);
 
@@ -475,7 +484,7 @@ internal sealed partial class NotchController
     internal static int Tier(float busy, bool watching, int current)
     {
 
-        if (watching) return 60;
+        if (watching) return busy > 0.90f ? 60 : MaxFps;
         if (busy > 0.90f) return 30;
         if (busy > 0.55f) return 60;
         if (busy < 0.45f) return MaxFps;
@@ -499,6 +508,7 @@ internal sealed partial class NotchController
     private int _displayHz;
     private long _displayAt;
     private MorphRate _morphRate;
+    private SteadyRate _steadyRate;
 
     private void PollDisplay()
     {
@@ -512,9 +522,10 @@ internal sealed partial class NotchController
             _displayHz = info.Hz;
             ApplyCadence();
         }
-        RateReport.Write(_morphRate.Measured, _displayHz);
+        RateReport.Write(_morphRate.Measured, _displayHz, _steadyRate.Measured);
     }
 
+    private int _drawnSs = 2;
     private bool _timerRaised, _timerCapped;
     private long _timerRaisedAt;
     internal const long TimerRaiseCapMs = 600_000;
@@ -569,19 +580,21 @@ internal sealed partial class NotchController
     }
 
     private void QueueRamNotice(int pct)
-        => QueueLoadNotice("memory", pct, TopRamProcess, "Memory is running low.");
+        => QueueLoadNotice(cpu: false, pct, TopRamProcess, Halo.Localization.Strings.Get("notice.load.ramFallback"));
 
-    private void QueueLoadNotice(string resource, int pct, Func<string?> topProcess, string? fallbackBody)
+    private void QueueLoadNotice(bool cpu, int pct, Func<string?> topProcess, string? fallbackBody)
     {
-        bool cpu = resource == "CPU";
         System.Threading.ThreadPool.QueueUserWorkItem(_ =>
         {
             string? top = topProcess();
-            string? body = top != null ? $"{top} is using the most." : fallbackBody;
+            string? body = top != null ? Halo.Localization.Strings.Format("notice.load.body", top) : fallbackBody;
             if (body == null) return;
             _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
             {
-                App = "System", Title = $"High {resource} usage — {pct}%",
+                App = Halo.Localization.Strings.Get("notice.app.system"),
+                Title = Halo.Localization.Strings.Format("notice.load.title",
+                    Halo.Localization.Strings.Get(cpu ? "notice.load.cpu" : "notice.load.memory"), pct),
+
                 Body = body, Kind = cpu ? "cpu" : "memory", Duration = 7,
                 Icon = cpu ? Badges.Cpu() : Badges.Memory(),
             });
@@ -606,7 +619,7 @@ internal sealed partial class NotchController
     }
 
     private void QueueCpuNotice(int sysPct)
-        => QueueLoadNotice("CPU", sysPct, TopCpuProcess, null);
+        => QueueLoadNotice(cpu: true, sysPct, TopCpuProcess, null);
 
     private static string? TopCpuProcess()
     {
@@ -664,12 +677,22 @@ internal sealed partial class NotchController
             current.Bool("api.settings", false));
     }
 
+    private static void ApplyLanguage(Halo.Settings.SettingsFile current)
+    {
+        string forced = Environment.GetEnvironmentVariable("HALO_LANG") ?? "";
+        Halo.Localization.Strings.Use(forced.Length > 0
+            ? Halo.Localization.Strings.Name(forced)
+            : current.Text("general.language", Halo.Localization.Strings.SystemLabel));
+    }
+
     private void SyncSettings()
     {
         int version = _settings.Version;
         if (version == _appliedSettings) return;
         _appliedSettings = version;
         var current = _settings.Current;
+
+        ApplyLanguage(current);
 
         ApplyCadence();
 
@@ -768,6 +791,9 @@ internal sealed partial class NotchController
         _ => 1f,
     };
 
+        internal static int TintFor(int baseAlpha, float scale)
+        => Math.Clamp((int)(baseAlpha * scale), 0, 255);
+
     private float GlassScale => _settings.Current.Text(Halo.Settings.SettingsKeys.Glass, "Balanced") switch
     {
         "Light" => 0.66f,
@@ -806,6 +832,7 @@ internal sealed partial class NotchController
         if (Alert("internet")) CheckInternet();
         if (Alert("context")) CheckContext();
         CheckCompact();
+        CheckApiRetry();
         if (Alert("hourly", on: false)) CheckHourly();
         Almanac.Poke();
     }
@@ -830,8 +857,9 @@ internal sealed partial class NotchController
             if (!_ctxWarned.Add(id)) continue;
             _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
             {
-                App = "Claude", Title = $"Context {(int)(frac * 100)}% full",
-                Body = "Answers get vaguer from here — /compact when you can.",
+                App = Halo.Localization.Strings.Get("notice.app.claude"),
+                Title = Halo.Localization.Strings.Format("notice.context.title", (int)(frac * 100)),
+                Body = Halo.Localization.Strings.Get("notice.context.body"),
                 Kind = "ctx-" + id, Duration = 8, Icon = Badges.Context(),
             });
         }
@@ -853,6 +881,21 @@ internal sealed partial class NotchController
             }
         if (pid > 0) ClaudeCode.CompactProgress.Poke(pid, key);
         else ClaudeCode.CompactProgress.Done();
+    }
+
+    private const int QuietBeforeRetryCheck = 12;
+
+    private void CheckApiRetry()
+    {
+        int pid = 0;
+        var now = DateTimeOffset.UtcNow;
+        for (int s = 0; s < StatusStore.MaxSessions && pid == 0; s++)
+            if (_claudeStore.SessionLive(s) is { State: "working", Pid: > 0 } st
+                && string.IsNullOrEmpty(st.CurrentTool)
+                && Widgets.ClaudeCodeWidget.WatchForRetry(st, now, ClaudeCode.ApiRetry.LiveFor(st.Pid)))
+                pid = st.Pid;
+        if (pid > 0) ClaudeCode.ApiRetry.Poke(pid);
+        else ClaudeCode.ApiRetry.Done();
     }
 
     private int _chimedHour = DateTime.Now.Hour;
@@ -887,11 +930,11 @@ internal sealed partial class NotchController
             {
 
                 case "cpu": case "sys": case "system":
-                    QueueLoadNotice("CPU", int.TryParse(arg, out var cp) ? cp : 92,
+                    QueueLoadNotice(cpu: true, int.TryParse(arg, out var cp) ? cp : 92,
                         () => proc.Length > 0 ? proc : TopCpuProcess() ?? "Chrome", null);
                     break;
                 case "ram": case "mem": case "memory":
-                    QueueLoadNotice("memory", int.TryParse(arg, out var rp) ? rp : 88,
+                    QueueLoadNotice(cpu: false, int.TryParse(arg, out var rp) ? rp : 88,
                         () => proc.Length > 0 ? proc : TopRamProcess() ?? "Chrome", null);
                     break;
 
@@ -948,8 +991,10 @@ internal sealed partial class NotchController
         bool dead = tier >= 1;
         _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
         {
-            App = "Battery", Title = $"Battery {(dead ? "critical" : "low")} — {pct}%",
-            Body = "Tap to turn on Power Saver.",
+            App = Halo.Localization.Strings.Get("notice.app.battery"),
+            Title = Halo.Localization.Strings.Format("notice.battery.title",
+                Halo.Localization.Strings.Get(dead ? "notice.battery.critical" : "notice.battery.low"), pct),
+            Body = Halo.Localization.Strings.Get("notice.battery.body"),
             Kind = "battery", Duration = 8, OnActivate = EnablePowerSaver,
             Icon = dead ? Badges.BatteryDead() : Badges.BatteryLow(),
         });
@@ -990,7 +1035,10 @@ internal sealed partial class NotchController
         int p = (int)(util * 100);
         _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
         {
-            App = app, Title = $"{app} usage {p}%", Body = $"You've used {p}% of your {window} limit.",
+
+            App = app,
+            Title = Halo.Localization.Strings.Format("limit.title", app, p),
+            Body = Halo.Localization.Strings.Format("limit.body", p, Halo.Localization.Strings.Get("limit.window." + window)),
             Kind = $"limit-{app}-{window}", Duration = 8,
             Icon = LongWindow(window) ? Badges.LimitLong() : Badges.Limit(),
         });
@@ -1009,17 +1057,23 @@ internal sealed partial class NotchController
         {
             "offline" => new Halo.Notifications.NotifItem
             {
-                App = "Network", Title = "No internet", Body = "Nothing is getting out right now.",
+                App = Halo.Localization.Strings.Get("notice.app.network"),
+                Title = Halo.Localization.Strings.Get("notice.net.down.title"),
+                Body = Halo.Localization.Strings.Get("notice.net.down.body"),
                 Kind = "net", Duration = 7, Icon = Badges.NetDown(),
             },
             "api" => new Halo.Notifications.NotifItem
             {
-                App = "Claude", Title = "Claude is unreachable", Body = "Your connection is fine — theirs isn't.",
+                App = Halo.Localization.Strings.Get("notice.app.claude"),
+                Title = Halo.Localization.Strings.Get("notice.api.down.title"),
+                Body = Halo.Localization.Strings.Get("notice.api.down.body"),
                 Kind = "net", Duration = 7, Icon = Badges.ApiDown(),
             },
             _ => new Halo.Notifications.NotifItem
             {
-                App = "Network", Title = "Bad internet", Kind = "net", Duration = 6, Icon = Badges.NetSlow(),
+                App = Halo.Localization.Strings.Get("notice.app.network"),
+                Title = Halo.Localization.Strings.Get("notice.net.slow.title"),
+                Kind = "net", Duration = 6, Icon = Badges.NetSlow(),
             },
         };
         _notifSrc.EnqueueLocal(item);
@@ -1072,12 +1126,8 @@ internal sealed partial class NotchController
         EaseRings();
         CheckAlerts();
 
-        Halo.ClaudeCode.HookConnect.Tick((app, title, body) => _notifSrc.EnqueueLocal(
-            new Halo.Notifications.NotifItem
-            {
-                App = app, Title = title, Body = body,
-                Kind = "hooks", Duration = 8,
-            }));
+        Halo.ClaudeCode.HookConnect.Tick((app, title, body, ok) =>
+            _notifSrc.EnqueueLocal(HookBanner((app, title, body), ok)));
         var notifStart = _notif;
         var fg = Win32.GetForegroundWindow();
         DetectAgentCancel(fg);
@@ -1454,19 +1504,25 @@ internal sealed partial class NotchController
             || _askT != prevAskT || _askHover != prevAskHover || _askTyped != _drawnTyped
             || _greetT != prevGreetT || _greet != prevGreet
 
-            || _carryDY != _drawnCarryDY || _dragRow != _drawnDragRow
+            || _carryDY != _drawnCarryDY || _dragRow != _drawnDragRow || _carryDX != _drawnCarryDX
 
             || _dragHeld >= DragHold;
 
         bool morphing = next != _progress || _notifT != prevNotifT || _askT != prevAskT || _shrink != prevShrink
             || sprint;
 
+        int ss = morphing ? 1 : 2;
+        LayeredNotch.Supersample = ss;
+        if (ss != _drawnSs) changed = true;
+
         bool watched = hovered || notice
                        || _notif != null || _ask != null || _greet != GreetingKind.None;
         RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)));
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 
-        if (_morphRate.Step(morphing, _dt)) RateReport.Write(_morphRate.Measured, _displayHz);
+        bool steady = !morphing && watched;
+        if (_morphRate.Step(morphing, _dt) | _steadyRate.Step(steady, _dt))
+            RateReport.Write(_morphRate.Measured, _displayHz, _steadyRate.Measured);
 
         if (Halo.Reports.ShapeReport.Due)
             Halo.Reports.ShapeReport.Write(PrimaryWidgetName(), LiveWidgetNames(),
@@ -1476,8 +1532,10 @@ internal sealed partial class NotchController
 
         _drawnTyped = _askTyped;
         _drawnCarryDY = _carryDY;
+        _drawnCarryDX = _carryDX;
         _drawnDragRow = _dragRow;
         if (changed) Apply(_progress);
+        _drawnSs = ss;
     }
 
     private bool InChip(Win32.POINT p, RectangleF r)
@@ -1548,7 +1606,22 @@ internal sealed partial class NotchController
 
         _stripKinds = _stripOrder.Apply(order);
 
-        return _stripKinds.ConvertAll(k => byKind[k].OrderByDescending(i => _widgets[i].ActivityRank).ToArray());
+        return _stripKinds.ConvertAll(k => OrderSessions(byKind[k]));
+    }
+
+    private int[] OrderSessions(List<int> members)
+    {
+        var byActivity = members.OrderByDescending(i => _widgets[i].ActivityRank).ToList();
+        var keys = byActivity.ConvertAll(i => _widgets[i].SessionKey);
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (keys.Exists(string.IsNullOrEmpty) || keys.Exists(k => !seen.Add(k)))
+            return [.. byActivity];
+
+        var ranked = _sessionOrder.Apply(keys);
+        var result = new List<int>(byActivity.Count);
+        foreach (var key in ranked) result.Add(byActivity[keys.IndexOf(key)]);
+        return [.. result];
     }
 
     private static string KindOf(IWidget w) => w switch
@@ -1667,7 +1740,16 @@ internal sealed partial class NotchController
             if (!live || !InMenu(p)) return false;
             _dragRow = Math.Clamp((p.Y - _ct) / D, 0, Math.Max(0, Groups().Count - 1));
             _dragFromY = p.Y;
+            _dragFromX = p.X;
             _dragHeld = 0f;
+
+            int mx = _cl + Sc(CollapsedW + LayeredNotch.CircleGap + LayeredNotch.PrivacyPad);
+            int rel = (p.X - mx) / D;
+            var rowsNow = Groups();
+            _dragSess = rel >= 1 && _row == _dragRow && _rowOpen > 0f
+                        && _dragRow < rowsNow.Count && rowsNow[_dragRow].Length >= 2
+                ? Math.Clamp(rel - 1, 0, rowsNow[_dragRow].Length - 1)
+                : -1;
             return true;
         }
         if (_dragRow < 0) return false;
@@ -1677,6 +1759,31 @@ internal sealed partial class NotchController
         {
             _dragHeld += _dt;
             if (_dragHeld < DragHold) { _carryDY = 0f; return true; }
+
+            if (_dragSess >= 0)
+            {
+                _carryWantX = (p.X - _dragFromX) / S;
+                _carryDX = Lerp(_carryDX, _carryWantX, Math.Clamp(_dt / 0.045f, 0f, 1f));
+                _carryDY = 0f;
+
+                var rowsHeld = Groups();
+                int hsteps = (int)((p.X - _dragFromX) / D);
+                if (hsteps != 0 && _dragRow < rowsHeld.Count && _dragSess < rowsHeld[_dragRow].Length)
+                {
+                    string skey = _widgets[rowsHeld[_dragRow][_dragSess]].SessionKey;
+                    var present = new List<string>();
+                    foreach (var i in rowsHeld[_dragRow]) present.Add(_widgets[i].SessionKey);
+                    if (skey.Length > 0 && _sessionOrder.Move(present, skey, hsteps))
+                    {
+                        _sessionOrder.Save(SessionOrderPath);
+                        _dragSess = Math.Clamp(_dragSess + hsteps, 0, rowsHeld[_dragRow].Length - 1);
+                        _dragFromX += hsteps * D;
+                        _carryWantX = (p.X - _dragFromX) / S;
+                        _carryDX -= hsteps * LayeredNotch.CircleD;
+                    }
+                }
+                return true;
+            }
 
             _carryWant = (p.Y - _dragFromY) / S;
             _carryDY = Lerp(_carryDY, _carryWant, Math.Clamp(_dt / 0.045f, 0f, 1f));
@@ -1698,11 +1805,14 @@ internal sealed partial class NotchController
             return true;
         }
 
-        bool wasTap = _dragHeld < DragHold && Math.Abs(p.Y - _dragFromY) < D / 2;
+        bool wasTap = _dragHeld < DragHold
+                      && Math.Abs(p.Y - _dragFromY) < D / 2 && Math.Abs(p.X - _dragFromX) < D / 2;
         int row = _dragRow;
         _dragRow = -1;
+        _dragSess = -1;
         _dragHeld = 0f;
         _carryDY = 0f;
+        _carryDX = 0f;
         if (wasTap && InMenu(p)) JumpToRow(p, row, D);
         return true;
     }
@@ -1975,8 +2085,8 @@ internal sealed partial class NotchController
         }
         bool glass = !_lastDesktop;
 
-        int cT = (int)((glass ? TintAppCollapsed : TintDeskCollapsed) * GlassScale);
-        int eT = (int)((glass ? TintAppExpanded : TintDeskExpanded) * GlassScale);
+        int cT = TintFor(glass ? TintAppCollapsed : TintDeskCollapsed, GlassScale);
+        int eT = TintFor(glass ? TintAppExpanded : TintDeskExpanded, GlassScale);
         int tint = (int)Lerp(cT, eT, t);
 
         if (_empty && !Privacy.Active)
@@ -2024,11 +2134,33 @@ internal sealed partial class NotchController
             }
             _rowShift[i] = Lerp(_rowShift[i], target, Math.Clamp(_dt / 0.11f, 0f, 1f));
         }
+
+        int openRow = _row >= 0 && _row < groups.Count ? _row : -1;
+        int fanCount = openRow >= 0 ? groups[openRow].Length : 0;
+        if (_sessShift.Length != fanCount) _sessShift = new float[fanCount];
+        bool carryingSess = _dragHeld >= DragHold && _dragSess >= 0 && _dragRow == openRow
+                            && _dragSess < fanCount;
+        float atX = carryingSess ? _dragSess + _carryDX / LayeredNotch.CircleD : 0f;
+        for (int j = 0; j < _sessShift.Length; j++)
+        {
+            float target = 0f;
+            if (carryingSess && j != _dragSess)
+            {
+                if (_dragSess < j && atX >= j) target = -LayeredNotch.CircleD;
+                else if (_dragSess > j && atX <= j) target = LayeredNotch.CircleD;
+            }
+            _sessShift[j] = Lerp(_sessShift[j], target, Math.Clamp(_dt / 0.11f, 0f, 1f));
+        }
+
         var frame = new MenuFrame
         {
-            CarryRow = _dragHeld >= DragHold ? _dragRow : -1,
+
+            CarryRow = _dragHeld >= DragHold && _dragSess < 0 ? _dragRow : -1,
             CarryDY = _carryDY,
             RowShift = _rowShift,
+            CarrySess = carryingSess ? _dragSess : -1,
+            CarryDX = _carryDX,
+            SessShift = _sessShift,
             Show = _greet == GreetingKind.None && (groups.Count >= 1 || _stripT > 0.01f),
             Appear = SmoothStep(_stripT),
 
@@ -2766,6 +2898,14 @@ internal sealed partial class NotchController
     private static Halo.Notifications.NotifItem Sample((string App, string Title, string Body) n, Bitmap icon)
         => new() { App = n.App, Title = n.Title, Body = n.Body, Icon = icon };
 
+    internal static Halo.Notifications.NotifItem HookBanner((string App, string Title, string Body) n, bool ok)
+        => new()
+        {
+            App = n.App, Title = n.Title, Body = n.Body,
+            Icon = ok ? Badges.Hooked() : Badges.HookFailed(),
+            Kind = "hooks", Duration = 8,
+        };
+
     internal static Halo.Notifications.NotifItem[] SampleLocalNotices(Bitmap shot) => new[]
     {
         new Halo.Notifications.NotifItem
@@ -2775,47 +2915,64 @@ internal sealed partial class NotchController
             Preview = shot, Icon = Badges.Shot(),
         },
 
-        Sample(Halo.ClaudeCode.HookConnect.Notice("Claude Code",
+        HookBanner(Halo.ClaudeCode.HookConnect.Notice("Claude Code",
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".claude", "settings.json")), Badges.Hooked()),
-        Sample(Halo.ClaudeCode.HookConnect.Notice("Codex",
+                ".claude", "settings.json")), ok: true),
+        HookBanner(Halo.ClaudeCode.HookConnect.Notice("Codex",
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".codex", "hooks.json")), Badges.Hooked()),
-        Sample(Halo.ClaudeCode.HookConnect.Failed("Claude Code", "access denied"), Badges.HookFailed()),
-        new Halo.Notifications.NotifItem { App = "Network", Title = "Bad internet", Icon = Badges.NetSlow() },
+                ".codex", "hooks.json")), ok: true),
+        HookBanner(Halo.ClaudeCode.HookConnect.Failed("Claude Code", "access denied"), ok: false),
         new Halo.Notifications.NotifItem
         {
-            App = "Network", Title = "No internet", Body = "Nothing is getting out right now.",
+            App = Halo.Localization.Strings.Get("notice.app.network"),
+            Title = Halo.Localization.Strings.Get("notice.net.slow.title"), Icon = Badges.NetSlow(),
+        },
+        new Halo.Notifications.NotifItem
+        {
+            App = Halo.Localization.Strings.Get("notice.app.network"),
+            Title = Halo.Localization.Strings.Get("notice.net.down.title"),
+            Body = Halo.Localization.Strings.Get("notice.net.down.body"),
             Icon = Badges.NetDown(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "Claude", Title = "Claude is unreachable", Body = "Your connection is fine — theirs isn't.",
+            App = Halo.Localization.Strings.Get("notice.app.claude"),
+            Title = Halo.Localization.Strings.Get("notice.api.down.title"),
+            Body = Halo.Localization.Strings.Get("notice.api.down.body"),
             Icon = Badges.ApiDown(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "System", Title = "High CPU usage — 92%", Body = "chrome.exe is using the most.",
+            App = Halo.Localization.Strings.Get("notice.app.system"),
+            Title = Halo.Localization.Strings.Format("notice.load.title", Halo.Localization.Strings.Get("notice.load.cpu"), 92),
+            Body = Halo.Localization.Strings.Format("notice.load.body", "chrome.exe"),
             Icon = Badges.Cpu(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "System", Title = "High memory usage — 88%", Body = "Chrome is using the most.",
+            App = Halo.Localization.Strings.Get("notice.app.system"),
+            Title = Halo.Localization.Strings.Format("notice.load.title", Halo.Localization.Strings.Get("notice.load.memory"), 88),
+            Body = Halo.Localization.Strings.Format("notice.load.body", "Chrome"),
             Icon = Badges.Memory(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "Battery", Title = "Battery critical — 7%", Body = "Tap to turn on Power Saver.",
+            App = Halo.Localization.Strings.Get("notice.app.battery"),
+            Title = Halo.Localization.Strings.Format("notice.battery.title", Halo.Localization.Strings.Get("notice.battery.critical"), 7),
+            Body = Halo.Localization.Strings.Get("notice.battery.body"),
             Icon = Badges.BatteryDead(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "Claude", Title = "Context 85% full",
-            Body = "Answers get vaguer from here — /compact when you can.", Icon = Badges.Context(),
+            App = Halo.Localization.Strings.Get("notice.app.claude"),
+            Title = Halo.Localization.Strings.Format("notice.context.title", 85),
+            Body = Halo.Localization.Strings.Get("notice.context.body"), Icon = Badges.Context(),
         },
         new Halo.Notifications.NotifItem
         {
-            App = "Claude", Title = "Claude usage 85%", Body = "You've used 85% of your weekly limit.",
+            App = Halo.Localization.Strings.Get("notice.app.claude"),
+            Title = Halo.Localization.Strings.Format("limit.title", Halo.Localization.Strings.Get("notice.app.claude"), 85),
+            Body = Halo.Localization.Strings.Format("limit.body", 85, Halo.Localization.Strings.Get("limit.window.weekly")),
             Icon = Badges.LimitLong(),
         },
 
@@ -2835,6 +2992,7 @@ internal sealed partial class NotchController
     private static readonly string OffsetPath = System.IO.Path.Combine(HaloDir, "offset");
     private static readonly string GreetedPath = System.IO.Path.Combine(HaloDir, "greeted");
     private static readonly string StripOrderPath = System.IO.Path.Combine(HaloDir, "strip-order.txt");
+    private static readonly string SessionOrderPath = System.IO.Path.Combine(HaloDir, "session-order.txt");
     private static readonly string PinPath = System.IO.Path.Combine(HaloDir, "pinned");
 
     private void LoadOffset()

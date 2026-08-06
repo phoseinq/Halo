@@ -6,6 +6,11 @@ namespace Halo.Tests;
 // Where a report goes. The rows that set these were deleted from the panel with no migration, and
 // SettingsFile keeps unknown keys forever, so the values are still sitting in real settings.json files
 // meaning what the old row said they meant. Every one of these went wrong once.
+// Serialised against the other classes that touch it: Strings.Use switches the ACTIVE LANGUAGE for
+// the whole process, so a test that reads a localized string while another has just moved to
+// Persian reads the wrong one. It failed one run in three before this - a settings label, a mood
+// set and a report route, never the same one twice, which is what a shared global looks like.
+[Collection("locale")]
 public class DestinationTests
 {
     private const string Built = "https://halo.pvboy.dev:2053/v1/reports";

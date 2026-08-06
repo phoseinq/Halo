@@ -17,6 +17,12 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+
+        string forced = Environment.GetEnvironmentVariable("HALO_LANG") ?? "";
+        Halo.Localization.Strings.Use(forced.Length > 0
+            ? Halo.Localization.Strings.Name(forced)
+            : new Store().Text("general.language", Catalog.LanguageRowFallback));
+
         if (e.Args.Length >= 2 && e.Args[0] == "--render-page")
         {
             Preview.Render(e.Args[1], e.Args.Length >= 3 ? e.Args[2] : "home",

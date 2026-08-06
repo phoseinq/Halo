@@ -42,8 +42,13 @@ internal static class AskBanner
 
     private static bool HasTarget(PendingAsk ask) => !ask.IsQuestion && !string.IsNullOrEmpty(ask.Target);
 
-    internal static readonly AskOption FreeText = new("Type something", "answer in your own words");
-    internal static readonly AskOption Chat = new("Chat about this", "leave the question and talk instead");
+    internal static readonly AskOption FreeText = new("__free__", "");
+    internal static readonly AskOption Chat = new("__chat__", "");
+
+        internal static (string Label, string Sub) Words(AskOption option)
+        => IsFreeText(option) ? (global::Halo.Localization.Strings.Get("ask.typeSomething"), global::Halo.Localization.Strings.Get("ask.freeTextSub"))
+         : IsChat(option) ? (global::Halo.Localization.Strings.Get("ask.chat"), global::Halo.Localization.Strings.Get("ask.chatSub"))
+         : (option.Label, option.Description);
 
     internal static bool IsFreeText(AskOption option) => ReferenceEquals(option, FreeText);
     internal static bool IsChat(AskOption option) => ReferenceEquals(option, Chat);
@@ -93,7 +98,7 @@ internal static class AskBanner
         options.AddRange(BuiltInsFor(ask));
         foreach (var option in options)
         {
-            float labelH = Lines(option.Label, lf, textW, LabelMaxLines) * LabelLineH;
+            float labelH = Lines(Words(option).Label, lf, textW, LabelMaxLines) * LabelLineH;
             bool hasDesc = !string.IsNullOrWhiteSpace(option.Description);
             float descH = hasDesc ? Lines(option.Description, df, textW, DescMaxLines) * DescLineH : 0f;
             float stack = labelH + (hasDesc ? LabelDescGap + descH : 0f);
@@ -163,7 +168,7 @@ internal static class AskBanner
             var row = layout.Rows[i];
 
             bool typing = typed != null && IsFreeText(row.Option);
-            DrawRow(g, row, i + 1, a, typing || i == hover, Accent(ask, row.Option.Label), seeThrough,
+            DrawRow(g, row, i + 1, a, typing || i == hover, Accent(ask, Words(row.Option).Label), seeThrough,
                 typing ? typed : null);
         }
     }
@@ -232,7 +237,7 @@ internal static class AskBanner
             return;
         }
 
-        InkRtl(g, row.Option.Label, lf, Slack(row.Label), sf, White, a, seeThrough);
+        InkRtl(g, Words(row.Option).Label, lf, Slack(row.Label), sf, White, a, seeThrough);
         if (row.Desc.Height <= 0f) return;
 
         InkRtl(g, row.Option.Description, df, Slack(row.Desc), sf, seeThrough ? DimClear : Dim, a, seeThrough);

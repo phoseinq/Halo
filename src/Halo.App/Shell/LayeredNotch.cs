@@ -33,6 +33,10 @@ internal struct MenuFrame
     public int CarryRow;
     public float CarryDY;
     public float[] RowShift;
+
+    public int CarrySess;
+    public float CarryDX;
+    public float[] SessShift;
 }
 
 internal sealed class LayeredNotch
@@ -520,11 +524,75 @@ internal sealed class LayeredNotch
         g.FillEllipse(cb, cx - ri, cy - ri, ri * 2, ri * 2);
     }
 
+        internal void SeedBackdrop(Bitmap? plate)
+    {
+        lock (_bgLock) { _bg = plate; }
+        System.Threading.Interlocked.Increment(ref _captureVersion);
+    }
+
     internal void DrawShape(Graphics g, int w, int h, int radius, int tintAlpha, bool glass,
         float glassFade = 1f, float clarity = 0f)
     {
-        lock (_bgLock) ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
+        lock (_bgLock)
+        {
+
+            if (!CacheOn)
+            {
+                ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
+                return;
+            }
+            var key = new ShapeKey(w, h, radius, tintAlpha, glass, glassFade, clarity,
+                Math.Clamp(Supersample, 1, 2), _captureVersion, Zoom, Sheen, Grain, RimLight);
+
+            bool moving = w != _lastW || h != _lastH || Zoom != _lastZoom;
+            _lastW = w; _lastH = h; _lastZoom = Zoom;
+            if (moving && (_shapeCache is null || !_shapeKey.Equals(key)))
+            {
+                if (_shapeCache is not null) { _shapeCache.Dispose(); _shapeCache = null; }
+                ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
+                return;
+            }
+            if (_shapeCache is null || !_shapeKey.Equals(key))
+            {
+
+                float sc = Zoom;
+                int dw = Math.Max(1, (int)MathF.Ceiling(w * sc)), dh = Math.Max(1, (int)MathF.Ceiling(h * sc));
+                if (_shapeCache is null || _shapeCache.Width != dw || _shapeCache.Height != dh)
+                {
+                    _shapeCache?.Dispose();
+                    _shapeCache = new Bitmap(dw, dh, PixelFormat.Format32bppPArgb);
+                }
+                using (var cg = Graphics.FromImage(_shapeCache))
+                {
+                    cg.CompositingMode = CompositingMode.SourceCopy;
+                    cg.Clear(Color.Transparent);
+                    cg.CompositingMode = CompositingMode.SourceOver;
+                    cg.ScaleTransform(sc, sc);
+                    ShapeInto(cg, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
+                }
+                _shapeKey = key;
+            }
+
+            using var caller = g.Transform;
+            var saved = g.Save();
+            g.ResetTransform();
+            g.TranslateTransform(caller.OffsetX, caller.OffsetY);
+            g.DrawImageUnscaled(_shapeCache, 0, 0);
+            g.Restore(saved);
+        }
     }
+
+        private readonly record struct ShapeKey(
+        int W, int H, int Radius, int TintAlpha, bool Glass, float GlassFade, float Clarity,
+        int Ss, int CaptureVersion, float Zoom, float Sheen, float Grain, float RimLight);
+
+    private static readonly bool CacheOn =
+        Environment.GetEnvironmentVariable("HALO_GLASSCACHE") == "1";
+
+    private Bitmap? _shapeCache;
+    private ShapeKey _shapeKey;
+    private int _lastW = -1, _lastH = -1;
+    private float _lastZoom = -1f;
 
     private static readonly object _scratchLock = new();
     private static Bitmap? _scratchA, _scratchB;
@@ -557,10 +625,12 @@ internal sealed class LayeredNotch
         });
     }
 
+    internal static int Supersample = 2;
+
     internal static void ShapeInto(Graphics g, int w, int h, int radius, int tintAlpha,
                                    Bitmap? backdrop, float glassFade, float clarity = 0f)
     {
-        const int ss = 2;
+        int ss = Math.Clamp(Supersample, 1, 2);
 
         var content = ScratchA(w * ss, h * ss);
         using (var cg = Graphics.FromImage(content))
@@ -738,9 +808,21 @@ internal sealed class LayeredNotch
                 Cell(menu.RowIcons[carry], menu.RowImages[carry], 0, (carry * CircleD + menu.CarryDY) * ss,
                     1f, menu.RowRings[carry], menu.RowProgress[carry], menu.RowImageOffsets[carry]);
             if (extf > 0.5f)
+            {
+
+                int cs = menu.CarrySess;
+                bool carryingSess = cs >= 0 && cs < menu.RowCounts[or_] && menu.Drop <= 0f;
                 for (int j = 0; j < menu.RowCounts[or_]; j++)
-                    Cell(menu.SessIcons[or_][j], menu.SessImages[or_][j], (j + 1) * D, or_ * D,
+                {
+                    if (carryingSess && j == cs) continue;
+                    float slideX = menu.SessShift is { } sx && j < sx.Length ? sx[j] : 0f;
+                    Cell(menu.SessIcons[or_][j], menu.SessImages[or_][j], (j + 1) * D + slideX * ss, or_ * D,
                         Math.Clamp((extf - j * CircleD) / CircleD, 0f, 1f), menu.SessRings[or_][j]);
+                }
+                if (carryingSess)
+                    Cell(menu.SessIcons[or_][cs], menu.SessImages[or_][cs],
+                        ((cs + 1) * CircleD + menu.CarryDX) * ss, or_ * D, 1f, menu.SessRings[or_][cs]);
+            }
         }
 
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -1145,7 +1227,9 @@ internal sealed class LayeredNotch
             _workLeft = work.left;
             _workTop = work.top;
             _workWidth = work.right - work.left;
+
             lock (_bgLock) { _bg?.Dispose(); _bg = null; }
+            System.Threading.Interlocked.Increment(ref _captureVersion);
         }
         return Win32.DefWindowProc(hwnd, msg, wParam, lParam);
     }

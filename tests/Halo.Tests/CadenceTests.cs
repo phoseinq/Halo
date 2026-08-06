@@ -4,8 +4,9 @@ using Xunit;
 namespace Halo.Tests;
 
 // The expand/collapse morph used to run at whatever tier the once-a-second CPU sampler had picked, which
-// while the panel is open is a deliberate 60 - so the animation never saw 120, and a tier change landing
-// inside the ~300ms morph switched cadence mid-movement.
+// while the panel is open WAS a deliberate 60 - so the animation never saw 120, and a tier change landing
+// inside the ~300ms morph switched cadence mid-movement. The 60 is gone as of the glass cache; the morph
+// still takes the ceiling regardless of the tier, which is what these first two pin.
 public class CadenceTests
 {
     [Fact]
@@ -16,8 +17,10 @@ public class CadenceTests
     public void A_morph_outruns_the_slammed_tier_too()
         => Assert.Equal(NotchController.MaxFps, NotchController.CadenceFps(true, 30));
 
-    // The morph is ~300ms, so running it flat out costs a third of a second of full rate. The settled
-    // panel is the thing that had to stay at 60, and it still does.
+    // The morph is ~300ms, so running it flat out costs a third of a second of full rate. The settled panel
+    // used to be the thing that had to stay at 60; it does not any more - see the Tier tests below for the
+    // measurement that changed, and the top rung now resolves through the ceiling rather than stopping at
+    // MaxFps.
     [Fact]
     public void The_ceiling_is_above_the_old_120_limit()
         => Assert.True(NotchController.MaxFps > 120);
@@ -28,6 +31,17 @@ public class CadenceTests
         Assert.Equal(60, NotchController.CadenceFps(false, 60));
         Assert.Equal(30, NotchController.CadenceFps(false, 30));
         Assert.Equal(120, NotchController.CadenceFps(false, 120));
+    }
+
+    // ...except the top one, which is a name for "flat out" rather than a measurement. A 280Hz display was
+    // being held to 240 on every settled frame while the morph went through Reach and got all 280.
+    [Fact]
+    public void The_top_rung_settles_at_the_ceiling_not_at_MaxFps()
+    {
+        Assert.Equal(280, NotchController.CadenceFps(false, NotchController.MaxFps, 280));
+        Assert.Equal(NotchController.MaxFps, NotchController.CadenceFps(false, NotchController.MaxFps, 0));
+        // and a ceiling BELOW it still wins, through Capped as before
+        Assert.Equal(120, NotchController.Capped(NotchController.CadenceFps(false, NotchController.MaxFps, 120), 120));
     }
 
     [Theory]
@@ -123,9 +137,18 @@ public class CadenceTests
     public void A_slammed_machine_still_yields_when_nobody_is_looking()
         => Assert.Equal(30, NotchController.Tier(0.95f, watching: false, current: NotchController.MaxFps));
 
+    // It used to pin 60 here, and the reason was the cost of the glass: the composite was 13.84ms of a
+    // 16.76ms frame. It is cached now and the frame is 1.84ms, so sixty frames of it cost 1006ms/s against
+    // the ceiling's 442ms/s - the rung was buying back less than it spent. A panel with room reaches.
     [Fact]
-    public void An_open_panel_still_pins_sixty_when_there_is_room()
-        => Assert.Equal(60, NotchController.Tier(0.20f, watching: true, current: NotchController.MaxFps));
+    public void An_open_panel_reaches_for_the_ceiling_when_there_is_room()
+        => Assert.Equal(NotchController.MaxFps, NotchController.Tier(0.20f, watching: true, current: 60));
+
+    // and the one case that does NOT follow it up: watching still beats slammed, but not by taking a
+    // quarter of a core from a machine at 95%
+    [Fact]
+    public void An_open_panel_on_a_slammed_machine_holds_sixty()
+        => Assert.Equal(60, NotchController.Tier(0.95f, watching: true, current: NotchController.MaxFps));
 
     [Fact]
     public void A_busy_machine_holds_sixty()
@@ -185,5 +208,32 @@ public class CadenceTests
         Assert.Equal(1f, NotchController.ContentFade(1f));
         Assert.Equal(1f, NotchController.MiniFade(0f));
         Assert.Equal(0f, NotchController.MiniFade(1f));
+    }
+
+    // "Set glass to Strong, then go to the desktop, and it freezes." Over an app the tints are 120 and 48
+    // and 1.34x has room; on the DESKTOP they are 255 and 245, already opaque because there is no
+    // wallpaper detail left to protect there, and 255 * 1.34 = 341. That reached Color.FromArgb, which
+    // throws outside 0..255 - on the render path, every frame. These pin both ends of the range.
+    [Theory]
+    [InlineData(255, 1.34f, 255)]   // the desktop at Strong: already opaque, cannot go further
+    [InlineData(245, 1.34f, 255)]
+    [InlineData(120, 1.34f, 160)]   // over an app there is headroom and Strong still means something
+    [InlineData(48, 1.34f, 64)]
+    [InlineData(255, 0.66f, 168)]   // Light works in both places, which is the direction it is for
+    [InlineData(120, 1f, 120)]
+    public void A_scaled_tint_stays_inside_an_alpha_channel(int baseAlpha, float scale, int expected)
+        => Assert.Equal(expected, NotchController.TintFor(baseAlpha, scale));
+
+    // whatever the strength, the result has to be something Color.FromArgb accepts
+    [Fact]
+    public void No_strength_can_produce_an_alpha_that_throws()
+    {
+        foreach (int a in new[] { 0, 48, 120, 245, 255 })
+            foreach (float s in new[] { 0.66f, 1f, 1.34f, 4f })
+            {
+                int v = NotchController.TintFor(a, s);
+                Assert.InRange(v, 0, 255);
+                System.Drawing.Color.FromArgb(v, 8, 8, 8);   // the call that was throwing
+            }
     }
 }

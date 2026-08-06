@@ -204,4 +204,50 @@ public class HookConnectTests
         Assert.Equal(HookConnect.Step.Wait, HookConnect.Next(busy: false, alreadyTried: false, undone: true,
             agentSeen: () => true, hooksInstalled: () => false));
     }
+
+    // The banner went out with no icon at all for as long as it had existed, and the sample sheet hid it by
+    // supplying its own badge. These pin the builder BOTH now use, so the preview cannot be right while the
+    // thing users see is wrong.
+    [Fact]
+    public void Every_hook_banner_carries_a_badge()
+    {
+        foreach (bool ok in new[] { true, false })
+        {
+            var item = Halo.Shell.NotchController.HookBanner(("Claude Code", "t", "b"), ok);
+            Assert.NotNull(item.Icon);
+        }
+    }
+
+    // success and failure must not land on the same mark - a red badge on "connected" reads as an error
+    [Fact]
+    public void A_failed_connection_does_not_wear_the_connected_badge()
+    {
+        var good = Halo.Shell.NotchController.HookBanner(("Claude Code", "t", "b"), ok: true);
+        var bad = Halo.Shell.NotchController.HookBanner(("Claude Code", "t", "b"), ok: false);
+        Assert.NotEqual(Tone(good.Icon!), Tone(bad.Icon!));
+    }
+
+    // the whole sheet, not just the two entries above: an iconless local notice is the bug class, and the
+    // sheet is what gets eyeballed before a release
+    [Fact]
+    public void No_sampled_local_notice_is_iconless()
+    {
+        using var shot = new System.Drawing.Bitmap(4, 4);
+        foreach (var item in Halo.Shell.NotchController.SampleLocalNotices(shot))
+            Assert.True(item.Icon != null || item.Preview != null, $"{item.App}/{item.Title} has nothing to draw");
+    }
+
+    // average colour, which is all that is needed to tell the green mark from the red one
+    private static (int r, int g, int b) Tone(System.Drawing.Bitmap bmp)
+    {
+        long r = 0, g = 0, b = 0, n = 0;
+        for (int y = 0; y < bmp.Height; y++)
+            for (int x = 0; x < bmp.Width; x++)
+            {
+                var p = bmp.GetPixel(x, y);
+                if (p.A < 128) continue;   // the badge is mostly transparent; only the glyph counts
+                r += p.R; g += p.G; b += p.B; n++;
+            }
+        return n == 0 ? (0, 0, 0) : ((int)(r / n), (int)(g / n), (int)(b / n));
+    }
 }

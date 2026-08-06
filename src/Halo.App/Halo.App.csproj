@@ -17,5 +17,15 @@
     <EmbeddedResource Include="Assets\uia-cancel.ps1" LogicalName="Halo.Assets.uia-cancel.ps1" />
     <EmbeddedResource Include="Assets\claude.png" />
     <EmbeddedResource Include="Assets\openai.png" LogicalName="Halo.Assets.openai.png" />
+    <!-- LogicalName rather than the default Halo.Localization.locales.en.json, because Halo.Settings
+         embeds this same file from a relative path and the two default names would not match -->
+    <EmbeddedResource Include="Localization\locales\en.json" LogicalName="Halo.Localization.en.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- both shipping paths take the publish directory wholesale - Halo.iss recurses {#Payload}\* and
+         build-msix.ps1 copies the layout - so a locales\ folder in the output needs no installer edit.
+         en.json is excluded because it is embedded; a loose copy would be a second source of truth. -->
+    <Content Include="Localization\locales\*.json" Exclude="Localization\locales\en.json"
+             Link="locales\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

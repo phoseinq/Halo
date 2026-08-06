@@ -81,6 +81,17 @@ internal sealed class MediaWidget : IWidget
 
     public string App => _sessions.SlotApp(_slot);
 
+    public string SessionKey
+    {
+        get
+        {
+            string? id; lock (_lock) { id = _appId; }
+            if (!string.IsNullOrWhiteSpace(id)) return "media:" + id;
+            string app = App;
+            return string.IsNullOrWhiteSpace(app) ? "" : "media:" + app;
+        }
+    }
+
     public int Slot => _slot;
     public string? TitleText { get { lock (_lock) return _title; } }
     public string? ArtistText { get { lock (_lock) return _artist; } }

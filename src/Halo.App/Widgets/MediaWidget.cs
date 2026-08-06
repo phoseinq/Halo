@@ -63,13 +63,31 @@ internal sealed class MediaWidget : IWidget
 
     internal void Seed(string title, string artist, byte[]? thumb, double through)
     {
+        _sessions.Changed -= Resync;
         lock (_lock)
         {
+            _session = null;
+            _appId = null;
             _title = title;
             _artist = artist;
             _trackKey = title + "|" + artist;
             _thumb = thumb;
             _thumbWide = false;
+            _playing = true;
+            _start = TimeSpan.Zero;
+            _end = TimeSpan.FromMinutes(4);
+            _pos = TimeSpan.FromMinutes(4 * through);
+            _posAt = DateTime.UtcNow;
+            _version++;
+        }
+    }
+
+    internal void SeedPosition(double through)
+    {
+        _sessions.Changed -= Resync;
+        lock (_lock)
+        {
+            _session = null;
             _playing = true;
             _start = TimeSpan.Zero;
             _end = TimeSpan.FromMinutes(4);
@@ -1304,7 +1322,9 @@ internal sealed class MediaWidget : IWidget
 
     private static void CoverFill(Graphics g, Bitmap img, float x, float y, float size, GraphicsPath path, float fade)
     {
-        int s = Math.Max(1, (int)Math.Ceiling(size));
+
+        float k = Math.Clamp(g.Transform.Elements[0], 1f, 4f);
+        int s = Math.Max(1, (int)Math.Ceiling(size * k));
         using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
         using (var sg = Graphics.FromImage(scaled))
         {
@@ -1319,7 +1339,9 @@ internal sealed class MediaWidget : IWidget
                 (img.Width - side) / 2, (img.Height - side) / 2, side, side, GraphicsUnit.Pixel, ia);
         }
         using var tb = new TextureBrush(scaled) { WrapMode = WrapMode.Clamp };
+
         tb.TranslateTransform(x, y);
+        if (k != 1f) tb.ScaleTransform(1f / k, 1f / k);
         g.FillPath(tb, path);
     }
 

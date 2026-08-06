@@ -42,6 +42,12 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-pill") { RenderPill(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--render-store")
+        {
+            RenderStore(args[1], args.Length > 2 && args[2] == "live");
+            return;
+        }
+
         if (args.Length >= 2 && args[0] == "--render-bar") { RenderBar(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-morph") { RenderMorph(args[1]); return; }
@@ -2343,6 +2349,254 @@ internal static class Program
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 
+    private static System.Drawing.Bitmap StoreWallpaper(int w, int h)
+    {
+        var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using (var lg = new System.Drawing.Drawing2D.LinearGradientBrush(
+            new System.Drawing.Rectangle(0, 0, w, h),
+            System.Drawing.Color.FromArgb(255, 14, 16, 28),
+            System.Drawing.Color.FromArgb(255, 34, 18, 44), 70f))
+            g.FillRectangle(lg, 0, 0, w, h);
+
+        (float cx, float cy, float r, System.Drawing.Color c)[] blobs =
+        [
+            (w * 0.30f, h * 0.10f, w * 0.42f, System.Drawing.Color.FromArgb(255, 196, 155,  4)),
+            (w * 0.78f, h * 0.30f, w * 0.38f, System.Drawing.Color.FromArgb(255,  44, 165, 224)),
+            (w * 0.55f, h * 0.92f, w * 0.45f, System.Drawing.Color.FromArgb(255, 214,  72,  96)),
+        ];
+        foreach (var (cx, cy, r, c) in blobs)
+        {
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddEllipse(cx - r, cy - r, r * 2, r * 2);
+            using var pg = new System.Drawing.Drawing2D.PathGradientBrush(path)
+            {
+                CenterColor = System.Drawing.Color.FromArgb(120, c),
+                SurroundColors = [System.Drawing.Color.FromArgb(0, c)],
+            };
+            g.FillPath(pg, path);
+        }
+        return bmp;
+    }
+
+    private static void StoreShot(string outPath, int pillW, int pillH, int radius,
+        Action<System.Drawing.Graphics> drawContent, string headline, string sub, float scale = 1.7f)
+    {
+        const int W = 1920, H = 1080;
+
+        int dw = (int)(pillW * scale), dh = (int)(pillH * scale);
+
+        using var bmp = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        using (var wall = StoreWallpaper(W, H)) g.DrawImage(wall, 0, 0, W, H);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+        int px = (W - dw) / 2, py = 0;
+        var notch = new Halo.Shell.LayeredNotch();
+
+        Halo.Shell.LayeredNotch.WantCaptureHeight(pillH);
+        int capW = 560, capH = Halo.Shell.LayeredNotch.CaptureH;
+        using (var strip = new System.Drawing.Bitmap(capW, capH,
+                   System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+        {
+            using (var sg = System.Drawing.Graphics.FromImage(strip))
+            {
+                sg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                sg.DrawImage(bmp, new System.Drawing.Rectangle(0, 0, capW, capH),
+                    new System.Drawing.RectangleF(px - (capW - pillW) * scale / 2f, py,
+                        capW * scale, capH * scale),
+                    System.Drawing.GraphicsUnit.Pixel);
+            }
+            notch.SeedBackdrop(Halo.Shell.LayeredNotch.BlurPyramid(strip));
+        }
+
+        var st = g.Save();
+        g.TranslateTransform(px, py);
+        g.ScaleTransform(scale, scale);
+        g.SetClip(new System.Drawing.RectangleF(0, 0, pillW, pillH));
+        notch.DrawShape(g, pillW, pillH, radius, 190, glass: true);
+        drawContent(g);
+        g.Restore(st);
+
+        using var hf = new System.Drawing.Font("Segoe UI Semibold", 56f, System.Drawing.GraphicsUnit.Pixel);
+        using var sf = new System.Drawing.Font("Segoe UI", 30f, System.Drawing.GraphicsUnit.Pixel);
+        using var hb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(248, 255, 255, 255));
+        using var sb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(175, 255, 255, 255));
+        var centre = new System.Drawing.StringFormat { Alignment = System.Drawing.StringAlignment.Center };
+        g.DrawString(headline, hf, hb, W / 2f, 700f, centre);
+        g.DrawString(sub, sf, sb, W / 2f, 782f, centre);
+
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"wrote {outPath}");
+    }
+
+    private static void StoreWarm(Action<System.Drawing.Graphics> draw)
+    {
+        using var warm = new System.Drawing.Bitmap(560, 220,
+            System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using var wg = System.Drawing.Graphics.FromImage(warm);
+        for (int f = 0; f < 45; f++)
+        {
+            wg.Clear(System.Drawing.Color.FromArgb(20, 20, 22));
+            try { draw(wg); } catch { }
+            System.Threading.Thread.Sleep(12);
+        }
+    }
+
+    private static void RenderStore(string outDir, bool liveMedia)
+    {
+        var t = new System.Threading.Thread(() =>
+        {
+            System.IO.Directory.CreateDirectory(outDir);
+            string P(string n) => System.IO.Path.Combine(outDir, n);
+
+            Halo.Widgets.AudioSpectrum.KeepWarm();
+
+            var media = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
+            if (liveMedia)
+            {
+
+                for (int i = 0; i < 100 && !media.IsActive; i++) System.Threading.Thread.Sleep(100);
+                if (!media.IsActive)
+                    Console.WriteLine("no media session found - play something, or drop the 'live' argument");
+            }
+            else media.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+            StoreWarm(g => media.DrawContent(g, 560, 220, 1f));
+            StoreShot(P("01-media.png"), 560, 220, 30, g => media.DrawContent(g, 560, 220, 1f),
+                "Everything that is playing, in one place",
+                "Art, a seek bar that really seeks, volume and transport - read from Windows' own media session");
+
+            string trayDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "halo-store", "Documents");
+            System.IO.Directory.CreateDirectory(trayDir);
+            foreach (var name in new[] { "quarterly-report.pdf", "logo-final.png", "notes.txt",
+                                         "invoice-0148.pdf", "screenshot.png", "budget.xlsx" })
+            {
+                string p = System.IO.Path.Combine(trayDir, name);
+                if (!System.IO.File.Exists(p)) System.IO.File.WriteAllText(p, "halo store screenshot sample");
+                Halo.Widgets.FileTray.Add(p);
+            }
+            var tray = new Halo.Widgets.FileTray();
+            StoreWarm(g => tray.DrawContent(g, 560, 220, 1f));
+            StoreShot(P("02-tray.png"), 560, 220, 30, g => tray.DrawContent(g, 560, 220, 1f),
+                "Drop files on the pill and it holds them",
+                "Drag them back out into any window later - a different app, a different desktop, an hour on");
+
+            int nw = Halo.Widgets.NotifBanner.W, nh = Halo.Widgets.NotifBanner.SummaryH;
+            using var icon = new System.Drawing.Bitmap(64, 64);
+            using (var ig = System.Drawing.Graphics.FromImage(icon))
+            {
+                ig.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                ig.Clear(System.Drawing.Color.Transparent);
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 40, 150, 235));
+                ig.FillEllipse(b, 2, 2, 60, 60);
+            }
+            var notif = new Halo.Notifications.NotifItem
+            {
+                Icon = icon,
+                App = "MESSAGES",
+                Title = "Your verification code",
+                Body = "Use 482913 to sign in. It expires in ten minutes and works only once.",
+                Code = "482913",
+            };
+            StoreShot(P("03-notifications.png"), nw, nh, 26,
+                g => Halo.Widgets.NotifBanner.Draw(g, nw, nh, 1f, notif, 0f, false),
+                "Every notification, mirrored with its real icon",
+                "Windows' own banner goes quiet, so nothing is said to you twice. A code becomes one click to copy");
+
+            string demoRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "halo-store-agent");
+            System.IO.Directory.CreateDirectory(demoRoot);
+            var now = DateTimeOffset.UtcNow;
+            System.IO.File.WriteAllText(System.IO.Path.Combine(demoRoot, "status.json"), $$"""
+            {
+              "pid": {{System.Environment.ProcessId}},
+              "sessionId": "demo",
+              "cwd": "C:\\Projects\\halo",
+              "state": "working",
+              "consolePid": {{System.Environment.ProcessId}},
+              "updatedAt": "{{now:o}}",
+              "startedAt": "{{now.AddMinutes(-12):o}}",
+              "currentTool": "Edit",
+              "session": { "contextUsed": 341000, "contextMax": 1000000, "promptTokens": 48200 }
+            }
+            """);
+            var agent = new Halo.Widgets.ClaudeCodeWidget(
+                new Halo.ClaudeCode.StatusStore(System.IO.Path.Combine(demoRoot, "status.json"),
+                    _ => DateTimeOffset.UtcNow.AddMinutes(-12), watchFiles: false), 0, () => { });
+
+            using (var warm = new System.Drawing.Bitmap(560, 220))
+            using (var wg = System.Drawing.Graphics.FromImage(warm)) agent.DrawContent(wg, 560, 220, 1f);
+            System.Threading.Thread.Sleep(8000);
+            SeedAgentDemo(hot: false);
+            StoreWarm(g => agent.DrawContent(g, 560, 220, 1f));
+            StoreShot(P("04-agents.png"), 560, 220, 30, g => agent.DrawContent(g, 560, 220, 1f),
+                "A live panel for every coding session",
+                "Context left, your 5-hour and weekly limits, and a stop button that really stops the prompt");
+
+            Halo.Widgets.AudioSpectrum.KeepWarm();
+            bool bars = false;
+            for (int i = 0; i < 80 && !bars; i++)
+            {
+                bars = Halo.Widgets.AudioSpectrum.Bands() is not null;
+                if (!bars) System.Threading.Thread.Sleep(100);
+            }
+            if (!bars) Console.WriteLine("no loopback audio - the collapsed pill's bars are the fallback");
+
+            if (liveMedia) media.SeedPosition(0.45);
+            StoreWarm(g => media.DrawCollapsed(g, 220, 40, 1f));
+            StoreShot(P("05-pill.png"), 220, 40, 20, g => media.DrawCollapsed(g, 220, 40, 1f),
+                "The rest of the time, it stays out of the way",
+                "A small glass pill at the top of the screen. Hover to open it, drag it anywhere, pin it above fullscreen apps",
+                scale: 3.4f);
+        });
+        t.SetApartmentState(System.Threading.ApartmentState.MTA);
+        t.Start();
+        t.Join();
+    }
+
+    private static void SeedAgentDemo(bool hot)
+    {
+        Halo.ClaudeCode.Limits.FiveHour = hot ? 0.93f : 0.42f;
+        Halo.ClaudeCode.Limits.FiveHourReset = DateTimeOffset.UtcNow.AddHours(2).AddMinutes(48);
+        Halo.ClaudeCode.Limits.Week = hot ? 0.78f : 0.61f;
+        Halo.ClaudeCode.Limits.WeekReset = DateTimeOffset.UtcNow.AddDays(3).AddHours(5);
+        Halo.ClaudeCode.Limits.CreditsUsed = 0;
+        Halo.ClaudeCode.Limits.LastSuccess = DateTime.UtcNow.AddMinutes(-2);
+
+        const string demoIp = "203.0.113.24";
+        Halo.ClaudeCode.IpCountry.Ip = demoIp;
+        Halo.ClaudeCode.IpCountry.ApiIp = null;
+        Halo.ClaudeCode.IpCountry.Cc = "NL";
+        Halo.ClaudeCode.IpCountry.Isp = "Example ISP";
+        Halo.ClaudeCode.IpCountry.Asn = "AS64496";
+        try
+        {
+            using var flagHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            Halo.ClaudeCode.IpCountry.Flag = new System.Drawing.Bitmap(new System.IO.MemoryStream(
+                flagHttp.GetByteArrayAsync("https://flagcdn.com/w320/nl.png").Result));
+        }
+        catch { }
+        Halo.ClaudeCode.IpRep.ForIp = demoIp;
+        Halo.ClaudeCode.IpRep.Verdict = "residential";
+        Halo.ClaudeCode.IpRep.Abuse = null;
+        Halo.ClaudeCode.IpRep.Sev = 0;
+        Halo.ClaudeCode.IpRep.Tor = false;
+        Halo.ClaudeCode.IpRep.Abuser = false;
+        Halo.ClaudeCode.IpRep.Bogon = false;
+        Halo.ClaudeCode.IpRep.Vpn = false;
+        Halo.ClaudeCode.IpRep.Proxy = false;
+        Halo.ClaudeCode.IpRep.Datacenter = false;
+        Halo.ClaudeCode.DnsLeak.ForIp = demoIp;
+        Halo.ClaudeCode.DnsLeak.Running = false;
+        Halo.ClaudeCode.DnsLeak.Done = true;
+        Halo.ClaudeCode.DnsLeak.Resolvers = 3;
+        Halo.ClaudeCode.DnsLeak.Where = "NL";
+        Halo.ClaudeCode.DnsLeak.Leaking = false;
+    }
+
     private static void RenderWidget(string outPath, string which, int scale = 1, string[]? args = null)
     {
         var t = new System.Threading.Thread(() =>
@@ -2449,45 +2703,7 @@ internal static class Program
             if (which is "claude" or "codex" or "codex-demo" || demo)
                 System.Threading.Thread.Sleep(8000);
 
-            if (demo || which == "codex-demo")
-            {
-                Halo.ClaudeCode.Limits.FiveHour = hot ? 0.93f : 0.42f;
-                Halo.ClaudeCode.Limits.FiveHourReset = DateTimeOffset.UtcNow.AddHours(2).AddMinutes(48);
-                Halo.ClaudeCode.Limits.Week = hot ? 0.78f : 0.61f;
-                Halo.ClaudeCode.Limits.WeekReset = DateTimeOffset.UtcNow.AddDays(3).AddHours(5);
-                Halo.ClaudeCode.Limits.CreditsUsed = 0;
-                Halo.ClaudeCode.Limits.LastSuccess = DateTime.UtcNow.AddMinutes(-2);
-
-                const string demoIp = "203.0.113.24";
-                Halo.ClaudeCode.IpCountry.Ip = demoIp;
-                Halo.ClaudeCode.IpCountry.ApiIp = null;
-                Halo.ClaudeCode.IpCountry.Cc = "NL";
-                Halo.ClaudeCode.IpCountry.Isp = "Example ISP";
-                Halo.ClaudeCode.IpCountry.Asn = "AS64496";
-                try
-                {
-                    using var flagHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-                    Halo.ClaudeCode.IpCountry.Flag = new System.Drawing.Bitmap(new System.IO.MemoryStream(
-                        flagHttp.GetByteArrayAsync("https://flagcdn.com/w320/nl.png").Result));
-                }
-                catch { }
-                Halo.ClaudeCode.IpRep.ForIp = demoIp;
-                Halo.ClaudeCode.IpRep.Verdict = "residential";
-                Halo.ClaudeCode.IpRep.Abuse = null;
-                Halo.ClaudeCode.IpRep.Sev = 0;
-                Halo.ClaudeCode.IpRep.Tor = false;
-                Halo.ClaudeCode.IpRep.Abuser = false;
-                Halo.ClaudeCode.IpRep.Bogon = false;
-                Halo.ClaudeCode.IpRep.Vpn = false;
-                Halo.ClaudeCode.IpRep.Proxy = false;
-                Halo.ClaudeCode.IpRep.Datacenter = false;
-                Halo.ClaudeCode.DnsLeak.ForIp = demoIp;
-                Halo.ClaudeCode.DnsLeak.Running = false;
-                Halo.ClaudeCode.DnsLeak.Done = true;
-                Halo.ClaudeCode.DnsLeak.Resolvers = 3;
-                Halo.ClaudeCode.DnsLeak.Where = "NL";
-                Halo.ClaudeCode.DnsLeak.Leaking = false;
-            }
+            if (demo || which == "codex-demo") SeedAgentDemo(hot);
 
             if (args is { Length: > 4 } && args[4].Contains(','))
             {

@@ -306,5 +306,22 @@
   "report.noStart": "Could not start Halo.App.",
   "ask.freeTextSub": "answer in your own words",
   "ask.chat": "Chat about this",
-  "ask.chatSub": "leave the question and talk instead"
+  "ask.chatSub": "leave the question and talk instead",
+  "ask.enterToSend": "enter to send   esc to go back",
+  "ask.eyebrow.asks": "CLAUDE CODE ASKS",
+  "ask.eyebrow.runs": "CLAUDE CODE WANTS TO RUN {0}",
+  "ask.title.yourMove": "your move ;)",
+  "ask.title.runThis": "run this?",
+  "agent.row.usage": "usage",
+  "agent.nothingReported": "nothing reported yet",
+  "agent.noLimitReported": "no limit reported",
+  "agent.noSecondWindow": "no second window",
+  "agent.window.plan": "plan",
+  "agent.window.mins": "{0}-min",
+  "agent.window.hours": "{0}-hour",
+  "agent.window.hoursMins": "{0}h{1}m",
+  "agent.window.days": "{0}-day",
+  "agent.window.daysHours": "{0}d{1}h",
+  "download.paused": "Paused",
+  "download.downloading": "Downloading"
 }

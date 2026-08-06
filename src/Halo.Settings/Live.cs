@@ -220,7 +220,7 @@ internal static class Live
         internal static bool IsLatin(string text)
     {
         foreach (var c in text)
-            if (c >= '֐' && c <= 'ࣿ') return false;
+            if (c >= '\u0590' && c <= '\u08FF') return false;
         return true;
     }
 

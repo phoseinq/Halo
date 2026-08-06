@@ -66,16 +66,21 @@ internal static class AskBanner
     private static Graphics? _measure;
     private static PendingAsk? _memoAsk;
     private static int _memoW;
+    private static int _memoLang = -1;
     private static AskLayout? _memo;
 
     internal static AskLayout Layout(PendingAsk ask, int w)
     {
         lock (LayoutLock)
         {
-            if (_memo != null && ReferenceEquals(_memoAsk, ask) && _memoW == w) return _memo;
+
+            int version = global::Halo.Localization.Strings.Version;
+            if (_memo != null && ReferenceEquals(_memoAsk, ask) && _memoW == w && _memoLang == version)
+                return _memo;
             _memo = Build(ask, w);
             _memoAsk = ask;
             _memoW = w;
+            _memoLang = version;
             return _memo;
         }
     }
@@ -98,9 +103,11 @@ internal static class AskBanner
         options.AddRange(BuiltInsFor(ask));
         foreach (var option in options)
         {
-            float labelH = Lines(Words(option).Label, lf, textW, LabelMaxLines) * LabelLineH;
-            bool hasDesc = !string.IsNullOrWhiteSpace(option.Description);
-            float descH = hasDesc ? Lines(option.Description, df, textW, DescMaxLines) * DescLineH : 0f;
+
+            var words = Words(option);
+            float labelH = Lines(words.Label, lf, textW, LabelMaxLines) * LabelLineH;
+            bool hasDesc = !string.IsNullOrWhiteSpace(words.Sub);
+            float descH = hasDesc ? Lines(words.Sub, df, textW, DescMaxLines) * DescLineH : 0f;
             float stack = labelH + (hasDesc ? LabelDescGap + descH : 0f);
             float rowH = MathF.Max(MinRowH, stack + RowPadY * 2);
 
@@ -168,7 +175,8 @@ internal static class AskBanner
             var row = layout.Rows[i];
 
             bool typing = typed != null && IsFreeText(row.Option);
-            DrawRow(g, row, i + 1, a, typing || i == hover, Accent(ask, Words(row.Option).Label), seeThrough,
+
+            DrawRow(g, row, i + 1, a, typing || i == hover, Accent(ask, row.Option.Label), seeThrough,
                 typing ? typed : null);
         }
     }
@@ -232,15 +240,17 @@ internal static class AskBanner
             using (var cb = new SolidBrush(Mul(accent, a)))
                 g.FillRectangle(cb, caretX, row.Label.Y + 1f, CaretW, LabelLineH - 4f);
             if (row.Desc.Height > 0f)
-                Ink(g, "enter to send   esc to go back", df, Slack(row.Desc), sf,
+
+                InkRtl(g, global::Halo.Localization.Strings.Get("ask.enterToSend"), df, Slack(row.Desc), sf,
                     seeThrough ? DimClear : Dim, a, seeThrough);
             return;
         }
 
-        InkRtl(g, Words(row.Option).Label, lf, Slack(row.Label), sf, White, a, seeThrough);
+        var words = Words(row.Option);
+        InkRtl(g, words.Label, lf, Slack(row.Label), sf, White, a, seeThrough);
         if (row.Desc.Height <= 0f) return;
 
-        InkRtl(g, row.Option.Description, df, Slack(row.Desc), sf, seeThrough ? DimClear : Dim, a, seeThrough);
+        InkRtl(g, words.Sub, df, Slack(row.Desc), sf, seeThrough ? DimClear : Dim, a, seeThrough);
     }
 
     private const float CaretW = 2f;
@@ -450,11 +460,14 @@ internal static class AskBanner
     }
 
     private static string Eyebrow(PendingAsk ask)
-        => ask.IsQuestion ? "CLAUDE CODE ASKS" : $"CLAUDE CODE WANTS TO RUN {ask.Tool.ToUpperInvariant()}";
+        => ask.IsQuestion
+            ? global::Halo.Localization.Strings.Get("ask.eyebrow.asks")
+            : global::Halo.Localization.Strings.Format("ask.eyebrow.runs", ask.Tool.ToUpperInvariant());
 
     private static string Title(PendingAsk ask)
         => !string.IsNullOrEmpty(ask.Question) ? ask.Question!
-         : ask.IsQuestion ? "your move ;)" : "run this?";
+         : ask.IsQuestion ? global::Halo.Localization.Strings.Get("ask.title.yourMove")
+         : global::Halo.Localization.Strings.Get("ask.title.runThis");
 
     private static Color Mul(Color c, float a)
         => Color.FromArgb((int)Math.Clamp(c.A * a, 0, 255), c.R, c.G, c.B);

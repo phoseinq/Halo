@@ -574,5 +574,22 @@
   "report.noStart": "Halo.App शुरू नहीं हो सका।",
   "ask.freeTextSub": "अपने शब्दों में उत्तर दें",
   "ask.chat": "इस पर बात करें",
-  "ask.chatSub": "प्रश्न छोड़ें और बात करें"
+  "ask.chatSub": "प्रश्न छोड़ें और बात करें",
+  "ask.enterToSend": "Enter से भेजें   Esc से वापस",
+  "ask.eyebrow.asks": "Claude Code पूछ रहा है",
+  "ask.eyebrow.runs": "Claude Code {0} चलाना चाहता है",
+  "ask.title.yourMove": "अब आपकी बारी ;)",
+  "ask.title.runThis": "यह चलाऊँ?",
+  "agent.row.usage": "उपयोग",
+  "agent.nothingReported": "अभी कुछ नहीं बताया गया",
+  "agent.noLimitReported": "कोई सीमा नहीं बताई गई",
+  "agent.noSecondWindow": "दूसरी विंडो नहीं",
+  "agent.window.plan": "प्लान",
+  "agent.window.mins": "{0} मिनट",
+  "agent.window.hours": "{0} घंटे",
+  "agent.window.hoursMins": "{0}घ{1}मि",
+  "agent.window.days": "{0} दिन",
+  "agent.window.daysHours": "{0}द{1}घ",
+  "download.paused": "रुका",
+  "download.downloading": "डाउनलोड हो रहा"
 }

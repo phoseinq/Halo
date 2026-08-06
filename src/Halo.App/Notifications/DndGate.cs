@@ -153,7 +153,7 @@ internal static class BannerGate
     }
 
     private const string GlobalSoundValue = "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND";
-    private const string GlobalKey = "global";
+    private const string GlobalKey = "\u0001global";
 
     private static bool SilenceGlobalSound()
     {

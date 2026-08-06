@@ -575,5 +575,22 @@
   "report.noStart": "Не удалось запустить Halo.App.",
   "ask.freeTextSub": "ответьте своими словами",
   "ask.chat": "Обсудить это",
-  "ask.chatSub": "оставить вопрос и поговорить"
+  "ask.chatSub": "оставить вопрос и поговорить",
+  "ask.enterToSend": "Enter — отправить   Esc — назад",
+  "ask.eyebrow.asks": "CLAUDE CODE СПРАШИВАЕТ",
+  "ask.eyebrow.runs": "CLAUDE CODE ХОЧЕТ ЗАПУСТИТЬ {0}",
+  "ask.title.yourMove": "твой ход ;)",
+  "ask.title.runThis": "выполнить это?",
+  "agent.row.usage": "расход",
+  "agent.nothingReported": "пока нет данных",
+  "agent.noLimitReported": "лимит не сообщён",
+  "agent.noSecondWindow": "второго окна нет",
+  "agent.window.plan": "тариф",
+  "agent.window.mins": "{0} мин",
+  "agent.window.hours": "{0} ч",
+  "agent.window.hoursMins": "{0}ч{1}м",
+  "agent.window.days": "{0} д",
+  "agent.window.daysHours": "{0}д{1}ч",
+  "download.paused": "Пауза",
+  "download.downloading": "Загрузка"
 }

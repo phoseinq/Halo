@@ -158,7 +158,7 @@ internal sealed class DownloadWidget : IWidget
         y += 32;
 
         string state = Downloads.Waiting ? "Waiting…" : Downloads.Installing ? "Installing…"
-            : paused ? "Paused" : "Downloading";
+            : paused ? Halo.Localization.Strings.Get("download.paused") : Halo.Localization.Strings.Get("download.downloading");
         string meta = state;
 
         if (Downloads.NoBytes) { }

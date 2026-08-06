@@ -620,5 +620,22 @@
   "report.noStart": "نتوانستم Halo.App را اجرا کنم.",
   "ask.freeTextSub": "با کلمه‌های خودت جواب بده",
   "ask.chat": "درباره‌اش حرف بزنیم",
-  "ask.chatSub": "سؤال را رها کن و گفت‌وگو کن"
+  "ask.chatSub": "سؤال را رها کن و گفت‌وگو کن",
+  "ask.enterToSend": "Enter برای فرستادن   Esc برای برگشت",
+  "ask.eyebrow.asks": "Claude Code می‌پرسد",
+  "ask.eyebrow.runs": "Claude Code می‌خواهد {0} را اجرا کند",
+  "ask.title.yourMove": "نوبت توست ;)",
+  "ask.title.runThis": "این را اجرا کنم؟",
+  "agent.row.usage": "مصرف",
+  "agent.nothingReported": "هنوز چیزی گزارش نشده",
+  "agent.noLimitReported": "محدودیتی گزارش نشده",
+  "agent.noSecondWindow": "پنجره‌ی دومی نیست",
+  "agent.window.plan": "پلن",
+  "agent.window.mins": "{0} دقیقه‌ای",
+  "agent.window.hours": "{0} ساعته",
+  "agent.window.hoursMins": "{0}س{1}د",
+  "agent.window.days": "{0} روزه",
+  "agent.window.daysHours": "{0}ر{1}س",
+  "download.paused": "متوقف",
+  "download.downloading": "در حال دانلود"
 }

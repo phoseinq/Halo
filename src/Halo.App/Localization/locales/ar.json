@@ -574,5 +574,22 @@
   "report.noStart": "تعذّر تشغيل Halo.App.",
   "ask.freeTextSub": "أجب بكلماتك",
   "ask.chat": "لنتحدث عن هذا",
-  "ask.chatSub": "اترك السؤال وتحدّث بدلًا منه"
+  "ask.chatSub": "اترك السؤال وتحدّث بدلًا منه",
+  "ask.enterToSend": "Enter للإرسال   Esc للرجوع",
+  "ask.eyebrow.asks": "Claude Code يسأل",
+  "ask.eyebrow.runs": "Claude Code يريد تشغيل {0}",
+  "ask.title.yourMove": "دورك ;)",
+  "ask.title.runThis": "أشغّل هذا؟",
+  "agent.row.usage": "الاستهلاك",
+  "agent.nothingReported": "لم يُبلغ عن شيء بعد",
+  "agent.noLimitReported": "لا يوجد حد مُبلغ",
+  "agent.noSecondWindow": "لا توجد نافذة ثانية",
+  "agent.window.plan": "الخطة",
+  "agent.window.mins": "{0} دقيقة",
+  "agent.window.hours": "{0} ساعة",
+  "agent.window.hoursMins": "{0}س{1}د",
+  "agent.window.days": "{0} يوم",
+  "agent.window.daysHours": "{0}ي{1}س",
+  "download.paused": "مُوقَف",
+  "download.downloading": "جارٍ التنزيل"
 }

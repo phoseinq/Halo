@@ -575,5 +575,22 @@
   "report.noStart": "Não foi possível iniciar o Halo.App.",
   "ask.freeTextSub": "responda com as suas palavras",
   "ask.chat": "Falar sobre isto",
-  "ask.chatSub": "deixe a pergunta e converse"
+  "ask.chatSub": "deixe a pergunta e converse",
+  "ask.enterToSend": "Enter para enviar   Esc para voltar",
+  "ask.eyebrow.asks": "CLAUDE CODE PERGUNTA",
+  "ask.eyebrow.runs": "CLAUDE CODE QUER EXECUTAR {0}",
+  "ask.title.yourMove": "é a tua vez ;)",
+  "ask.title.runThis": "executo isto?",
+  "agent.row.usage": "uso",
+  "agent.nothingReported": "ainda sem dados",
+  "agent.noLimitReported": "sem limite informado",
+  "agent.noSecondWindow": "sem segunda janela",
+  "agent.window.plan": "plano",
+  "agent.window.mins": "{0} min",
+  "agent.window.hours": "{0} h",
+  "agent.window.hoursMins": "{0}h{1}m",
+  "agent.window.days": "{0} d",
+  "agent.window.daysHours": "{0}d{1}h",
+  "download.paused": "Em pausa",
+  "download.downloading": "A transferir"
 }

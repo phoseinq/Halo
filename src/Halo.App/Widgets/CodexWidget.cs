@@ -390,12 +390,13 @@ internal sealed class CodexWidget : IWidget
             string big = rf < 0 ? "—" : $"{Math.Clamp(rf, 0f, 1f) * 100:0}%";
             string cap2 = shown switch
             {
-                0 => primary is null ? "no limit reported"
-                    : $"{LimitCaption(primary)}  ·  {ResetIn(primary.ResetsAt ?? default)} left",
-                1 => secondary is null ? "no second window"
-                    : $"{LimitCaption(secondary)}  ·  {ResetIn(secondary.ResetsAt ?? default)} left",
+                0 => primary is null ? Halo.Localization.Strings.Get("agent.noLimitReported")
+                    : LimitCaption(primary) + "  ·  " + Halo.Localization.Strings.Format("agent.left", ResetIn(primary.ResetsAt ?? default)),
+                1 => secondary is null ? Halo.Localization.Strings.Get("agent.noSecondWindow")
+                    : LimitCaption(secondary) + "  ·  " + Halo.Localization.Strings.Format("agent.left", ResetIn(secondary.ResetsAt ?? default)),
                 _ => ctxFrac >= 0 && st is not null
-                    ? $"context  ·  {st.ContextUsed / 1000}K of {st.ContextMax / 1000}K" : "context  ·  no session",
+                    ? Halo.Localization.Strings.Format("agent.contextShort", st.ContextUsed / 1000, st.ContextMax / 1000)
+                    : Halo.Localization.Strings.Get("agent.row.context") + "  ·  " + Halo.Localization.Strings.Get("agent.noSession"),
             };
 
             float hole = RingOuter - 2 * RingStep - RingBand / 2f - 2f;
@@ -463,7 +464,8 @@ internal sealed class CodexWidget : IWidget
             Key(s, UsageColor(pFrac), LimitCaption(primary),
                 KeyHover(s) ? $"{pFrac * 100:0.#}%" : Pct(pFrac),
                 primary.ResetsAt is { } pr
-                    ? (KeyHover(s) ? $"resets {pr.ToLocalTime():ddd HH:mm}" : $"{ResetIn(pr)} left")
+                    ? (KeyHover(s) ? Halo.Localization.Strings.Format("agent.resets", pr.ToLocalTime().ToString("ddd HH:mm"))
+                                   : Halo.Localization.Strings.Format("agent.left", ResetIn(pr)))
                     : "",
                 UsageColor(pFrac));
         }
@@ -473,21 +475,23 @@ internal sealed class CodexWidget : IWidget
             Key(s, UsageColor(sFrac), LimitCaption(secondary),
                 KeyHover(s) ? $"{sFrac * 100:0.#}%" : Pct(sFrac),
                 secondary.ResetsAt is { } sr
-                    ? (KeyHover(s) ? $"resets {sr.ToLocalTime():ddd HH:mm}" : $"{ResetIn(sr)} left")
+                    ? (KeyHover(s) ? Halo.Localization.Strings.Format("agent.resets", sr.ToLocalTime().ToString("ddd HH:mm"))
+                                   : Halo.Localization.Strings.Format("agent.left", ResetIn(sr)))
                     : "",
                 UsageColor(sFrac));
         }
         if (primary is null && secondary is null)
-            Key(slot++, Dim, "usage", "—", "nothing reported yet");
+            Key(slot++, Dim, Halo.Localization.Strings.Get("agent.row.usage"), "—", Halo.Localization.Strings.Get("agent.nothingReported"));
 
         if (ctxFrac >= 0 && st is not null)
         {
             long maxK = st.ContextMax / 1000, usedK = Math.Min(st.ContextUsed / 1000, maxK);
             string maxLabel = maxK >= 1000 ? $"{maxK / 1000f:0.#}M" : $"{maxK}K";
-            Key(slot, ctxCol, "context", $"{usedK}K", $"of {maxLabel}  ·  {ctxFrac * 100:0}% used", ctxCol,
+            Key(slot, ctxCol, Halo.Localization.Strings.Get("agent.row.context"), $"{usedK}K",
+                Halo.Localization.Strings.Format("agent.contextOf", maxLabel, (ctxFrac * 100).ToString("0")), ctxCol,
                 $"{ctxFrac * 100:0}%");
         }
-        else Key(slot, Dim, "context", "—", "no active session");
+        else Key(slot, Dim, Halo.Localization.Strings.Get("agent.row.context"), "—", Halo.Localization.Strings.Get("agent.noActiveSession"));
 
         DrawNet(g, ColR, 74, RightEdge - ColR, 38, a);
         ExitBlock.Draw(g, a, keySub, keyCap, ColR, RightEdge,
@@ -499,10 +503,13 @@ internal sealed class CodexWidget : IWidget
         using (var rsf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap })
         {
+            string glyph = "⟳ " + Halo.Localization.Strings.Get("agent.refresh");
             string label = rHover
-                ? (CodexLimits.LastSuccess == DateTimeOffset.MinValue ? "never read  ·  ⟳ refresh"
-                   : $"read {AgeText(DateTime.UtcNow - CodexLimits.LastSuccess)}  ·  ⟳ refresh")
-                : "⟳ refresh";
+                ? (CodexLimits.LastSuccess == DateTimeOffset.MinValue
+                    ? Halo.Localization.Strings.Get("agent.neverRead") + "  ·  " + glyph
+                    : Halo.Localization.Strings.Format("agent.read", AgeText(DateTime.UtcNow - CodexLimits.LastSuccess))
+                      + "  ·  " + glyph)
+                : glyph;
             g.DrawString(label, keySub, rb, rr, rsf);
         }
 
@@ -513,13 +520,13 @@ internal sealed class CodexWidget : IWidget
 
     internal static string LimitCaption(int windowMinutes) => windowMinutes switch
     {
-        <= 0 => "plan",
-        10_080 => "weekly",
-        < 60 => $"{windowMinutes}-min",
-        < 1440 when windowMinutes % 60 == 0 => $"{windowMinutes / 60}-hour",
-        < 1440 => $"{windowMinutes / 60}h{windowMinutes % 60}m",
-        _ when windowMinutes % 1440 == 0 => $"{windowMinutes / 1440}-day",
-        _ => $"{windowMinutes / 1440}d{windowMinutes % 1440 / 60}h",
+        <= 0 => Halo.Localization.Strings.Get("agent.window.plan"),
+        10_080 => Halo.Localization.Strings.Get("agent.row.weekly"),
+        < 60 => Halo.Localization.Strings.Format("agent.window.mins", windowMinutes),
+        < 1440 when windowMinutes % 60 == 0 => Halo.Localization.Strings.Format("agent.window.hours", windowMinutes / 60),
+        < 1440 => Halo.Localization.Strings.Format("agent.window.hoursMins", windowMinutes / 60, windowMinutes % 60),
+        _ when windowMinutes % 1440 == 0 => Halo.Localization.Strings.Format("agent.window.days", windowMinutes / 1440),
+        _ => Halo.Localization.Strings.Format("agent.window.daysHours", windowMinutes / 1440, windowMinutes % 1440 / 60),
     };
 
     private void DrawCancel(Graphics g, int w, int h, float a, Color state)
@@ -775,7 +782,8 @@ internal sealed class CodexWidget : IWidget
     {
         if (r == default) return "";
         var d = r - DateTimeOffset.UtcNow;
-        if (d.TotalSeconds <= 0) return "now";
+        if (d.TotalSeconds <= 0) return Halo.Localization.Strings.Get("time.now");
+
         if (d.TotalDays >= 1) return $"{(int)d.TotalDays}d {d.Hours}h";
         if (d.TotalHours >= 1) return $"{(int)d.TotalHours}h {d.Minutes}m";
         return $"{d.Minutes}m";

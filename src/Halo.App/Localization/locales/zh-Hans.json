@@ -575,5 +575,22 @@
   "report.noStart": "无法启动 Halo.App。",
   "ask.freeTextSub": "用你自己的话回答",
   "ask.chat": "聊聊这个",
-  "ask.chatSub": "先放下问题，改为对话"
+  "ask.chatSub": "先放下问题，改为对话",
+  "ask.enterToSend": "Enter 发送   Esc 返回",
+  "ask.eyebrow.asks": "Claude Code 提问",
+  "ask.eyebrow.runs": "Claude Code 想运行 {0}",
+  "ask.title.yourMove": "该你了 ;)",
+  "ask.title.runThis": "运行这个？",
+  "agent.row.usage": "用量",
+  "agent.nothingReported": "尚未报告",
+  "agent.noLimitReported": "未报告限额",
+  "agent.noSecondWindow": "没有第二个窗口",
+  "agent.window.plan": "套餐",
+  "agent.window.mins": "{0}分钟",
+  "agent.window.hours": "{0}小时",
+  "agent.window.hoursMins": "{0}时{1}分",
+  "agent.window.days": "{0}天",
+  "agent.window.daysHours": "{0}天{1}时",
+  "download.paused": "已暂停",
+  "download.downloading": "下载中"
 }

@@ -6,8 +6,14 @@ namespace Halo.Tests;
 // any other length produced two rows both captioned "plan" — and, worse, the projections feeding them
 // were named FiveHour/Week without ever checking the duration, so the pill claimed a 5-hour window
 // Codex does not necessarily have. These pin the caption to the real window length.
+// The captions go through the string layer now, so these assert the ENGLISH wording and have to say so:
+// Strings.Use is process-global, and without the collection this class runs in parallel with the ones
+// that switch language underneath it.
+[Collection("locale")]
 public sealed class CodexLimitCaptionTests
 {
+    public CodexLimitCaptionTests() => Halo.Localization.Strings.Use("English");
+
     [Theory]
     [InlineData(300, "5-hour")]
     [InlineData(60, "1-hour")]

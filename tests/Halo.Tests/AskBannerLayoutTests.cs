@@ -10,6 +10,9 @@ namespace Halo.Tests;
 // text. Nothing here checks pixels; it checks the properties that go wrong when geometry is derived from
 // text: that a row grows for its content, that the rects Draw paints are the rects the hit-test clicks,
 // and that recomputing every frame stays cheap.
+// Serialised with the other classes that touch the language: the two built-in rows are measured from
+// translated text now, and Strings.Use switches it for the whole process.
+[Collection("locale")]
 public class AskBannerLayoutTests
 {
     private static PendingAsk Ask(params AskOption[] options)
@@ -49,6 +52,71 @@ public class AskBannerLayoutTests
 
         Assert.Equal(0f, rows[0].Desc.Height);
         Assert.True(rows[0].Rect.Height >= 40f);
+    }
+
+    // Halo's own two rows store a MARKER where their text used to be - Words() resolves what is drawn, so a
+    // language change reaches them without breaking IsFreeText, which is a reference comparison. Layout has
+    // to measure that same resolved text. Reading the stored value here instead shipped in v4.0.0: both rows
+    // measured as having no description, reserved no height for one, and drew none - visibly shorter than
+    // the agent's own options in --render-ask.
+    [Fact]
+    public void The_rows_Halo_adds_itself_reserve_room_for_their_sub_label()
+    {
+        var rows = AskBanner.Layout(Ask(new AskOption("one", "the CPU one")), AskBanner.W).Rows;
+
+        Assert.Equal(3, rows.Count);
+        Assert.True(AskBanner.IsFreeText(rows[1].Option));
+        Assert.True(AskBanner.IsChat(rows[2].Option));
+        Assert.All(rows, row => Assert.True(row.Desc.Height > 0f,
+            "every row here has a sub-label, so every row must have reserved height for one"));
+    }
+
+    [Fact]
+    public void Words_resolves_the_built_ins_and_leaves_the_agent_s_own_text_alone()
+    {
+        foreach (var (built, labelKey, subKey) in new[]
+                 {
+                     (AskBanner.FreeText, "ask.typeSomething", "ask.freeTextSub"),
+                     (AskBanner.Chat, "ask.chat", "ask.chatSub"),
+                 })
+        {
+            var (Label, Sub) = AskBanner.Words(built);
+            Assert.False(string.IsNullOrWhiteSpace(Label));
+            Assert.False(string.IsNullOrWhiteSpace(Sub));
+            // Get falls through active -> English -> THE KEY ITSELF, so "not empty" stays green with every
+            // ask.* key deleted and the banner would ship raw dotted key names in all eight languages.
+            // These two assertions are the ones that fail in that case.
+            Assert.NotEqual(labelKey, Label);
+            Assert.NotEqual(subKey, Sub);
+            // and never the identity marker the option stores
+            Assert.DoesNotContain("__", Label);
+        }
+
+        // an agent's own option is not ours to translate
+        Assert.Equal(("allow", "run it"), AskBanner.Words(new AskOption("allow", "run it")));
+    }
+
+    // the memo is keyed on the ask instance, which does not change when the language does
+    [Fact]
+    public void Switching_language_re_measures_instead_of_serving_the_old_heights()
+    {
+        var ask = Ask(new AskOption("one", "the CPU one"));
+        try
+        {
+            Halo.Localization.Strings.Use("English");
+            var english = AskBanner.Layout(ask, AskBanner.W);
+            string englishLabel = AskBanner.Words(AskBanner.FreeText).Label;
+
+            // the same language must still be served from the memo, or this proves nothing about the key
+            Assert.Same(english, AskBanner.Layout(ask, AskBanner.W));
+
+            Halo.Localization.Strings.Use("Persian");
+            // guards the vacuous pass: with no fa.json beside the assembly the text would be identical and
+            // only the object identity would differ, so the assertion below would mean nothing
+            Assert.NotEqual(englishLabel, AskBanner.Words(AskBanner.FreeText).Label);
+            Assert.NotSame(english, AskBanner.Layout(ask, AskBanner.W));
+        }
+        finally { Halo.Localization.Strings.Use("English"); }
     }
 
     [Fact]

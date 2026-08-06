@@ -855,7 +855,8 @@ internal sealed class ClaudeCodeWidget : IWidget
     {
         if (r == default) return "";
         var d = r - DateTimeOffset.UtcNow;
-        if (d.TotalSeconds <= 0) return "now";
+        if (d.TotalSeconds <= 0) return Halo.Localization.Strings.Get("time.now");
+
         if (d.TotalDays >= 1) return $"{(int)d.TotalDays}d {d.Hours}h";
         if (d.TotalHours >= 1) return $"{(int)d.TotalHours}h {d.Minutes}m";
         return $"{d.Minutes}m";

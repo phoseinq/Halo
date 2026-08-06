@@ -153,6 +153,27 @@ public class StringsTests
     public void The_default_follows_the_Windows_language_and_falls_back_to_English(string? code, string expected)
         => Assert.Equal(expected, Strings.LabelForCulture(code));
 
+    // The row above tried fa, FA, en, de, "" and null, and every one of those codes is already two letters,
+    // so the theory could not fail for the one language that is not: Known stores Chinese as "zh-Hans"
+    // while CurrentUICulture.TwoLetterISOLanguageName reports "zh" for zh-CN, zh-Hans-CN and the rest.
+    // A Chinese Windows therefore opened v4.0.0 in English, under a manifest that declares zh-Hans and a
+    // Store listing that promises the app follows the system language.
+    // Asserted through Code() rather than against the endonym, because a Chinese label written in this file
+    // would break the ASCII-source rule the same way the range in Live.cs did.
+    [Theory]
+    [InlineData("zh")]
+    [InlineData("ZH")]
+    [InlineData("zh-Hans")]
+    public void A_Chinese_Windows_opens_in_Chinese(string code)
+        => Assert.Equal("zh-Hans", Strings.Code(Strings.LabelForCulture(code)));
+
+    // Same mismatch reached the dev knob: Name("zh") found nothing, handed "zh" to Use, which found no
+    // LABEL of that name and fell back to English - so HALO_LANG=zh rendered an English PNG and called it
+    // a Chinese one, on the variable whose whole purpose is rendering the hooks in another language.
+    [Fact]
+    public void HALO_LANG_accepts_the_subtag_Windows_actually_reports()
+        => Assert.Equal("zh-Hans", Strings.Code(Strings.Name("zh")));
+
     // The panel must not offer a language it cannot actually show - offering Persian with no fa.json is a
     // control the app cannot honour, which this repo has rejected twice already, for playback rate and for
     // invented percentages.

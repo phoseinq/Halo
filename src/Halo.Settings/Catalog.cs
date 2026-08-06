@@ -45,12 +45,19 @@ internal static class Catalog
 
     internal static string LanguageRowFallback => Halo.Localization.Strings.SystemLabel;
 
+    private static readonly object Gate = new();
+
     internal static NavGroup[] Nav
     {
         get
         {
-            if (_navFor != Halo.Localization.Strings.Version) { _nav = BuildNav(); _navFor = Halo.Localization.Strings.Version; }
-            return _nav!;
+            lock (Gate)
+            {
+
+                int version = Halo.Localization.Strings.Version;
+                if (_navFor != version) { _nav = BuildNav(); _navFor = version; }
+                return _nav!;
+            }
         }
     }
 
@@ -58,8 +65,12 @@ internal static class Catalog
     {
         get
         {
-            if (_pagesFor != Halo.Localization.Strings.Version) { _pages = BuildPages(); _pagesFor = Halo.Localization.Strings.Version; }
-            return _pages!;
+            lock (Gate)
+            {
+                int version = Halo.Localization.Strings.Version;
+                if (_pagesFor != version) { _pages = BuildPages(); _pagesFor = version; }
+                return _pages!;
+            }
         }
     }
 

@@ -5,7 +5,21 @@
          page - which reads its OWN assembly (Halo.Settings/Live.cs) - reported the SDK default 1.0.0
          while the pill and the installer said 3.x. every assembly inherits this now, and installer's
          Halo.iss reads the version back out of the published Halo.App.exe. -->
-    <Version>4.0.1</Version>
+    <Version>4.0.2</Version>
+  </PropertyGroup>
+
+  <!-- The shipped .pdb files were carrying the build machine's absolute source paths - username,
+       OneDrive folder, worktree name - plus a SourceLink map keyed by that same path, readable by
+       anyone who unzips the installer or the Store package. This turns both into /_/src/... instead.
+       Deleting the pdbs would have worked too and was rejected: Reports/ReportPayload.StackLines ships
+       stack traces in bug reports, and the pdb beside the exe is what puts line numbers in them.
+       Conditioned on being in a git checkout because DeterministicSourcePaths - which this turns on -
+       fails the build outright with "SourceRoot items must include at least one top-level item" when
+       nothing supplies a source root. publish-mirror.ps1 builds the staged tree in a temp directory
+       that is not a repo, and it carries this file, so the unconditional form broke the publish.
+       Exists() is true for a file as well as a directory, which is what a worktree's .git is. -->
+  <PropertyGroup Condition="Exists('$(MSBuildThisFileDirectory).git')">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
 </Project>

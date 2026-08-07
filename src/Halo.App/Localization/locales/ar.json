@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "فتح Halo بعد تسجيل الدخول",
   "settings.general.fullscreen.label": "الظهور فوق ملء الشاشة",
   "settings.general.fullscreen.desc": "إبقاء الحبّة فوق الألعاب والفيديو",
+  "settings.general.greeting.label": "إلقاء التحية",
+  "settings.general.greeting.desc": "التلويح أول مرة تعود فيها كل يوم",
   "settings.general.language.label": "اللغة",
   "settings.general.language.desc": "اللغة التي يعرض بها Halo نصوصه",
   "settings.general.capture.label": "إظهار Halo في التسجيلات",

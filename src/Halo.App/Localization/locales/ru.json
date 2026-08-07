@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "Открывать Halo после входа в систему",
   "settings.general.fullscreen.label": "Поверх полноэкранных окон",
   "settings.general.fullscreen.desc": "Держать пилюлю над играми и видео",
+  "settings.general.greeting.label": "Здороваться",
+  "settings.general.greeting.desc": "Махать рукой при первом возвращении за день",
   "settings.general.language.label": "Язык",
   "settings.general.language.desc": "Язык, на котором Halo показывает свои надписи",
   "settings.general.capture.label": "Показывать Halo в записи",

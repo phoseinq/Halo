@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 
 namespace Halo.Shell;
@@ -9,6 +10,8 @@ internal enum GreetingKind
     Install,
     Login,
 }
+
+internal readonly record struct GreetingMark(string Version, DateOnly? Last);
 
 internal static class GreetingArm
 {
@@ -25,27 +28,52 @@ internal static class GreetingArm
 
 internal static class GreetingGate
 {
-    internal static GreetingKind Decide(string? marker, string version)
-        => string.IsNullOrWhiteSpace(marker) || marker.Trim() != version
-            ? GreetingKind.Install
-            : GreetingKind.Login;
+    internal static GreetingKind Decide(GreetingMark mark, string version, DateOnly today, bool enabled)
+    {
+        if (!enabled) return GreetingKind.None;
+        if (!string.Equals(mark.Version, version, StringComparison.Ordinal)) return GreetingKind.Install;
+        return mark.Last == today ? GreetingKind.None : GreetingKind.Login;
+    }
 
     internal static string Version =>
         typeof(GreetingGate).Assembly.GetName().Version?.ToString() ?? "0";
 
-    internal static GreetingKind Read(string path)
+    internal static GreetingMark Parse(string? text)
     {
-        try { return Decide(File.Exists(path) ? File.ReadAllText(path) : null, Version); }
-        catch { return GreetingKind.Login; }
+        if (string.IsNullOrWhiteSpace(text)) return new GreetingMark("", null);
+        var lines = text.Split('\n');
+        DateOnly? last = lines.Length > 1
+            && DateOnly.TryParseExact(lines[1].Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var day)
+            ? day : null;
+        return new GreetingMark(lines[0].Trim(), last);
     }
 
-    internal static void Mark(string path)
+    internal static string Format(GreetingMark mark) => mark.Last is { } day
+        ? mark.Version + "\n" + day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+        : mark.Version;
+
+    internal static GreetingMark Read(string path)
+    {
+        try { return Parse(File.Exists(path) ? File.ReadAllText(path) : null); }
+        catch { return new GreetingMark("", null); }
+    }
+
+    internal static void Write(string path, GreetingMark mark)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, Version);
+            File.WriteAllText(path, Format(mark));
         }
         catch { }
+    }
+
+    internal static GreetingKind Take(string path, DateOnly today, bool enabled)
+    {
+        var mark = Read(path);
+        var kind = Decide(mark, Version, today, enabled);
+        Write(path, new GreetingMark(Version, kind == GreetingKind.None ? mark.Last : today));
+        return kind;
     }
 }

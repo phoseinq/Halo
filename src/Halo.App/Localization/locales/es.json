@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "Abrir Halo al iniciar sesión",
   "settings.general.fullscreen.label": "Visible sobre pantalla completa",
   "settings.general.fullscreen.desc": "Mantener la píldora sobre juegos y vídeo",
+  "settings.general.greeting.label": "Saludar",
+  "settings.general.greeting.desc": "Saludar con la mano la primera vez que vuelves cada día",
   "settings.general.language.label": "Idioma",
   "settings.general.language.desc": "El idioma en el que Halo muestra sus textos",
   "settings.general.capture.label": "Incluir Halo en las capturas",

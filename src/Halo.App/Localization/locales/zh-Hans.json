@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "登录后自动打开 Halo",
   "settings.general.fullscreen.label": "全屏之上仍显示",
   "settings.general.fullscreen.desc": "让药丸浮在游戏和视频之上",
+  "settings.general.greeting.label": "打招呼",
+  "settings.general.greeting.desc": "每天第一次回来时挥手",
   "settings.general.language.label": "语言",
   "settings.general.language.desc": "Halo 显示自身文字所用的语言",
   "settings.general.capture.label": "截图中包含 Halo",

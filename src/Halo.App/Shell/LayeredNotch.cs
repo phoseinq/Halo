@@ -185,12 +185,15 @@ internal sealed class LayeredNotch
 
     public bool IsFullscreen(IntPtr fg)
     {
-        if (fg == IntPtr.Zero || fg == Hwnd || IsDesktopWindow(fg)) return false;
+        if (fg == IntPtr.Zero || fg == Hwnd || IsDesktopWindow(fg) || IsShellTransient(fg)) return false;
         if (!Win32.GetWindowRect(fg, out var r)) return false;
         int cx = Win32.GetSystemMetrics(Win32.SM_CXSCREEN);
         int cy = Win32.GetSystemMetrics(Win32.SM_CYSCREEN);
-        return r.left <= 0 && r.top <= 0 && r.right >= cx && r.bottom >= cy;
+        return CoversScreen(r, cx, cy);
     }
+
+    internal static bool CoversScreen(Win32.RECT r, int cx, int cy)
+        => r.left <= 0 && r.top <= 0 && r.right >= cx && r.bottom >= cy;
 
     public bool ProbeBehind(out IntPtr behindRoot)
     {
@@ -415,7 +418,25 @@ internal sealed class LayeredNotch
         catch { return null; }
     }
 
-    private static bool IsDesktopWindow(IntPtr hwnd)
+    internal static bool IsShellTransient(IntPtr hwnd) => IsShellTransientClass(ClassNameOf(hwnd));
+
+    internal static bool IsShellTransientClass(string cls) =>
+        cls is "XamlExplorerHostIslandWindow"
+            or "MultitaskingViewFrame"
+            or "ForegroundStaging";
+
+    internal static string ClassNameOf(IntPtr hwnd)
+    {
+        try
+        {
+            var buf = new char[120];
+            int n = Win32.GetClassName(hwnd, buf, buf.Length);
+            return new string(buf, 0, n);
+        }
+        catch { return "?"; }
+    }
+
+    internal static bool IsDesktopWindow(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return true;
         var buf = new char[80];

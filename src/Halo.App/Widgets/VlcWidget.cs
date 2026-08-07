@@ -176,15 +176,16 @@ internal sealed class VlcWidget : IWidget
         if (name == null) return;
         var icon = IconImage;
 
-        const float artX = 26, artY = 26, artSize = 132;
+        var art = MediaWidget.ArtRect(h);
+        float artX = art.X, artY = art.Y, artSize = art.Width;
         Fx.Glow(g, w, h, fade, artX + artSize / 2f, artY + artSize / 2f, w * 0.85f, h * 1.2f, 34, Orange);
-        using (var path = Fx.Rounded(new RectangleF(artX, artY, artSize, artSize), 14f))
+        using (var path = Fx.Rounded(art, MediaWidget.ArtRadius(h)))
         {
             if (icon != null)
             {
                 g.SetClip(path);
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                float inset = artSize * 0.14f;
+                float inset = ConeInset(h);
                 g.DrawImage(icon, artX + inset, artY + inset, artSize - inset * 2, artSize - inset * 2);
                 g.ResetClip();
             }
@@ -290,17 +291,20 @@ internal sealed class VlcWidget : IWidget
         if (name == null) return;
 
         _marquee.Park();
-        float sz = h - 14f, x = 9, y = (h - sz) / 2f;
+
+        var art = MediaWidget.ArtRect(h);
+        float sz = art.Width, x = art.X, y = art.Y;
         float prog = Progress();
         if (prog >= 0f) Fx.PillBar(g, w, h, fade, prog, Orange, 0.5f);
         Fx.Glow(g, w, h, fade, x + sz / 2f, h / 2f, w * 0.7f, h * 2.2f, 30, Orange);
         var icon = IconImage;
         if (icon != null)
         {
-            using var path = Fx.Rounded(new RectangleF(x, y, sz, sz), sz * 0.28f);
+            using var path = Fx.Rounded(art, MediaWidget.ArtRadius(h));
             g.SetClip(path);
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.DrawImage(icon, x + 2, y + 2, sz - 4, sz - 4);
+            float inset = ConeInset(h);
+            g.DrawImage(icon, x + inset, y + inset, sz - inset * 2, sz - inset * 2);
             g.ResetClip();
         }
 
@@ -309,6 +313,13 @@ internal sealed class VlcWidget : IWidget
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap | (Fx.IsRtl(name) ? StringFormatFlags.DirectionRightToLeft : 0), LineAlignment = StringAlignment.Center };
         g.DrawString(name, f, b, new RectangleF(x + sz + 10, 0, w - (x + sz + 10) - 12, h), sf);
+    }
+
+    internal const float MiniInsetFrac = 2f / 26f, PanelInsetFrac = 0.14f;
+    internal static float ConeInset(float h)
+    {
+        float t = MediaWidget.MorphT(h);
+        return MediaWidget.ArtRect(h).Width * (MiniInsetFrac + (PanelInsetFrac - MiniInsetFrac) * t);
     }
 
     private string SpeedLabel() => VlcHttp.Online

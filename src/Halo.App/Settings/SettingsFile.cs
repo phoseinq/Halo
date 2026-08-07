@@ -103,6 +103,7 @@ internal static class SettingsKeys
     internal const string OverFullscreen = "general.fullscreen";
     internal const string InCaptures = "general.capture";
     internal const string FollowFocus = "general.follow";
+    internal const string Greeting = "general.greeting";
     internal const string Scale = "appearance.scale";
     internal const string Glass = "appearance.glass";
     internal const string Motion = "appearance.motion";

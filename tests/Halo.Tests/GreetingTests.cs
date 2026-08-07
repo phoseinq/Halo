@@ -1,4 +1,7 @@
+extern alias settingsasm;
 using System;
+using System.Globalization;
+using System.IO;
 using Halo.Shell;
 using Xunit;
 
@@ -7,38 +10,154 @@ namespace Halo.Tests;
 public class GreetingGateTests
 {
     private const string Version = "3.1.7.0";
+    private static readonly DateOnly Today = new(2026, 8, 7);
+
+    private static GreetingKind Decide(string? marker, bool enabled = true)
+        => GreetingGate.Decide(GreetingGate.Parse(marker), Version, Today, enabled);
 
     [Fact]
     public void No_marker_means_this_build_has_never_run_here()
-        => Assert.Equal(GreetingKind.Install, GreetingGate.Decide(null, Version));
+        => Assert.Equal(GreetingKind.Install, Decide(null));
 
     // the marker used to hold a boot timestamp; an upgrade reads that and must treat it as "not this build"
     [Fact]
     public void A_marker_it_cannot_recognise_is_a_new_build()
-        => Assert.Equal(GreetingKind.Install, GreetingGate.Decide("2026-07-31T17:11:05.4669755Z", Version));
+        => Assert.Equal(GreetingKind.Install, Decide("2026-07-31T17:11:05.4669755Z"));
 
     [Fact]
     public void An_upgrade_introduces_itself()
-        => Assert.Equal(GreetingKind.Install, GreetingGate.Decide("3.1.6.0", Version));
+        => Assert.Equal(GreetingKind.Install, Decide("3.1.6.0"));
 
-    // The one that matters: the settings panel restarts Halo on apply. Same build, so the long
-    // introduction stays put - but the hand still comes, which is what was asked for.
+    // Every marker written before the ration existed is one line and no day, so an installed build that
+    // upgrades into this one must read as "same build, has not said hello today" - one hand, not the
+    // ten-second introduction and not silence.
     [Fact]
-    public void A_restart_of_the_same_build_gets_the_hand_and_not_the_introduction()
-        => Assert.Equal(GreetingKind.Login, GreetingGate.Decide(Version, Version));
+    public void A_marker_from_before_the_ration_gets_exactly_one_hand()
+        => Assert.Equal(GreetingKind.Login, Decide(Version));
+
+    [Fact]
+    public void The_first_arrival_of_the_day_gets_the_hand()
+        => Assert.Equal(GreetingKind.Login, Decide(Version + "\n2026-08-06"));
+
+    // The report this whole thing exists for: a laptop set to sleep ten minutes after you stand up woke
+    // to a hand every single time you came back to it.
+    [Fact]
+    public void A_second_arrival_the_same_day_gets_nothing()
+        => Assert.Equal(GreetingKind.None, Decide(Version + "\n2026-08-07"));
 
     // whitespace happens to a file written by a text editor; it is not a different build
     [Fact]
     public void The_marker_is_compared_trimmed()
-        => Assert.Equal(GreetingKind.Login, GreetingGate.Decide(" 3.1.7.0\r\n", Version));
+        => Assert.Equal(GreetingKind.Login, Decide(" 3.1.7.0\r\n"));
+
+    // Off means off, including the one greeting that has something new to say. A user who switched the
+    // hand off and then upgraded did not ask for ten seconds of signature.
+    [Fact]
+    public void The_switch_silences_the_introduction_too()
+    {
+        Assert.Equal(GreetingKind.None, Decide(null, enabled: false));
+        Assert.Equal(GreetingKind.None, Decide(Version + "\n2026-08-06", enabled: false));
+    }
+
+    // A second line it cannot read must cost the ration and nothing else. Reading it as a version change
+    // would turn a corrupt byte into the ten-second introduction on every launch.
+    [Fact]
+    public void A_day_it_cannot_read_is_a_missing_day_and_not_a_new_build()
+        => Assert.Equal(GreetingKind.Login, Decide(Version + "\nnot a day"));
+
+    // The machine this was reported on runs a Persian locale, where a culture-formatted date writes a year
+    // 621 off and parses back as nothing - which reads as "no hello yet today", on every single wake.
+    [Fact]
+    public void The_day_is_written_and_read_in_one_calendar_whatever_the_machine_is_set_to()
+    {
+        var was = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fa-IR");
+            string text = GreetingGate.Format(new GreetingMark(Version, Today));
+            Assert.Equal(Version + "\n2026-08-07", text);
+            Assert.Equal(Today, GreetingGate.Parse(text).Last);
+            Assert.Equal(GreetingKind.None, Decide(text));
+        }
+        finally { CultureInfo.CurrentCulture = was; }
+    }
 
     // a real version, not "0": the fallback would make every launch an install
     [Fact]
     public void The_running_build_reports_a_version()
     {
         Assert.NotEqual("0", GreetingGate.Version);
-        Assert.Equal(GreetingKind.Login, GreetingGate.Decide(GreetingGate.Version, GreetingGate.Version));
+        Assert.Equal(GreetingKind.Login,
+            GreetingGate.Decide(new GreetingMark(GreetingGate.Version, null), GreetingGate.Version, Today, true));
     }
+
+    // The rule end to end, through the file the pill actually keeps: two arrivals in a day, one hand.
+    [Fact]
+    public void Two_arrivals_in_one_day_leave_one_hand_between_them()
+    {
+        var (dir, path) = TempMarker();
+        try
+        {
+            GreetingGate.Write(path, new GreetingMark(GreetingGate.Version, null));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, true));
+            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, true));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today.AddDays(1), true));
+        }
+        finally { Scrub(dir); }
+    }
+
+    // Stamping the day on every Take regardless would let a launch with the hand switched off eat the
+    // day's one greeting, so switching it back on would show nothing until tomorrow.
+    [Fact]
+    public void A_hand_the_switch_refused_does_not_spend_the_day()
+    {
+        var (dir, path) = TempMarker();
+        try
+        {
+            GreetingGate.Write(path, new GreetingMark(GreetingGate.Version, null));
+            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, false));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, true));
+        }
+        finally { Scrub(dir); }
+    }
+
+    // A state directory that cannot be written costs a greeting, not a launch - so Take has to answer even
+    // when nothing it does can be persisted, and the answer has to be the safe one.
+    [Fact]
+    public void A_marker_that_cannot_be_written_still_answers()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "halo-greet-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(path);   // a DIRECTORY where the marker file should be
+        try { Assert.Equal(GreetingKind.Install, GreetingGate.Take(path, Today, true)); }
+        finally { Scrub(path); }
+    }
+
+    // The switch is written by one executable and read by another, which is as far apart as two readers
+    // get here: a typo leaves a toggle that slides, saves, and is never read by the thing it names - and
+    // nothing anywhere would say so. Its default is pinned on the same grounds; a row defaulting off
+    // against a reader defaulting on is a hand that disappears for everyone who never opened the panel.
+    [Fact]
+    public void The_panel_writes_the_greeting_key_the_pill_reads()
+    {
+        bool found = false;
+        foreach (var page in settingsasm::Halo.Settings.Catalog.Pages)
+            foreach (var section in page.Sections)
+                foreach (var row in section.Rows)
+                    if (row.Key == Halo.Settings.SettingsKeys.Greeting)
+                    {
+                        found = true;
+                        Assert.Equal("on", row.Fallback);
+                    }
+        Assert.True(found, "no settings row writes " + Halo.Settings.SettingsKeys.Greeting);
+    }
+
+    private static (string dir, string path) TempMarker()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "halo-greet-" + Guid.NewGuid().ToString("n"));
+        return (dir, Path.Combine(dir, "greeted"));
+    }
+
+    private static void Scrub(string dir) { try { Directory.Delete(dir, true); } catch { } }
 
     // Long enough that no stall, alt-tab storm or fps tier can reach it, short enough that a nap does.
     [Fact]

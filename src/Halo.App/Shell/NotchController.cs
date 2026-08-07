@@ -35,6 +35,9 @@ internal static class NotchVisibility
         return new(hiddenForFullscreen ? NotchVisibilityAction.ShowAndRender : NotchVisibilityAction.None,
             ReturnEarly: false, HiddenForFullscreen: false);
     }
+
+    internal static (bool Empty, float Shrink) Settled(int activeCount)
+        => (activeCount == 0, activeCount == 0 ? 1f : 0f);
 }
 
 internal sealed class AgentNoticeCoordinator
@@ -310,8 +313,6 @@ internal sealed partial class NotchController
         _keys.OnChar = TypedChar;
         _keys.OnKey = TypedKey;
 
-        _greet = GreetingGate.Read(GreetedPath);
-        GreetingGate.Mark(GreetedPath);
         _codexStore = new CodexStatusStore();
         _codexDesktopRuntime = CodexDesktopRuntime.Shared;
         CodexLimits.Attach(_codexStore);
@@ -319,6 +320,8 @@ internal sealed partial class NotchController
 
         _settings = new Halo.Settings.SettingsStore();
         Halo.Settings.SettingsStore.Shared = _settings;
+
+        _greet = GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now), GreetingWanted);
         _appliedSettings = _settings.Version;
 
         ApplyLanguage(_settings.Current);
@@ -1085,6 +1088,24 @@ internal sealed partial class NotchController
     internal static readonly TimeSpan WakeGap = TimeSpan.FromSeconds(90);
     private DateTime _lastTickUtc = DateTime.UtcNow;
 
+    private bool GreetingWanted =>
+        _settings.Current.Bool(Halo.Settings.SettingsKeys.Greeting, true);
+
+    private static readonly bool VisDebug = Environment.GetEnvironmentVariable("HALO_VISDEBUG") == "1";
+
+    private void LogVis(string what, IntPtr fg, int activeLen)
+    {
+        if (!VisDebug) return;
+        try
+        {
+            System.IO.File.AppendAllText(VisDebugPath,
+                $"{DateTime.Now:HH:mm:ss.fff} {what,-13} empty={_empty,-5} shrink={_shrink:0.000} "
+                + $"progress={_progress:0.000} primary={PrimaryWidgetName(),-18} active={activeLen} "
+                + $"pinned={Pinned(_pinned),-5} fg={LayeredNotch.ClassNameOf(fg)}\r\n");
+        }
+        catch { }
+    }
+
     private void CheckWake()
     {
         var now = DateTime.UtcNow;
@@ -1092,6 +1113,9 @@ internal sealed partial class NotchController
         _lastTickUtc = now;
 
         if (gap < WakeGap || _greet != GreetingKind.None || _notif != null || _ask != null) return;
+
+        if (GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now), GreetingWanted)
+            == GreetingKind.None) return;
         _greet = GreetingKind.Login;
         _greetT = 0f;
 
@@ -1151,18 +1175,26 @@ internal sealed partial class NotchController
         var visibility = NotchVisibility.Decide(fullscreen && !notifLive, _hiddenForFullscreen);
         _hiddenForFullscreen = visibility.HiddenForFullscreen;
 
+        bool justShown = visibility.Action == NotchVisibilityAction.ShowAndRender;
         if (visibility.Action == NotchVisibilityAction.Hide)
-            _notch.SetVisible(false);
-        else if (visibility.Action == NotchVisibilityAction.ShowAndRender)
         {
+            LogVis("hide", fg, active.Length);
+            _notch.SetVisible(false);
+        }
+        else if (justShown)
+        {
+            LogVis("show:frozen", fg, active.Length);
             if (active.Length > 0 && Array.IndexOf(active, _primary) < 0)
             {
                 _primary = PreferredPrimary(active);
                 _agentNotices.SetPrimary(_primary);
             }
+
+            (_empty, _shrink) = NotchVisibility.Settled(active.Length);
             _notch.SetVisible(true);
             _lastFg = IntPtr.Zero;
             Apply(_progress);
+            LogVis("show:applied", fg, active.Length);
         }
 
         if (visibility.ReturnEarly)
@@ -1170,6 +1202,7 @@ internal sealed partial class NotchController
 
         bool wasEmpty = _empty;
         _empty = active.Length == 0;
+        if (justShown) LogVis("show:settled", fg, active.Length);
 
         if (!_empty && _drop < 0f && Array.IndexOf(active, _primary) < 0)
         {
@@ -2991,6 +3024,7 @@ internal sealed partial class NotchController
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo");
     private static readonly string OffsetPath = System.IO.Path.Combine(HaloDir, "offset");
     private static readonly string GreetedPath = System.IO.Path.Combine(HaloDir, "greeted");
+    private static readonly string VisDebugPath = System.IO.Path.Combine(HaloDir, "vis-debug.txt");
     private static readonly string StripOrderPath = System.IO.Path.Combine(HaloDir, "strip-order.txt");
     private static readonly string SessionOrderPath = System.IO.Path.Combine(HaloDir, "session-order.txt");
     private static readonly string PinPath = System.IO.Path.Combine(HaloDir, "pinned");

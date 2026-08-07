@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "Halo بعد از ورود شما اجرا شود",
   "settings.general.fullscreen.label": "نمایش روی تمام‌صفحه",
   "settings.general.fullscreen.desc": "پیل بالای بازی‌ها و ویدیو بماند",
+  "settings.general.greeting.label": "سلام کردن",
+  "settings.general.greeting.desc": "اولین بار که هر روز برمی‌گردی دست تکان بدهد",
   "settings.general.language.label": "زبان",
   "settings.general.language.desc": "زبانی که Halo متن‌های خودش را با آن نشان می‌دهد",
   "settings.general.capture.label": "نمایش Halo در تصویربرداری",

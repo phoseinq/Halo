@@ -43,6 +43,8 @@
   "settings.general.startup.desc": "साइन इन के बाद Halo खोलें",
   "settings.general.fullscreen.label": "फुलस्क्रीन के ऊपर दिखे",
   "settings.general.fullscreen.desc": "पिल को गेम और वीडियो के ऊपर रखें",
+  "settings.general.greeting.label": "नमस्ते कहना",
+  "settings.general.greeting.desc": "हर दिन पहली बार लौटने पर हाथ हिलाए",
   "settings.general.language.label": "भाषा",
   "settings.general.language.desc": "Halo अपना टेक्स्ट जिस भाषा में दिखाता है",
   "settings.general.capture.label": "कैप्चर में Halo शामिल करें",

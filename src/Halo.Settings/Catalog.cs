@@ -109,6 +109,8 @@ internal static class Catalog
 
                 Toggle("general.startup", L("general.startup"), D("general.startup")),
                 Toggle("general.fullscreen", L("general.fullscreen"), D("general.fullscreen"), true),
+
+                Toggle("general.greeting", L("general.greeting"), D("general.greeting"), true),
             ]),
             new(S("behaviour"), "\uE945", [
 

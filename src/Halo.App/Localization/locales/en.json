@@ -44,6 +44,8 @@
   "settings.general.startup.desc": "Launch Halo after you sign in",
   "settings.general.fullscreen.label": "Stay visible over fullscreen",
   "settings.general.fullscreen.desc": "Keep the pill above games and video",
+  "settings.general.greeting.label": "Say hello",
+  "settings.general.greeting.desc": "Wave the first time you come back each day",
   "settings.general.language.label": "Language",
   "settings.general.language.desc": "The language Halo shows its own text in",
   "settings.general.capture.label": "Include Halo in captures",

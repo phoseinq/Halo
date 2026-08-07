@@ -40,6 +40,8 @@ internal sealed class CcStatus
     public string? CurrentTool { get; set; }
     public string? ToolTarget { get; set; }
     public string? LastPrompt { get; set; }
+
+    public string? SessionId { get; set; }
     public string? StartedAt { get; set; }
     public string? Message { get; set; }
     public string? CompactedAt { get; set; }

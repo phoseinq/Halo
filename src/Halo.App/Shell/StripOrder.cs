@@ -45,8 +45,12 @@ internal sealed class StripOrder
         foreach (var k in view)
             _pinned.Remove(k);
         _pinned.InsertRange(0, view);
+
+        if (_pinned.Count > MaxPinned) _pinned.RemoveRange(MaxPinned, _pinned.Count - MaxPinned);
         return true;
     }
+
+    private const int MaxPinned = 100;
 
     internal string Serialise() => string.Join('\n', _pinned);
 

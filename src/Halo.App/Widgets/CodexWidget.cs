@@ -84,6 +84,8 @@ internal sealed class CodexWidget : IWidget
 
     public IEnumerable<int> OwnerPids => Current is { } st
         ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+
+    public string SessionKey => Current is null ? "" : "codex:" + _surface;
     public int RevealPid => Current?.HostPid ?? 0;
 
     public string? RevealProcess => Current?.Source == CodexSurface.Desktop ? "chatgpt" : null;

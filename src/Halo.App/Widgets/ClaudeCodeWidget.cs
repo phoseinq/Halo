@@ -69,6 +69,15 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     public IEnumerable<int> OwnerPids => Live is { } st
         ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();
+
+    public string SessionKey
+    {
+        get
+        {
+            var st = Live;
+            return st is { Pid: > 0 } ? "claude:" + ContextKey(st) : "";
+        }
+    }
     public int RevealPid => Live?.HostPid ?? 0;
 
     public string? RevealProcess => Live is { FromDesktopApp: true } ? "claude" : null;
@@ -290,12 +299,14 @@ internal sealed class ClaudeCodeWidget : IWidget
     internal static Color ContextColour(double frac)
         => frac < 0 ? Blue : ContextBand((float)frac) switch { 2 => Red, 1 => Amber, _ => Blue };
 
+    internal static string? ContextKey(ClaudeCode.CcStatus? st)
+        => st is null ? null : st.Pid + ":" + (st.SessionId ?? "");
+
     internal (string? id, float frac) ContextState()
     {
         var st = Live;
         if (st?.Session is not { ContextMax: > 0 } ses) return (null, -1f);
-        var id = st.Pid + ":" + st.StartedAt;
-        return (id, (float)Math.Clamp((double)ses.ContextUsed / ses.ContextMax, 0, 1));
+        return (ContextKey(st), (float)Math.Clamp((double)ses.ContextUsed / ses.ContextMax, 0, 1));
     }
 
     private const int Pad = 22;

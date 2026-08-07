@@ -526,49 +526,23 @@ internal static class Program
                 DateTimeOffset.TryParse(sn.GetValue<string>(), null,
                     System.Globalization.DateTimeStyles.RoundtripKind, out started);
 
-            long latest = 0, turn = 0;
-            string? model = null;
-            for (int i = lines.Length - 1; i >= 0; i--)
+            var read = TranscriptScan.Read(lines, started);
+            if (read.Latest <= 0)
             {
-                if (string.IsNullOrWhiteSpace(lines[i])) continue;
-                JsonNode? node;
-                try { node = JsonNode.Parse(lines[i]); } catch { continue; }
-                var usage = node?["message"]?["usage"] ?? node?["usage"];
-                if (usage == null) continue;
 
-                long ctx = Get(usage, "input_tokens") + Get(usage, "cache_read_input_tokens")
-                    + Get(usage, "cache_creation_input_tokens");
-                if (latest == 0 && ctx > 0)
-                {
-                    latest = ctx;
-                    model = (node?["message"]?["model"] ?? node?["model"])?.GetValue<string>();
-                }
-
-                if (started == DateTimeOffset.MinValue) { if (latest > 0) break; continue; }
-                var tsNode = node?["timestamp"]?.GetValue<string>();
-                if (!DateTimeOffset.TryParse(tsNode, null,
-                        System.Globalization.DateTimeStyles.RoundtripKind, out var ts)) continue;
-                if (ts < started) { if (latest > 0) break; continue; }
-                turn += Get(usage, "input_tokens") + Get(usage, "cache_creation_input_tokens")
-                    + Get(usage, "output_tokens");
+                if (read.Compacted) status.Remove("session");
+                return;
             }
-            if (latest <= 0) return;
 
             var session = status["session"] as JsonObject ?? new JsonObject();
-            session["contextUsed"] = latest;
-            session["contextMax"] = ContextWindow(model);
-            session["promptTokens"] = turn;
+            session["contextUsed"] = read.Latest;
+            session["contextMax"] = ContextWindow(read.Model);
+            session["promptTokens"] = read.Turn;
             status["session"] = session;
         }
         catch
         {
         }
-    }
-
-    private static long Get(JsonNode usage, string key)
-    {
-        try { return usage[key]?.GetValue<long>() ?? 0; }
-        catch { return 0; }
     }
 
     private static long ContextWindow(string? model)

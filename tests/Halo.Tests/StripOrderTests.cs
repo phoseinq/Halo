@@ -75,4 +75,21 @@ public class StripOrderTests
         var order = new StripOrder(["claude", "", "claude", "   ", "media"]);
         Assert.Equal(["claude", "media"], order.Pinned);
     }
+
+    // An agent session's key names one process and one session id, so unlike a kind or a media AUMID it can
+    // never match again once that session is gone. Without a bound the stored list would grow by one line
+    // per session the user ever dragged.
+    [Fact]
+    public void The_stored_list_stays_bounded_as_sessions_come_and_go()
+    {
+        var order = new StripOrder();
+        for (int i = 0; i < 400; i++)
+        {
+            string[] present = ["claude:" + i + ":a", "claude:" + i + ":b"];
+            order.Move(present, present[1], -1);
+        }
+        Assert.True(order.Pinned.Count <= 100, $"stored {order.Pinned.Count} keys");
+        // and the arrangement that was just made is still the one that survives
+        Assert.Equal(["claude:399:b", "claude:399:a"], order.Apply(["claude:399:a", "claude:399:b"]));
+    }
 }

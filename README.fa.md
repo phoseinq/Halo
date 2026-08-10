@@ -4,8 +4,9 @@
 
 <br />
 
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-get%20Halo-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
 [![Release](https://img.shields.io/github/v/release/phoseinq/Halo?label=release&color=c49b04&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases/latest)
-[![Platform](https://img.shields.io/badge/Windows-11-0078D6?logo=windows11&logoColor=white)](https://github.com/phoseinq/Halo/releases/latest)
+[![Platform](https://img.shields.io/badge/Windows-11-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
 [![Built with](https://img.shields.io/badge/C%23-.NET%209-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
 [![Downloads](https://img.shields.io/github/downloads/phoseinq/Halo/total?label=downloads&color=2CA5E0&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases)
 [![License](https://img.shields.io/badge/License-MIT-c49b04.svg)](LICENSE)
@@ -14,7 +15,7 @@
 
 [English](README.md) · **فارسی**
 
-[⬇️ دانلود](https://github.com/phoseinq/Halo/releases/latest) · [گزارش باگ](https://github.com/phoseinq/Halo/issues) · [پیشنهاد قابلیت](https://github.com/phoseinq/Halo/issues)
+[⬇️ دانلود](https://apps.microsoft.com/detail/9n9rs278cwk2) · [گزارش باگ](https://github.com/phoseinq/Halo/issues) · [پیشنهاد قابلیت](https://github.com/phoseinq/Halo/issues)
 
 </div>
 
@@ -43,11 +44,12 @@
 
 <div align="center">
 
-### [⬇️ دانلود برای Windows 11](https://github.com/phoseinq/Halo/releases/latest)
+### [⬇️ نصب از Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)
 
-<sub>Windows 11 · x64 · نصب فقط برای همین کاربر · بدون درخواست دسترسی Administrator</sub>
+<sub>Windows 11 · x64 و ARM64 · نصب فقط برای همین کاربر · بدون درخواست دسترسی Administrator · آپدیت خودکار</sub>
 
-<sub>اگر نصب معمولی می‌خوای، `DynamicWinSetup.exe` رو دانلود کن. اگر هم نسخه قابل‌حمل ترجیح میدی، `DynamicWinPortable.zip` آماده است.</sub>
+<sub>اگر ترجیح میدی خودت دستی نصب کنی، [آخرین ریلیز](https://github.com/phoseinq/Halo/releases/latest) هم هست:
+`DynamicWinSetup.exe` برای نصب معمولی، و `DynamicWinPortable.zip` اگر نسخه قابل‌حمل می‌خوای.</sub>
 
 </div>
 

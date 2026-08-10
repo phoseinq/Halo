@@ -44,7 +44,7 @@ folds away when there is not. No app to open, nothing covering your work.
 
 <div align="center">
 
-### [⬇️ Get it from the Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)
+### [<img src="ReadmeFiles/microsoft.svg" height="18" alt="">&nbsp;Get it from the Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)
 
 <sub>Windows 11 · x64 and ARM64 · installs per-user with no admin prompt, and updates itself</sub>
 

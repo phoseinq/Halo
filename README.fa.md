@@ -44,7 +44,7 @@
 
 <div align="center">
 
-### [⬇️ نصب از Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)
+### [<img src="ReadmeFiles/microsoft.svg" height="18" alt="">&nbsp;نصب از Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)
 
 <sub>Windows 11 · x64 و ARM64 · نصب فقط برای همین کاربر · بدون درخواست دسترسی Administrator · آپدیت خودکار</sub>
 

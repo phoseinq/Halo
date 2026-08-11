@@ -109,7 +109,7 @@ internal static class ConsoleRead
     private const ushort KEY_EVENT = 1;
 
     internal const ushort VkDown = 0x28, VkUp = 0x26, VkEnter = 0x0D, VkTab = 0x09, VkEscape = 0x1B,
-                          VkRight = 0x27, VkLeft = 0x25;
+                          VkRight = 0x27, VkLeft = 0x25, VkBack = 0x08;
 
     internal static bool Press(int pid, ushort vk, int times = 1)
         => Send(pid, null, vk, times);

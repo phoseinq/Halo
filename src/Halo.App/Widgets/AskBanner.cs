@@ -162,7 +162,7 @@ internal static class AskBanner
 
     internal static void Draw(Graphics g, int w, int h, float a, PendingAsk ask, int hover,
         int tint = DeskTint, string? typed = null, bool closeHover = false,
-        IReadOnlySet<int>? ticked = null)
+        IReadOnlySet<int>? ticked = null, string? sent = null)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -192,9 +192,11 @@ internal static class AskBanner
                             && i < ask.Options.Count && ticked.Contains(i);
 
             bool submit = IsSubmit(row.Option);
-            DrawRow(g, row, submit ? 0 : i + 1, a, submit || typing || i == hover,
+
+            bool holding = IsFreeText(row.Option) && sent is { Length: > 0 };
+            DrawRow(g, row, submit ? 0 : i + 1, a, submit || typing || holding || i == hover,
                 submit ? SubmitTint : Accent(ask, row.Option.Label), seeThrough,
-                typing ? typed : null, isTicked);
+                typing ? typed : null, isTicked, sent);
         }
     }
 
@@ -227,7 +229,7 @@ internal static class AskBanner
     }
 
     private static void DrawRow(Graphics g, AskRow row, int number, float a, bool hover, Color accent,
-        bool seeThrough, string? typed, bool ticked = false)
+        bool seeThrough, string? typed, bool ticked = false, string? sent = null)
     {
         var r = row.Rect;
         var numRect = new RectangleF(r.X, r.Y + (r.Height - NumD) / 2f, NumD, NumD);
@@ -282,6 +284,16 @@ internal static class AskBanner
         }
 
         var words = Words(row.Option);
+
+        if (IsFreeText(row.Option) && sent is { Length: > 0 })
+        {
+            var whole = row.Desc.Height > 0f
+                ? RectangleF.FromLTRB(row.Label.X, row.Label.Y, row.Label.Right, row.Desc.Bottom)
+                : row.Label;
+            InkRtl(g, sent, lf, Slack(whole), sf, White, a, seeThrough);
+            return;
+        }
+
         InkRtl(g, words.Label, lf, Slack(row.Label), sf, White, a, seeThrough);
         if (row.Desc.Height <= 0f) return;
 

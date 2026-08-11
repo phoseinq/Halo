@@ -1997,7 +1997,8 @@ internal static class Program
             new Halo.Shell.LayeredNotch().DrawShape(g, W, h3, 26, tints[^1], glass: false);
 
             Halo.Widgets.AskBanner.Draw(g, W, h3, 1f, multi, hover: -1, tints[^1],
-                                        ticked: new System.Collections.Generic.HashSet<int> { 0, 2 });
+                                        ticked: new System.Collections.Generic.HashSet<int> { 0, 2 },
+                                        sent: "profile it first, then decide whether the cadence is worth a day");
             g.TranslateTransform(0, h3 + pad);
 
             new Halo.Shell.LayeredNotch().DrawShape(g, W, h2, 26, tints[^1], glass: false);

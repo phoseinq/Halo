@@ -2335,7 +2335,7 @@ internal sealed partial class NotchController
             ? (g, cw, ch, f) => DrawGreeting(g, cw, ch)
             : _notif == null && (_ask ?? _askGhost) is { } q && _askT > 0f
             ? (g, cw, ch, f) => AskBanner.Draw(g, cw, ch, f, q, _askHover, tint, _askTyped, _askCloseHover,
-                                               _asks.Ticked(q.Nonce))
+                                               _asks.Ticked(q.Nonce), _asks.Sent(q.Nonce))
             : _notif is { } toast && _notifT > 0f
             ? (g, cw, ch, f) => NotifBanner.Draw(g, cw, ch, f, toast, SmoothStep(_notifDetail), _notifDetailOn,
                                                 SmoothStep(_notifFold))
@@ -2407,7 +2407,9 @@ internal sealed partial class NotchController
     private void BeginTyping()
     {
         if (_askTyped != null) return;
-        _askTyped = _askDraftNonce == _ask?.Nonce ? _askDraft : "";
+
+        _askTyped = _askDraftNonce == _ask?.Nonce ? _askDraft
+                  : _ask != null ? _asks.Sent(_ask.Nonce) ?? "" : "";
         _keys.Start();
     }
 

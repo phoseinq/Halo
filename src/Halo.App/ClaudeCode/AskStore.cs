@@ -158,7 +158,7 @@ internal sealed class AskStore
 
             Trace($"submit -> pid {ask.Pid} (queued)");
             System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { WalkToSubmit(ask); } catch { } });
-            lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); }
+            lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); _sent.Remove(ask.Nonce); }
             Forget(ask.Nonce);
             try { File.Delete(Path.Combine(_dir, $"ask-{ask.Nonce}.json")); } catch { }
             System.Threading.Interlocked.Increment(ref _version);
@@ -174,10 +174,13 @@ internal sealed class AskStore
         bool sent = index >= 0 && index < 9
 
             ? Interop.ConsoleRead.Type(ask.Pid, (index + 1).ToString())
-            : Write(ask, label, delivery);
+            : Write(ask, label, delivery, Sent(ask.Nonce));
         Trace($"{(index >= 0 ? "row " + (index + 1) : delivery.ToString())} -> pid {ask.Pid} = {sent}"
             + (ask.MultiSelect ? " (multiSelect: toggled, still open)" : ""));
         if (!sent) return false;
+
+        if (delivery == AskDelivery.FreeText)
+            lock (_lock) _sent[ask.Nonce] = label;
 
         if (ask.MultiSelect)
         {
@@ -189,15 +192,53 @@ internal sealed class AskStore
                     if (!set.Add(index)) set.Remove(index);
                 }
 
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    System.Threading.Thread.Sleep(160);
+                    var real = ReadTicks(ask.Pid);
+                    if (real is null) return;
+                    lock (_lock)
+                    {
+
+                        if (real.Count > 0 || !_ticked.TryGetValue(ask.Nonce, out var mine) || mine.Count == 0)
+                            _ticked[ask.Nonce] = real;
+                    }
+                    System.Threading.Interlocked.Increment(ref _version);
+                }
+                catch { }
+            });
+
             System.Threading.Interlocked.Increment(ref _version);
             return true;
         }
 
-        lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); }
+        lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); _sent.Remove(ask.Nonce); }
         Forget(ask.Nonce);
         try { File.Delete(Path.Combine(_dir, $"ask-{ask.Nonce}.json")); } catch { }
         System.Threading.Interlocked.Increment(ref _version);
         return true;
+    }
+
+    private static HashSet<int>? ReadTicks(int pid)
+    {
+        try
+        {
+            string text = Interop.ConsoleRead.Dump(pid, 24) ?? "";
+            var found = new HashSet<int>();
+            bool any = false;
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(text, @"(\d+)\.\s*\[([^\]]?)\]"))
+            {
+                if (!int.TryParse(m.Groups[1].Value, out int n) || n < 1) continue;
+                any = true;
+
+                if (!string.IsNullOrWhiteSpace(m.Groups[2].Value)) found.Add(n - 1);
+            }
+            return any ? found : null;
+        }
+        catch { return null; }
     }
 
     private static void WalkToSubmit(PendingAsk ask)
@@ -231,15 +272,24 @@ internal sealed class AskStore
         _ => 0,
     };
 
-    private static bool Write(PendingAsk ask, string text, AskDelivery delivery)
+    private static bool Write(PendingAsk ask, string text, AskDelivery delivery, string? prior)
     {
         int pid = ask.Pid;
         int row = RowNumber(ask.Options.Count, delivery);
 
         if (row is <= 0 or > 9) return false;
 
-        if (delivery == AskDelivery.FreeText && string.IsNullOrWhiteSpace(text)) return false;
-        if (!Interop.ConsoleRead.Type(pid, row.ToString())) return false;
+        if (delivery == AskDelivery.FreeText && string.IsNullOrWhiteSpace(text))
+            return !string.IsNullOrEmpty(prior) && Interop.ConsoleRead.Type(pid, row.ToString());
+
+        bool alreadyOn = delivery == AskDelivery.FreeText && !string.IsNullOrEmpty(prior);
+        if (!alreadyOn && !Interop.ConsoleRead.Type(pid, row.ToString())) return false;
+
+        if (delivery == AskDelivery.FreeText && !string.IsNullOrEmpty(prior))
+        {
+            System.Threading.Thread.Sleep(90);
+            Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkBack, prior.Length);
+        }
         if (delivery != AskDelivery.FreeText) return true;
         System.Threading.ThreadPool.QueueUserWorkItem(_ =>
         {
@@ -247,7 +297,12 @@ internal sealed class AskStore
             {
 
                 System.Threading.Thread.Sleep(140);
-                if (!Interop.ConsoleRead.Type(pid, text)) return;
+
+                foreach (char ch in text)
+                {
+                    if (!Interop.ConsoleRead.Type(pid, ch.ToString())) return;
+                    System.Threading.Thread.Sleep(18);
+                }
 
                 if (ask.MultiSelect) return;
                 System.Threading.Thread.Sleep(140);
@@ -270,6 +325,13 @@ internal sealed class AskStore
     }
 
     private readonly Dictionary<string, HashSet<int>> _ticked = [];
+
+    private readonly Dictionary<string, string> _sent = [];
+
+    internal string? Sent(string nonce)
+    {
+        lock (_lock) return _sent.TryGetValue(nonce, out var t) ? t : null;
+    }
 
     internal IReadOnlySet<int> Ticked(string nonce)
     {

@@ -623,6 +623,8 @@
   "ask.freeTextSub": "با کلمه‌های خودت جواب بده",
   "ask.chat": "درباره‌اش حرف بزنیم",
   "ask.chatSub": "سؤال را رها کن و گفت‌وگو کن",
+  "ask.submit": "ثبت",
+  "ask.submitSub": "گزینه‌های تیک‌خورده را بفرست",
   "ask.enterToSend": "Enter برای فرستادن   Esc برای برگشت",
   "ask.eyebrow.asks": "Claude Code می‌پرسد",
   "ask.eyebrow.runs": "Claude Code می‌خواهد {0} را اجرا کند",

@@ -113,7 +113,7 @@ internal static class TelegramPlayer
             System.IO.Directory.CreateDirectory(dir);
             var f = new System.IO.FileInfo(path);
             if (f.Exists && f.Length > 200_000) f.Delete();
-            System.IO.File.AppendAllText(path,
+            Halo.Reports.DebugFile.Append(path,
                 DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + "  " + line + Environment.NewLine);
         }
         catch { }

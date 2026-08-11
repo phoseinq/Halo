@@ -12,6 +12,8 @@ internal struct MenuFrame
 {
     public bool Show;
     public float Appear;
+
+    public float Swallow;
     public string[] RowIcons;
     public Bitmap?[] RowImages;
     public float[] RowImageOffsets;
@@ -500,11 +502,14 @@ internal sealed class LayeredNotch
                 int m = 3;
                 g.DrawArc(hp, w - 2 * radius + m, h - 2 * radius + m, 2 * (radius - m), 2 * (radius - m), 25, 40);
             }
-            float ca = 1f - contentFade;
+            float ca = menu.Swallow;
             if (menu.Show && ca > 0.01f && !menu.Dropping) DrawMenu(g, menuX, w, tintAlpha, glass, menu, ca);
             if (menu.Dropping) DrawDrop(g, menu, tintAlpha, w, h);
             if (privacy) DrawPrivacyDots(g, w);
         }
+
+        CutPillCorners(pw, ph, (int)MathF.Ceiling(w * S), (int)MathF.Ceiling(h * S),
+                       (int)MathF.Round(radius * S));
 
         var size = new Win32.SIZE { cx = pw, cy = ph };
         var src = new Win32.POINT { X = 0, Y = 0 };
@@ -522,6 +527,47 @@ internal sealed class LayeredNotch
         Win32.DeleteObject(dib);
         Win32.DeleteDC(memDc);
         Win32.ReleaseDC(IntPtr.Zero, screenDc);
+    }
+
+    private long _rgnKey = long.MinValue;
+
+    private void CutPillCorners(int pw, int ph, int wS, int hS, int r)
+    {
+        try
+        {
+            long key = ((long)pw << 44) ^ ((long)ph << 33) ^ ((long)wS << 22) ^ ((long)hS << 11) ^ r;
+            if (key == _rgnKey) return;
+            _rgnKey = key;
+
+            if (r < 2 || wS < r * 2 || hS < r) { Win32.SetWindowRgn(Hwnd, IntPtr.Zero, false); return; }
+
+            using var region = new Region(new Rectangle(0, 0, pw, ph));
+
+            int rc = r + 1, d = rc * 2;
+
+            using (var left = new GraphicsPath())
+            {
+                left.AddLine(0, hS - rc, 0, hS);
+                left.AddLine(0, hS, rc, hS);
+                left.AddArc(r - rc, hS - r - rc, d, d, 90f, 90f);
+                left.CloseFigure();
+                region.Exclude(left);
+            }
+            using (var right = new GraphicsPath())
+            {
+                right.AddLine(wS, hS - rc, wS, hS);
+                right.AddLine(wS, hS, wS - rc, hS);
+                right.AddArc(wS - r - rc, hS - r - rc, d, d, 90f, -90f);
+                right.CloseFigure();
+                region.Exclude(right);
+            }
+
+            using var measure = Graphics.FromHwnd(IntPtr.Zero);
+            IntPtr hrgn = region.GetHrgn(measure);
+
+            if (Win32.SetWindowRgn(Hwnd, hrgn, false) == 0) Win32.DeleteObject(hrgn);
+        }
+        catch { }
     }
 
     private const float DotR = 3.3f, DotRing = 0.9f, DotStep = 8.5f, DotTop = 9f;
@@ -600,6 +646,9 @@ internal sealed class LayeredNotch
             g.TranslateTransform(caller.OffsetX, caller.OffsetY);
             g.DrawImageUnscaled(_shapeCache, 0, 0);
             g.Restore(saved);
+
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         }
     }
 
@@ -608,7 +657,7 @@ internal sealed class LayeredNotch
         int Ss, int CaptureVersion, float Zoom, float Sheen, float Grain, float RimLight);
 
     private static readonly bool CacheOn =
-        Environment.GetEnvironmentVariable("HALO_GLASSCACHE") == "1";
+        Environment.GetEnvironmentVariable("HALO_GLASSCACHE") != "0";
 
     private Bitmap? _shapeCache;
     private ShapeKey _shapeKey;
@@ -690,6 +739,28 @@ internal sealed class LayeredNotch
                 using var noise = new TextureBrush(GrainTile(), WrapMode.Tile);
                 cg.FillRectangle(noise, 0, 0, w * ss, h * ss);
             }
+        }
+
+        if (ss == 1)
+        {
+            var keepSmoothing = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using (var path1 = PillPath(w, h, radius))
+            using (var mask1 = new TextureBrush(content) { WrapMode = WrapMode.Clamp })
+            {
+                g.FillPath(mask1, path1);
+                if (RimLight > 0.004f)
+                {
+                    using var rim1 = new Pen(Color.FromArgb((int)(255 * RimLight), 255, 255, 255), 1f)
+                    { Alignment = PenAlignment.Inset };
+                    g.DrawPath(rim1, path1);
+                }
+            }
+            g.SmoothingMode = keepSmoothing;
+            return;
         }
 
         var big = ScratchB(w * ss, h * ss);
@@ -1239,6 +1310,12 @@ internal sealed class LayeredNotch
         {
             HandleClipboard();
             return IntPtr.Zero;
+        }
+
+        if (msg is Win32.WM_QUERYENDSESSION or Win32.WM_ENDSESSION)
+        {
+            try { Notifications.BannerGate.RestoreForExit(live: false); } catch { }
+
         }
         if (msg is Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE)
         {

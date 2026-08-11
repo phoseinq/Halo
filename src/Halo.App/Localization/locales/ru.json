@@ -578,6 +578,8 @@
   "ask.freeTextSub": "ответьте своими словами",
   "ask.chat": "Обсудить это",
   "ask.chatSub": "оставить вопрос и поговорить",
+  "ask.submit": "отправить",
+  "ask.submitSub": "отправить отмеченные варианты",
   "ask.enterToSend": "Enter — отправить   Esc — назад",
   "ask.eyebrow.asks": "CLAUDE CODE СПРАШИВАЕТ",
   "ask.eyebrow.runs": "CLAUDE CODE ХОЧЕТ ЗАПУСТИТЬ {0}",

@@ -578,6 +578,8 @@
   "ask.freeTextSub": "responda com as suas palavras",
   "ask.chat": "Falar sobre isto",
   "ask.chatSub": "deixe a pergunta e converse",
+  "ask.submit": "enviar",
+  "ask.submitSub": "envia as opções marcadas",
   "ask.enterToSend": "Enter para enviar   Esc para voltar",
   "ask.eyebrow.asks": "CLAUDE CODE PERGUNTA",
   "ask.eyebrow.runs": "CLAUDE CODE QUER EXECUTAR {0}",

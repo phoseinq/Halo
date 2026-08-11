@@ -124,6 +124,25 @@ internal sealed class NotifSource
         lock (_lock) { return _pending.Count > 0 ? _pending.Dequeue() : null; }
     }
 
+    public NotifItem? DequeueFoldable(NotifItem live)
+    {
+        lock (_lock)
+        {
+            if (_pending.Count == 0) return null;
+            NotifItem? found = null;
+            var keep = new Queue<NotifItem>(_pending.Count);
+            foreach (var it in _pending)
+            {
+                if (found is null && LiveText.CanFold(live, it)) { found = it; continue; }
+                keep.Enqueue(it);
+            }
+            if (found is null) return null;
+            _pending.Clear();
+            foreach (var it in keep) _pending.Enqueue(it);
+            return found;
+        }
+    }
+
     public bool HasPending { get { lock (_lock) { return _pending.Count > 0; } } }
 
     public void EnqueueLocal(NotifItem item)
@@ -161,7 +180,7 @@ internal sealed class NotifSource
     {
         try
         {
-            System.IO.File.AppendAllText(DebugPath, $"{DateTime.Now:HH:mm:ss} {msg}\r\n");
+            Halo.Reports.DebugFile.Append(DebugPath, $"{DateTime.Now:HH:mm:ss} {msg}\r\n");
         }
         catch { }
     }

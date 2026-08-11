@@ -428,6 +428,8 @@ internal sealed class DownloadWidget : IWidget
 
     private EasedBar _pillFrac;
 
+    internal static float IconSize(float h) => MathF.Max(0f, h - 14f);
+
     private static void DrawPillProgress(Graphics g, int w, int h, float fade, float frac, int pct,
         Color accent, bool paused, float iconRight)
     {
@@ -435,7 +437,7 @@ internal sealed class DownloadWidget : IWidget
 
         Fx.PillBar(g, w, h, fade, frac, bar, 1f, alive: !paused);
 
-        float sz = h - 14f;
+        float sz = IconSize(h);
         DrawCollapsedIcon(g, Ico(), 9, (h - sz) / 2f, sz, fade);
         if (paused) DrawPausedBadge(g, 9, (h - sz) / 2f, sz, fade);
         DrawCountBadge(g, 9, (h - sz) / 2f, sz, fade, Downloads.Count);
@@ -474,6 +476,8 @@ internal sealed class DownloadWidget : IWidget
     {
         if (n < 2) return;
         float d = sz * 0.60f, bx = x + sz - d + 1f, by = y - 1f;
+
+        if (d < 4f) return;
         using (var shade = new SolidBrush(Mul(Color.FromArgb(215, 12, 12, 14), fade)))
             g.FillEllipse(shade, bx, by, d, d);
         using (var ring = new Pen(Mul(Color.FromArgb(190, 255, 255, 255), fade), 1.1f))

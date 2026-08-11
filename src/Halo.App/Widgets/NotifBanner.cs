@@ -103,7 +103,8 @@ internal static class NotifBanner
         catch { return SummaryH + 70; }
     }
 
-    public static void Draw(Graphics g, int w, int h, float a, NotifItem n, float detail, bool detailOn)
+    public static void Draw(Graphics g, int w, int h, float a, NotifItem n, float detail, bool detailOn,
+                            float fold = 1f)
     {
         if (a <= 0.01f) return;
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -167,9 +168,8 @@ internal static class NotifBanner
 
         if (detail < 0.999f && n.Body.Length > 0)
             using (var b = new SolidBrush(Mul(BodyInk, a * (1f - detail))))
-            using (var f = SummaryFmt(n.Body))
 
-                g.DrawString(n.Body, bodyF, b, new RectangleF(tx, BodyTop, tw, BodyLinePx * 2 + 6), f);
+                DrawLiveBody(g, n.Body, bodyF, b, new RectangleF(tx, BodyTop, tw, BodyLinePx * 2 + 6), fold);
         if (detail > 0.01f && n.Body.Length > 0)
             using (var b = new SolidBrush(Mul(BodyInk, a * detail)))
                 DrawWrappedBody(g, n.Body, bodyF, b, new RectangleF(tx, BodyTop, tw, h - BodyTop - 14));
@@ -298,6 +298,60 @@ internal static class NotifBanner
         var sf = new StringFormat(StringFormat.GenericTypographic);
         if (IsRtl(s)) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
         return sf;
+    }
+
+    private static void DrawLiveBody(Graphics g, string text, Font f, Brush b, RectangleF box, float fold)
+    {
+        var all = VisualLines(g, text, f, box.Width);
+        if (all.Count == 0) return;
+
+        int nl = text.LastIndexOf('\n');
+        int older = nl < 0 ? 0 : VisualLines(g, text[..nl], f, box.Width).Count;
+        int visible = Math.Max(1, (int)(box.Height / BodyLinePx));
+        float scroll = LiveScroll(all.Count, older, visible, fold);
+
+        var clip = g.Clip;
+        g.SetClip(box, CombineMode.Intersect);
+        for (int i = 0; i < all.Count; i++)
+        {
+            float y = box.Y + (i - scroll) * BodyLinePx;
+            if (y + BodyLinePx <= box.Y || y >= box.Y + box.Height) continue;
+            float alpha = ClipFade(y, BodyLinePx, box.Y, box.Height);
+            if (i >= older) alpha *= Math.Clamp(fold, 0f, 1f);
+            if (alpha <= 0.01f) continue;
+            using var sf = new StringFormat(StringFormat.GenericTypographic)
+            { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+            if (IsRtl(all[i])) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
+
+            using var lb = new SolidBrush(Mul(((SolidBrush)b).Color, alpha));
+            g.DrawString(all[i], f, lb, new RectangleF(box.X, y, box.Width, BodyLinePx + 4), sf);
+        }
+        g.Clip = clip;
+    }
+
+        internal static float LiveScroll(int total, int older, int visible, float fold)
+    {
+
+        float from = Math.Max(0, older - visible);
+        float to = Math.Max(0, total - visible);
+        return from + (to - from) * Math.Clamp(fold, 0f, 1f);
+    }
+
+        internal static float ClipFade(float lineTop, float lineH, float viewTop, float viewH)
+    {
+        if (lineH <= 0f) return 0f;
+        float top = Math.Max(lineTop, viewTop), bottom = Math.Min(lineTop + lineH, viewTop + viewH);
+        return Math.Clamp((bottom - top) / lineH, 0f, 1f);
+    }
+
+    private static System.Collections.Generic.List<string> VisualLines(
+        Graphics g, string text, Font f, float width)
+    {
+        var lines = new System.Collections.Generic.List<string>();
+        foreach (var para in text.Replace("\r\n", "\n").Split('\n'))
+            foreach (var line in WrapLines(g, para, f, width))
+                lines.Add(line);
+        return lines;
     }
 
     private static void DrawWrappedBody(Graphics g, string text, Font f, Brush b, RectangleF box)

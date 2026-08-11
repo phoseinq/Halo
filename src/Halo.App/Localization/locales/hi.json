@@ -577,6 +577,8 @@
   "ask.freeTextSub": "अपने शब्दों में उत्तर दें",
   "ask.chat": "इस पर बात करें",
   "ask.chatSub": "प्रश्न छोड़ें और बात करें",
+  "ask.submit": "भेजें",
+  "ask.submitSub": "टिक किए गए विकल्प भेजें",
   "ask.enterToSend": "Enter से भेजें   Esc से वापस",
   "ask.eyebrow.asks": "Claude Code पूछ रहा है",
   "ask.eyebrow.runs": "Claude Code {0} चलाना चाहता है",

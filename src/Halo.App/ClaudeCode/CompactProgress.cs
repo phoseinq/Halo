@@ -146,7 +146,7 @@ internal static class CompactProgress
             if (bar is null && tokens is null && rows is not null)
                 foreach (var row in rows)
                     if (row.Length > 0) sb.Append("    | ").AppendLine(row.Length > 110 ? row[..110] : row);
-            File.AppendAllText(path, sb.ToString());
+            Halo.Reports.DebugFile.Append(path, sb.ToString());
         }
         catch { }
     }

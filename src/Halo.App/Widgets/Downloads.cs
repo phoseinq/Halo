@@ -63,7 +63,7 @@ internal static class Downloads
             string s = $"name='{Name}' store={IsStore} canControl={CanControl} hwnd={(Hwnd != IntPtr.Zero)} exe='{ExePath}' pct={Percent} inst={Installing} wait={Waiting}";
             if (s == _lastLog) return;
             _lastLog = s;
-            System.IO.File.AppendAllText(System.IO.Path.Combine(
+            Halo.Reports.DebugFile.Append(System.IO.Path.Combine(
                 System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Halo", "dl-debug.txt"),
                 $"{System.DateTime.Now:HH:mm:ss} {s}\r\n");
         }
@@ -399,7 +399,7 @@ internal static class Downloads
     {
         try
         {
-            System.IO.File.AppendAllText(System.IO.Path.Combine(
+            Halo.Reports.DebugFile.Append(System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "cancel-debug.txt"),
                 $"{DateTime.Now:HH:mm:ss.fff} {s}\r\n");
         }

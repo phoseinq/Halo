@@ -21,6 +21,7 @@ internal sealed class BtWidget : IWidget
     private long _until;
     private int _version;
     private float _fillShown = -1f;
+    private float _pctIn;
 
     public void Show(string name, int pct, int major = -1, int minor = -1)
     {
@@ -31,6 +32,7 @@ internal sealed class BtWidget : IWidget
 
             _glyph = major > 0 ? GlyphForCod(major, minor) : GlyphFor(name);
             _fillShown = 0f;
+            _pctIn = 0f;
             _until = Environment.TickCount64 + HoldMs;
             _version++;
         }
@@ -105,8 +107,13 @@ internal sealed class BtWidget : IWidget
         float fill = Math.Clamp(_fillShown, 0f, 1f);
         Color ringCol = Charge(fill);
 
+        _pctIn += (1f - _pctIn) * 0.09f;
+        if (_pctIn > 0.995f) _pctIn = 1f;
+        float pctIn = 1f - (1f - _pctIn) * (1f - _pctIn);
+
         var (cx, cy, rr, ir, tw, aw) = Metrics(h);
-        Fx.Glow(g, w, h, fade, cx, cy, w * 0.6f, h * 2.0f, 34, ringCol);
+
+        Fx.Glow(g, w, h, fade, cx, cy, w * 0.6f, h * 2.0f, 27, ringCol);
         EdgeBand(g, w, h, fade);
 
         using (var disc = new SolidBrush(Mul(Color.FromArgb(20, 255, 255, 255), fade)))
@@ -121,14 +128,17 @@ internal sealed class BtWidget : IWidget
 
         float sz = rr * 2f;
         using var pf = new Font("Segoe UI Semibold", h * 0.42f, GraphicsUnit.Pixel);
-        using var pb = new SolidBrush(Mul(White, fade));
+        using var pb = new SolidBrush(Mul(White, fade * pctIn));
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
-        g.DrawString($"{pct}%", pf, pb, new RectangleF(cx + sz, 0, w - (cx + sz) - 14, h), sf);
+
+        float rise = (1f - pctIn) * 3f;
+        g.DrawString($"{pct}%", pf, pb, new RectangleF(cx + sz, rise, w - (cx + sz) - 14, h), sf);
     }
 
     private const float BandPen = 1.6f;
-    private static readonly Color Band = Color.FromArgb(150, 46, 176, 96);
+
+    private static readonly Color Band = Color.FromArgb(150, 34, 138, 76);
     private static GraphicsPath BandPath(int w, int h, float r, float inset)
     {
         float x0 = inset, y0 = inset, x1 = w - inset, y1 = h - inset;

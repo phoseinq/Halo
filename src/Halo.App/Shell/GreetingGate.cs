@@ -8,6 +8,7 @@ internal enum GreetingKind
 {
     None,
     Install,
+    Signin,
     Login,
 }
 
@@ -28,10 +29,13 @@ internal static class GreetingArm
 
 internal static class GreetingGate
 {
-    internal static GreetingKind Decide(GreetingMark mark, string version, DateOnly today, bool enabled)
+
+    internal static GreetingKind Decide(GreetingMark mark, string version, DateOnly today, bool arriving,
+                                        bool enabled)
     {
         if (!enabled) return GreetingKind.None;
         if (!string.Equals(mark.Version, version, StringComparison.Ordinal)) return GreetingKind.Install;
+        if (arriving) return GreetingKind.Signin;
         return mark.Last == today ? GreetingKind.None : GreetingKind.Login;
     }
 
@@ -69,10 +73,10 @@ internal static class GreetingGate
         catch { }
     }
 
-    internal static GreetingKind Take(string path, DateOnly today, bool enabled)
+    internal static GreetingKind Take(string path, DateOnly today, bool arriving, bool enabled)
     {
         var mark = Read(path);
-        var kind = Decide(mark, Version, today, enabled);
+        var kind = Decide(mark, Version, today, arriving, enabled);
         Write(path, new GreetingMark(Version, kind == GreetingKind.None ? mark.Last : today));
         return kind;
     }

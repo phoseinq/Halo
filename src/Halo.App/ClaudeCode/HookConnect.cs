@@ -107,7 +107,7 @@ internal static class HookConnect
             string path = Path.Combine(dir, "hooks-debug.txt");
             var f = new FileInfo(path);
             if (f.Exists && f.Length > 200_000) f.Delete();
-            File.AppendAllText(path, DateTime.Now.ToString("HH:mm:ss",
+            Halo.Reports.DebugFile.Append(path, DateTime.Now.ToString("HH:mm:ss",
                 System.Globalization.CultureInfo.InvariantCulture) + "  " + line + Environment.NewLine);
         }
         catch { }

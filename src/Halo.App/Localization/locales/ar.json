@@ -577,6 +577,8 @@
   "ask.freeTextSub": "أجب بكلماتك",
   "ask.chat": "لنتحدث عن هذا",
   "ask.chatSub": "اترك السؤال وتحدّث بدلًا منه",
+  "ask.submit": "إرسال",
+  "ask.submitSub": "أرسل الخيارات المحددة",
   "ask.enterToSend": "Enter للإرسال   Esc للرجوع",
   "ask.eyebrow.asks": "Claude Code يسأل",
   "ask.eyebrow.runs": "Claude Code يريد تشغيل {0}",

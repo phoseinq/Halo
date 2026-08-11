@@ -70,6 +70,18 @@ internal static class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--render-net") { RenderNet(args[1]); return; }
+
+        if (args.Length >= 2 && args[0] == "--render-livetext") { RenderLiveText(args[1]); return; }
+
+        if (args.Length >= 1 && args[0] == "--probe-mini")
+        {
+            ProbeMini(args.Length > 1 ? args[1] : "media",
+                      args.Length > 2 && int.TryParse(args[2], out var pmw) ? pmw : 560,
+                      args.Length > 3 && int.TryParse(args[3], out var pmh) ? pmh : 420);
+            return;
+        }
+
         if (args.Length >= 1 && args[0] == "--probe-almanac")
         {
             Console.WriteLine($"zone     {TimeZoneInfo.Local.Id}");
@@ -103,6 +115,7 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-ask") { RenderAsk(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--render-bt-reveal") { RenderBtReveal(args[1]); return; }
         if (args.Length >= 2 && args[0] == "--render-greeting") { RenderGreeting(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-local") { RenderLocal(args[1]); return; }
@@ -428,7 +441,13 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "--moods") { Moods(); return; }
 
         _instance = new System.Threading.Mutex(true, "Halo.Notch.SingleInstance", out bool created);
-        if (!created) { OpenSettingsPanel(); return; }
+        if (!created)
+        {
+            if (Halo.Shell.DuplicateLaunch.ShouldOpenPanel(
+                    args.Contains("--settings", StringComparer.OrdinalIgnoreCase), RunningPillAge()))
+                OpenSettingsPanel();
+            return;
+        }
         if (args.Contains("--settings", StringComparer.OrdinalIgnoreCase)) OpenSettingsPanel();
 
         try
@@ -536,6 +555,9 @@ internal static class Program
         {
             var sb = new System.Text.StringBuilder();
 
+            var pill = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
+            pill.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+
             using var plate = new System.Drawing.Bitmap(560, 220, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             using (var pg = System.Drawing.Graphics.FromImage(plate))
             using (var pb = new System.Drawing.Drawing2D.LinearGradientBrush(
@@ -575,20 +597,63 @@ internal static class Program
                 {
                     g.Clear(System.Drawing.Color.Transparent);
                     g.ScaleTransform(z, z);
-                    Halo.Shell.LayeredNotch.ShapeInto(g, w, h, radius, tint, null, 1f, 0f);
+                    Halo.Shell.LayeredNotch.ShapeInto(g, w, h, radius, tint, plate, 1f, 0f);
                 }
 
-                long differing = 0; int worst = 0;
-                for (int y = 0; y < dh; y++)
-                    for (int x = 0; x < dw; x++)
-                    {
-                        var a = viaCache.GetPixel(x, y);
-                        var b = direct.GetPixel(x, y);
-                        int d = Math.Max(Math.Max(Math.Abs(a.A - b.A), Math.Abs(a.R - b.R)),
-                                         Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));
-                        if (d != 0) { differing++; if (d > worst) worst = d; }
-                    }
-                sb.AppendLine($"zoom {z:0.00}  {dw}x{dh}  differing px {differing}/{(long)dw * dh}  worst channel delta {worst}");
+                static (long Differing, int Worst) Compare(System.Drawing.Bitmap x, System.Drawing.Bitmap y,
+                                                           int dw, int dh)
+                {
+                    long differing = 0; int worst = 0;
+                    for (int yy = 0; yy < dh; yy++)
+                        for (int xx = 0; xx < dw; xx++)
+                        {
+                            var a = x.GetPixel(xx, yy);
+                            var b = y.GetPixel(xx, yy);
+                            int d = Math.Max(Math.Max(Math.Abs(a.A - b.A), Math.Abs(a.R - b.R)),
+                                             Math.Max(Math.Abs(a.G - b.G), Math.Abs(a.B - b.B)));
+                            if (d != 0) { differing++; if (d > worst) worst = d; }
+                        }
+                    return (differing, worst);
+                }
+                var bare = Compare(viaCache, direct, dw, dh);
+                sb.AppendLine($"zoom {z:0.00}  {dw}x{dh}  shape alone      "
+                    + $"differing px {bare.Differing}/{(long)dw * dh}  worst channel delta {bare.Worst}");
+
+                using var viaCacheW = new System.Drawing.Bitmap(dw, dh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var g = System.Drawing.Graphics.FromImage(viaCacheW))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.ScaleTransform(z, z);
+                    notch.DrawShape(g, w, h, radius, tint, true);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    if (h <= 60) pill.DrawCollapsed(g, w, h, 1f); else pill.DrawContent(g, w, h, 1f);
+                }
+                using var directW = new System.Drawing.Bitmap(dw, dh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var g = System.Drawing.Graphics.FromImage(directW))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.ScaleTransform(z, z);
+                    Halo.Shell.LayeredNotch.ShapeInto(g, w, h, radius, tint, plate, 1f, 0f);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    if (h <= 60) pill.DrawCollapsed(g, w, h, 1f); else pill.DrawContent(g, w, h, 1f);
+                }
+
+                using var directW2 = new System.Drawing.Bitmap(dw, dh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var g = System.Drawing.Graphics.FromImage(directW2))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.ScaleTransform(z, z);
+                    Halo.Shell.LayeredNotch.ShapeInto(g, w, h, radius, tint, plate, 1f, 0f);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    if (h <= 60) pill.DrawCollapsed(g, w, h, 1f); else pill.DrawContent(g, w, h, 1f);
+                }
+                var withW = Compare(viaCacheW, directW, dw, dh);
+                var selfW = Compare(directW, directW2, dw, dh);
+                sb.AppendLine($"                             + media widget  "
+                    + $"differing px {withW.Differing}/{(long)dw * dh}  worst channel delta {withW.Worst}");
+                sb.AppendLine($"                             (same path x2)  "
+                    + $"differing px {selfW.Differing}/{(long)dw * dh}  worst channel delta {selfW.Worst}"
+                    + "   <- animation noise floor");
 
                 static double Time(int warm, int n, Action body)
                 {
@@ -1237,7 +1302,10 @@ internal static class Program
                     for (int f = 0; f < 60; f++)
                     {
                         fg.Clear(System.Drawing.Color.FromArgb(255, 12, 12, 14));
+
+                        Halo.Widgets.Fx.AmbientScale = Halo.Shell.NotchController.CollapsedAmbient(mh);
                         if (mf > 0.01f) wdg.DrawCollapsed(fg, mw, mh, mf);
+                        Halo.Widgets.Fx.AmbientScale = 1f;
                         wdg.DrawContent(fg, mw, mh, cf);
                     }
                 float s = 420f / 560f, dy = 12 + i * 92;
@@ -1273,6 +1341,115 @@ internal static class Program
             return sw <= 0 ? (0, 0, false) : ((float)(sx / sw - cx), (float)(sy / sw - cy), true);
         }
         finally { b.UnlockBits(data); }
+    }
+
+    private static void ProbeMini(string which, int w, int h)
+    {
+        var th = new System.Threading.Thread(() =>
+        {
+            Halo.Widgets.IWidget widget;
+            if (which == "claude")
+                widget = new Halo.Widgets.ClaudeCodeWidget(new Halo.ClaudeCode.StatusStore(), 0, () => { });
+            else
+            {
+
+                var media = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
+                media.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+                widget = media;
+            }
+            using var plate = new System.Drawing.Bitmap(560, 420, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (var pg = System.Drawing.Graphics.FromImage(plate))
+            using (var pb = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new System.Drawing.Rectangle(0, 0, 560, 420),
+                System.Drawing.Color.FromArgb(255, 210, 90, 40),
+                System.Drawing.Color.FromArgb(255, 30, 60, 170), 30f))
+                pg.FillRectangle(pb, 0, 0, 560, 420);
+
+            Halo.Shell.LayeredNotch.Supersample = 1;
+            Console.WriteLine($"widget {which}   panel {w}x{h}   ss=1");
+            Console.WriteLine("             the WHOLE collapsed layer          |  only its ambient wash+glow");
+            Console.WriteLine("   t    size      mini  content   saved  maxd meand px>=2 |  saved  maxd meand px>=2");
+            foreach (float t in new[] { 0.10f, 0.20f, 0.25f, 0.30f, 0.35f, 0.40f, 0.45f, 0.49f })
+            {
+                float e = Halo.Shell.NotchController.EaseOutBack(t);
+                int mw = Math.Max(1, (int)(220 + (w - 220) * e)), mh = Math.Max(1, (int)(40 + (h - 40) * e));
+                float mini = Halo.Shell.NotchController.MiniFade(t),
+                      cf = Halo.Shell.NotchController.ContentFade(t);
+                int radius = 22;
+
+                void Compose(System.Drawing.Graphics g, int mode)
+                {
+                    Halo.Widgets.Fx.AmbientScale = mode == 2 ? 0f : 1f;
+                    g.Clear(System.Drawing.Color.Transparent);
+                    Halo.Shell.LayeredNotch.ShapeInto(g, mw, mh, radius, 200, plate, 1f);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    if (mode != 1 && mini > 0.01f) widget.DrawCollapsed(g, mw, mh, mini);
+                    Halo.Widgets.Fx.AmbientScale = 1f;
+                    widget.DrawContent(g, mw, mh, cf);
+                }
+
+                double Time(System.Drawing.Graphics g, int mode)
+                {
+                    for (int i = 0; i < 8; i++) Compose(g, mode);
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    for (int i = 0; i < 40; i++) Compose(g, mode);
+                    return sw.Elapsed.TotalMilliseconds / 40;
+                }
+
+                var shots = new System.Drawing.Bitmap[3];
+                var ms = new double[3];
+                for (int mode = 0; mode < 3; mode++)
+                {
+                    shots[mode] = new System.Drawing.Bitmap(mw, mh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                    using var sgx = System.Drawing.Graphics.FromImage(shots[mode]);
+                    ms[mode] = Time(sgx, mode);
+                }
+
+                (int Max, double Mean, double Over) Diff(System.Drawing.Bitmap x, System.Drawing.Bitmap y)
+                {
+                    var rect = new System.Drawing.Rectangle(0, 0, mw, mh);
+                    var dx = x.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                    var dy = y.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                    int maxd = 0; long sum = 0, over = 0, n = 0;
+                    unsafe
+                    {
+                        for (int yy = 0; yy < mh; yy++)
+                        {
+                            byte* ra = (byte*)dx.Scan0 + (long)yy * dx.Stride;
+                            byte* rb = (byte*)dy.Scan0 + (long)yy * dy.Stride;
+                            for (int xx = 0; xx < mw; xx++)
+                            {
+                                int worst = 0;
+                                for (int c = 0; c < 4; c++)
+                                {
+                                    int d = Math.Abs(ra[xx * 4 + c] - rb[xx * 4 + c]);
+                                    if (d > worst) worst = d;
+                                }
+                                if (worst > maxd) maxd = worst;
+                                if (worst >= 2) over++;
+                                sum += worst; n++;
+                            }
+                        }
+                    }
+                    x.UnlockBits(dx);
+                    y.UnlockBits(dy);
+                    return (maxd, (double)sum / Math.Max(1, n), 100.0 * over / Math.Max(1, n));
+                }
+
+                var dropLayer = Diff(shots[0], shots[1]);
+                var dropWash = Diff(shots[0], shots[2]);
+                foreach (var s in shots) s.Dispose();
+                Console.WriteLine($"  {t:0.00}  {mw,3}x{mh,-3}  {mini,5:0.00}  {cf,5:0.00}  "
+                    + $"{ms[0] - ms[1],5:0.00}ms {dropLayer.Max,4} {dropLayer.Mean,5:0.00} {dropLayer.Over,4:0.0}% | "
+                    + $"{ms[0] - ms[2],5:0.00}ms {dropWash.Max,4} {dropWash.Mean,5:0.00} {dropWash.Over,4:0.0}%");
+            }
+            Halo.Shell.LayeredNotch.Supersample = 2;
+        });
+        th.SetApartmentState(System.Threading.ApartmentState.STA);
+        th.Start();
+        th.Join();
     }
 
     private static void ProbeFrame(int w, int h)
@@ -1326,6 +1503,8 @@ internal static class Program
                 System.Drawing.Color.FromArgb(255, 210, 90, 40),
                 System.Drawing.Color.FromArgb(255, 30, 60, 170), 30f))
                 pg.FillRectangle(pb, 0, 0, 560, 420);
+
+            notch.SeedBackdrop(plate);
 
             double shape = Time(Warm, N, () =>
             {
@@ -1399,10 +1578,13 @@ internal static class Program
             Halo.Shell.LayeredNotch.Supersample = 1;
             Console.WriteLine("morph sweep  (220x40 -> 560x420, collapsed fading out under the panel)");
             double worst = 0; string worstAt = "";
-            foreach (float t in new[] { 0.15f, 0.30f, 0.50f, 0.70f, 0.85f })
+
+            foreach (float t in new[] { 0.15f, 0.30f, 0.45f, 0.60f, 0.80f, 0.95f })
             {
-                int mw = (int)(220 + (w - 220) * t), mh = (int)(40 + (h - 40) * t);
-                float mini = 1f - t, cf = t;
+                float e = Halo.Shell.NotchController.EaseOutBack(t);
+                int mw = (int)(220 + (w - 220) * e), mh = (int)(40 + (h - 40) * e);
+                float mini = Halo.Shell.NotchController.MiniFade(t),
+                      cf = Halo.Shell.NotchController.ContentFade(t);
                 using var ms = new System.Drawing.Bitmap(mw, mh, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
                 using var mg = System.Drawing.Graphics.FromImage(ms);
                 double one = Time(8, 60, () =>
@@ -1618,16 +1800,59 @@ internal static class Program
         return null;
     }
 
+    private static void RenderBtReveal(string outPath)
+    {
+
+        int[] frames = [1, 3, 6, 12, 24, 80];
+        const int pillW = 220, pillH = 40, pad = 16, cellW = 260;
+        using var bmp = new System.Drawing.Bitmap(cellW + pad * 2, (pillH + pad) * frames.Length + pad * 3);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            using (var lg = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height),
+                System.Drawing.Color.FromArgb(255, 18, 22, 28),
+                System.Drawing.Color.FromArgb(255, 34, 26, 44), 60f))
+                g.FillRectangle(lg, 0, 0, bmp.Width, bmp.Height);
+            using var cap = new System.Drawing.Font("Segoe UI", 11f, System.Drawing.GraphicsUnit.Pixel);
+            using var capBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(160, 255, 255, 255));
+            var notch = new Halo.Shell.LayeredNotch();
+            using var scratch = new System.Drawing.Bitmap(pillW, pillH);
+            using var sg = System.Drawing.Graphics.FromImage(scratch);
+
+            float y = pad;
+            g.DrawString("bluetooth takeover - the number fades up and rises in after the ring",
+                         cap, capBrush, pad, y);
+            y += 18f;
+            foreach (int n in frames)
+            {
+                var bt = new Halo.Widgets.BtWidget();
+                bt.Show("AirPods Pro", 72, 4, 6);
+                for (int f = 1; f < n; f++) bt.DrawCollapsed(sg, pillW, pillH, 1f);
+                var st = g.Save();
+                g.TranslateTransform(pad + (cellW - pillW) / 2f, y);
+                notch.DrawShape(g, pillW, pillH, 20, 205, glass: false);
+                bt.DrawCollapsed(g, pillW, pillH, 1f);
+                g.Restore(st);
+                g.DrawString($"frame {n}", cap, capBrush, pad, y + pillH * 0.5f - 6f);
+                y += pillH + pad;
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"wrote {outPath}");
+    }
+
     private static void RenderGreeting(string outPath)
     {
 
         float[] install = [0.05f, 0.20f, 0.36f, 0.51f, 0.59f, 0.70f, 0.85f, 0.97f];
+        float[] signin = [0.06f, 0.22f, 0.45f, 0.66f, 0.86f, 0.96f];
         float[] login = [0.10f, 0.35f, 0.62f, 0.88f];
 
         const int cellW = 620, pad = 18;
 
         float tall = 40f;
         foreach (float t in install) tall += Halo.Shell.GreetingPlan.Install(t).PillH + pad;
+        foreach (float t in signin) tall += Halo.Shell.GreetingPlan.Signin(t).PillH + pad;
         foreach (float t in login) tall += Halo.Shell.GreetingPlan.Login(t).PillH + pad;
         using var bmp = new System.Drawing.Bitmap(cellW + pad * 2, (int)tall + pad * 4);
         using (var g = System.Drawing.Graphics.FromImage(bmp))
@@ -1661,6 +1886,25 @@ internal static class Program
                 if (s.LineAlpha > 0f)
                     Halo.Widgets.Greeting.DrawLine(g, Halo.Widgets.Greeting.Lines[s.LineIndex], box,
                         s.LineWritten, s.LineAlpha, System.Drawing.Color.White, 9f);
+                g.Restore(st);
+                g.DrawString($"t={t:0.00}", cap, capBrush, pad, y + h - 14f);
+                y += h + pad;
+            }
+
+            y += pad;
+            g.DrawString("sign-in - it grows and says hello, and there is no introduction after it",
+                         cap, capBrush, pad, y);
+            y += 20f;
+            foreach (float t in signin)
+            {
+                var s = Halo.Shell.GreetingPlan.Signin(t);
+                int w = (int)s.PillW, h = (int)s.PillH;
+                float x = pad + (cellW - w) / 2f;
+                var st = g.Save();
+                g.TranslateTransform(x, y);
+                notch.DrawShape(g, w, h, (int)s.Radius, 190, glass: false);
+                Halo.Widgets.Greeting.DrawHello(g, Halo.Widgets.Greeting.InkBox(w, h),
+                    s.Written, s.HelloAlpha, System.Drawing.Color.White, 9f);
                 g.Restore(st);
                 g.DrawString($"t={t:0.00}", cap, capBrush, pad, y + h - 14f);
                 y += h + pad;
@@ -1712,8 +1956,10 @@ internal static class Program
             [new Halo.ClaudeCode.AskOption("allow", "run it"),
              new Halo.ClaudeCode.AskOption("deny", "skip it")], expires);
 
+        var multi = question with { Nonce = "n3", MultiSelect = true };
         int W = Halo.Widgets.AskBanner.W, pad = 24;
         int h1 = Halo.Widgets.AskBanner.Height(question, W);
+        int h3 = Halo.Widgets.AskBanner.Height(multi, W);
         int h2 = Halo.Widgets.AskBanner.Height(permission, W);
 
         int[] tints =
@@ -1721,7 +1967,7 @@ internal static class Program
             Halo.Shell.NotchController.TintAskDesk,
             Halo.Shell.NotchController.TintAskApp,
         ];
-        int total = h1 * tints.Length + h2 + pad * (tints.Length + 2);
+        int total = h1 * tints.Length + h3 + h2 + pad * (tints.Length + 3);
         using var bmp = new System.Drawing.Bitmap(W + pad * 2, total);
         using (var g = System.Drawing.Graphics.FromImage(bmp))
         {
@@ -1748,6 +1994,11 @@ internal static class Program
                 Halo.Widgets.AskBanner.Draw(g, W, h1, 1f, question, hover: 1, tints[i], typed);
                 g.TranslateTransform(0, h1 + pad);
             }
+            new Halo.Shell.LayeredNotch().DrawShape(g, W, h3, 26, tints[^1], glass: false);
+
+            Halo.Widgets.AskBanner.Draw(g, W, h3, 1f, multi, hover: -1, tints[^1],
+                                        ticked: new System.Collections.Generic.HashSet<int> { 0, 2 });
+            g.TranslateTransform(0, h3 + pad);
 
             new Halo.Shell.LayeredNotch().DrawShape(g, W, h2, 26, tints[^1], glass: false);
             Halo.Widgets.AskBanner.Draw(g, W, h2, 1f, permission, hover: -1, tints[^1], closeHover: true);
@@ -1755,11 +2006,144 @@ internal static class Program
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 
+    private static void RenderNet(string outPath)
+    {
+        var th = new System.Threading.Thread(() =>
+        {
+            const int W = 560, PanelH = 220, PillW = 220, PillH = 40, pad = 16;
+
+            var today = DateOnly.FromDateTime(DateTime.Now);
+
+            var full = new Halo.Widgets.NetLedger();
+            long[] gb = [3, 1, 9, 4, 0, 0, 2, 7, 5, 1, 6, 8, 2, 4];
+            for (int i = 0; i < gb.Length; i++)
+                full.Add(today.AddDays(i - gb.Length + 1),
+                    i % 3 == 0 ? Halo.Widgets.NetLink.Lan : Halo.Widgets.NetLink.Wifi,
+                    gb[i] * 1024L * 1024 * 1024, gb[i] * 1024L * 1024 * 120);
+            var oneDay = new Halo.Widgets.NetLedger();
+            oneDay.Add(today, Halo.Widgets.NetLink.Wifi, 900L * 1024 * 1024, 40L * 1024 * 1024);
+
+            (double Down, double Up, Halo.Widgets.NetLink Link)[] speeds =
+            [
+                (200 * 1024.0, 20 * 1024.0, Halo.Widgets.NetLink.Wifi),
+                (1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi),
+                (11.0 * 1024 * 1024, 2.0 * 1024 * 1024, Halo.Widgets.NetLink.Wifi),
+                (3.0 * 1024 * 1024, 640 * 1024.0, Halo.Widgets.NetLink.Lan),
+            ];
+            using var bmp = new System.Drawing.Bitmap(W + pad * 2,
+                speeds.Length * (PillH + pad) + 2 * (PanelH + pad) + pad);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(255, 18, 18, 22));
+                var notch = new Halo.Shell.LayeredNotch();
+                float y = pad;
+                foreach (var (down, up, link) in speeds)
+                {
+
+                    var meter = new Halo.Widgets.NetMeter();
+                    var widget = new Halo.Widgets.NetWidget(meter);
+                    meter.Seed(down, up, link, full);
+
+                    widget.Settle();
+                    var st = g.Save();
+                    g.TranslateTransform(pad, y);
+                    g.SetClip(new System.Drawing.RectangleF(0, 0, PillW, PillH));
+                    notch.DrawShape(g, PillW, PillH, 20, 200, glass: false);
+                    widget.DrawCollapsed(g, PillW, PillH, 1f);
+                    g.Restore(st);
+                    y += PillH + pad;
+                }
+                foreach (var led in new[] { full, oneDay })
+                {
+
+                    var panelMeter = new Halo.Widgets.NetMeter();
+                    panelMeter.Seed(1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi, led);
+                    var panel = new Halo.Widgets.NetWidget(panelMeter);
+                    var st = g.Save();
+                    g.TranslateTransform(pad, y);
+                    g.SetClip(new System.Drawing.RectangleF(0, 0, W, PanelH));
+                    notch.DrawShape(g, W, PanelH, 30, 245, glass: false);
+                    panel.DrawContent(g, W, PanelH, 1f);
+                    g.Restore(st);
+                    y += PanelH + pad;
+                }
+            }
+            bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine("wrote " + outPath);
+        });
+        th.SetApartmentState(System.Threading.ApartmentState.STA);
+        th.Start();
+        th.Join();
+    }
+
+    private static void RenderLiveText(string outPath)
+    {
+        int W = Halo.Widgets.NotifBanner.W, H = Halo.Widgets.NotifBanner.SummaryH, pad = 14;
+        float[] folds = [0f, 0.25f, 0.5f, 0.75f, 1f];
+
+        string[] thread =
+        [
+            "on my way",
+            "stuck behind a tram on the bridge, this is going to be more like fifteen minutes than five",
+            "ok I am here",
+        ];
+        string two = Halo.Notifications.LiveText.Append(thread[0], thread[1]);
+        string three = Halo.Notifications.LiveText.Append(two, thread[2]);
+
+        int rows = folds.Length + 3;
+        using var bmp = new System.Drawing.Bitmap(W + pad * 2 + 210, rows * (H + pad) + pad);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(255, 20, 20, 24));
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            using var cap = new System.Drawing.Font("Consolas", 12f, System.Drawing.GraphicsUnit.Pixel);
+            using var capBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(170, 255, 255, 255));
+            using var icon = new System.Drawing.Bitmap(64, 64);
+            using (var ig = System.Drawing.Graphics.FromImage(icon))
+            {
+                ig.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                ig.Clear(System.Drawing.Color.Transparent);
+                using var b = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 40, 150, 235));
+                ig.FillEllipse(b, 2, 2, 60, 60);
+            }
+
+            var notch = new Halo.Shell.LayeredNotch();
+            float y = pad;
+            void Row(string body, float fold, string label)
+            {
+                var item = new Halo.Notifications.NotifItem
+                {
+                    Icon = icon, Id = 9, Aumid = "app.messages", App = "Phone Link", Title = "Ali", Body = body,
+                };
+                var st = g.Save();
+                g.TranslateTransform(pad, y);
+                g.SetClip(new System.Drawing.RectangleF(0, 0, W, H));
+                notch.DrawShape(g, W, H, 26, 245, glass: false);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                Halo.Widgets.NotifBanner.Draw(g, W, H, 1f, item, 0f, false, fold);
+                g.Restore(st);
+                g.DrawString(label, cap, capBrush, W + pad * 2, y + H / 2f - 7);
+                y += H + pad;
+            }
+
+            foreach (var f in folds) Row(three, f, $"fold={f:0.00}");
+
+            Row(thread[0], 1f, "settled: 1 msg");
+            Row(two, 1f, "settled: 2 (2nd wraps)");
+            Row(three, 1f, "settled: 3");
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine("wrote " + outPath);
+    }
+
     private static void RenderNotif(string outPath)
     {
 
         int W = Halo.Widgets.NotifBanner.W, H = Halo.Widgets.NotifBanner.SummaryH, pad = 24, detailRoom = 340;
-        using var bmp = new System.Drawing.Bitmap(W + pad * 2, H * 2 + detailRoom + pad * 4);
+
+        using var bmp = new System.Drawing.Bitmap(W + pad * 2, H * 3 + detailRoom * 2 + pad * 6);
         using (var g = System.Drawing.Graphics.FromImage(bmp))
         {
             using (var lg = new System.Drawing.Drawing2D.LinearGradientBrush(
@@ -1835,6 +2219,34 @@ internal static class Program
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             Halo.Widgets.NotifBanner.Draw(g, W, dh, 1f, mixed, 1f, true);
+
+            string thread = "";
+            foreach (var line in new[]
+            {
+                "\u0633\u0644\u0627\u0645\u060C \u0631\u0633\u06CC\u062F\u06CC\u061F",
+                "\u0645\u0646 \u062F\u0645 \u062F\u0631\u0645",
+                "\u06F5 \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0647",
+                "ok on my way",
+            })
+                thread = Halo.Notifications.LiveText.Append(thread, line);
+            var folded = new Halo.Notifications.NotifItem
+            {
+                Icon = icon, Id = 9, Aumid = "app.messages", App = "Phone Link",
+                Title = "\u0639\u0644\u06CC",
+                Body = thread,
+            };
+            g.TranslateTransform(0, dh + pad);
+            new Halo.Shell.LayeredNotch().DrawShape(g, W, H, 26, 245, glass: false);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            Halo.Widgets.NotifBanner.Draw(g, W, H, 1f, folded, 0f, false);
+
+            int fh = Math.Min(detailRoom, Halo.Widgets.NotifBanner.DetailHeight(folded));
+            g.TranslateTransform(0, H + pad);
+            new Halo.Shell.LayeredNotch().DrawShape(g, W, fh, 26, 245, glass: false);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            Halo.Widgets.NotifBanner.Draw(g, W, fh, 1f, folded, 1f, true);
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
     }
@@ -2361,6 +2773,28 @@ internal static class Program
 
     private static bool _probeCrash;
 
+    private static double? RunningPillAge()
+    {
+        try
+        {
+            using var me = System.Diagnostics.Process.GetCurrentProcess();
+            double? oldest = null;
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName(me.ProcessName))
+            {
+                try
+                {
+                    if (p.Id == me.Id) continue;
+                    double age = (DateTime.Now - p.StartTime).TotalSeconds;
+                    if (age >= 0 && (oldest is null || age > oldest)) oldest = age;
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            return oldest;
+        }
+        catch { return null; }
+    }
+
     private static void OpenSettingsPanel()
     {
         try
@@ -2383,6 +2817,10 @@ internal static class Program
 
     internal static void Quit()
     {
+
+        try { Halo.Notifications.BannerGate.RestoreForExit(live: true); } catch { }
+
+        try { Halo.Shell.NotchController.FlushNet?.Invoke(); } catch { }
         Teardown();
         Environment.Exit(0);
     }

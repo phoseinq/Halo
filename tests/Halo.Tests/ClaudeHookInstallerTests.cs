@@ -14,10 +14,18 @@ namespace Halo.Tests;
 public class ClaudeHookInstallerTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "halo-claude-" + Guid.NewGuid().ToString("n"));
-    private readonly string _exe = @"C:\Program Files\Halo\Halo.Hooks.exe";
+    // A real file rather than a plausible-looking path. IsInstalled now asks whether the exe a handler
+    // names is still on disk, so a fictional one reads as "not installed" and every test below would be
+    // measuring that instead of the thing it claims to measure.
+    private readonly string _exe;
     private string Settings => Path.Combine(_root, "settings.json");
 
-    public ClaudeHookInstallerTests() => Directory.CreateDirectory(_root);
+    public ClaudeHookInstallerTests()
+    {
+        Directory.CreateDirectory(_root);
+        _exe = Path.Combine(_root, "Halo.Hooks.exe");
+        File.WriteAllText(_exe, "");
+    }
     // clears ReadOnly first: the read-only regression test deliberately leaves one behind, and
     // Directory.Delete throws on it - into the bare catch, leaking a temp folder on every run
     public void Dispose()
@@ -182,5 +190,48 @@ public class ClaudeHookInstallerTests : IDisposable
         // cleared - the fix only holds if the clearing happens on every pass rather than once
         ClaudeHookInstaller.Install(Settings, _exe);
         Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
+    }
+
+    // This one happened for real. Uninstalling the ordinary build deleted
+    // %LOCALAPPDATA%\Programs\Halo\Halo.Hooks.exe, all nine handlers went on naming it, and
+    // query-claude-hooks still answered "installed" - so the app never repaired the wiring and the agent
+    // panels stayed empty with nothing anywhere saying why.
+    [Fact]
+    public void IsInstalled_is_false_once_the_hook_exe_is_gone()
+    {
+        ClaudeHookInstaller.Install(Settings, _exe);
+        Assert.True(ClaudeHookInstaller.IsInstalled(Settings));
+
+        File.Delete(_exe);
+        Assert.False(ClaudeHookInstaller.IsInstalled(Settings));
+    }
+
+    // A different Halo.Hooks.exe still runs, so it is not broken - but when this build's own stub resolves,
+    // the wiring belongs on it. That is the migration which produced the bug above: an installer build's
+    // hooks left in place while the Store build was the one running, each talking to the other's binary.
+    [Fact]
+    public void IsInstalled_is_false_when_the_hooks_name_another_build()
+    {
+        string other = Path.Combine(_root, "other", "Halo.Hooks.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(other)!);
+        File.WriteAllText(other, "");
+
+        ClaudeHookInstaller.Install(Settings, _exe);
+
+        Assert.True(ClaudeHookInstaller.IsInstalled(Settings, _exe));
+        Assert.False(ClaudeHookInstaller.IsInstalled(Settings, other));
+    }
+
+    // Ownership has to stay path-agnostic. RemoveManagedHandlers strips Halo's entries whatever path they
+    // carry, including a dead one, or an uninstall would leave nine handlers behind pointing at nothing.
+    [Fact]
+    public void Uninstall_still_strips_handlers_that_name_a_deleted_exe()
+    {
+        ClaudeHookInstaller.Install(Settings, _exe);
+        File.Delete(_exe);
+
+        ClaudeHookInstaller.Uninstall(Settings);
+
+        Assert.DoesNotContain("Halo.Hooks.exe", File.ReadAllText(Settings));
     }
 }

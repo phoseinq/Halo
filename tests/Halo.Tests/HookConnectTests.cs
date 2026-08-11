@@ -5,6 +5,12 @@ namespace Halo.Tests;
 
 // This decides whether Halo edits a file belonging to another program, unprompted. Every one of these is a
 // way that could go wrong quietly, so the gate is a test rather than something read off Frame() later.
+//
+// Serialised against the other classes that touch it: one case asserts the English notice text, and
+// Strings.Use switches the ACTIVE LANGUAGE for the whole process. Without the collection this class ran in
+// parallel with the ones that switch to Persian and failed about one run in four, reading the Persian
+// notice back where it expected "Claude Code connected".
+[Collection("locale")]
 public class HookConnectTests
 {
     // The probes are the real thing's cost, so they are functions here too - there is no plain-bool

@@ -578,6 +578,8 @@
   "ask.freeTextSub": "用你自己的话回答",
   "ask.chat": "聊聊这个",
   "ask.chatSub": "先放下问题，改为对话",
+  "ask.submit": "提交",
+  "ask.submitSub": "发送已勾选的选项",
   "ask.enterToSend": "Enter 发送   Esc 返回",
   "ask.eyebrow.asks": "Claude Code 提问",
   "ask.eyebrow.runs": "Claude Code 想运行 {0}",

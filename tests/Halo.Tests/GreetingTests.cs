@@ -13,7 +13,7 @@ public class GreetingGateTests
     private static readonly DateOnly Today = new(2026, 8, 7);
 
     private static GreetingKind Decide(string? marker, bool enabled = true)
-        => GreetingGate.Decide(GreetingGate.Parse(marker), Version, Today, enabled);
+        => GreetingGate.Decide(GreetingGate.Parse(marker), Version, Today, arriving: false, enabled);
 
     [Fact]
     public void No_marker_means_this_build_has_never_run_here()
@@ -88,7 +88,8 @@ public class GreetingGateTests
     {
         Assert.NotEqual("0", GreetingGate.Version);
         Assert.Equal(GreetingKind.Login,
-            GreetingGate.Decide(new GreetingMark(GreetingGate.Version, null), GreetingGate.Version, Today, true));
+            GreetingGate.Decide(new GreetingMark(GreetingGate.Version, null), GreetingGate.Version, Today,
+                                arriving: false, true));
     }
 
     // The rule end to end, through the file the pill actually keeps: two arrivals in a day, one hand.
@@ -99,9 +100,9 @@ public class GreetingGateTests
         try
         {
             GreetingGate.Write(path, new GreetingMark(GreetingGate.Version, null));
-            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, true));
-            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, true));
-            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today.AddDays(1), true));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, arriving: false, true));
+            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, arriving: false, true));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today.AddDays(1), arriving: false, true));
         }
         finally { Scrub(dir); }
     }
@@ -115,8 +116,8 @@ public class GreetingGateTests
         try
         {
             GreetingGate.Write(path, new GreetingMark(GreetingGate.Version, null));
-            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, false));
-            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, true));
+            Assert.Equal(GreetingKind.None, GreetingGate.Take(path, Today, arriving: false, false));
+            Assert.Equal(GreetingKind.Login, GreetingGate.Take(path, Today, arriving: false, true));
         }
         finally { Scrub(dir); }
     }
@@ -128,7 +129,7 @@ public class GreetingGateTests
     {
         string path = Path.Combine(Path.GetTempPath(), "halo-greet-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(path);   // a DIRECTORY where the marker file should be
-        try { Assert.Equal(GreetingKind.Install, GreetingGate.Take(path, Today, true)); }
+        try { Assert.Equal(GreetingKind.Install, GreetingGate.Take(path, Today, arriving: false, true)); }
         finally { Scrub(path); }
     }
 
@@ -281,5 +282,80 @@ public class GreetingPlanTests
             Assert.True(f.HelloAlpha < 0.5f || f.LineAlpha < 0.5f,
                 $"the signature and a line were both solid at t={t}");
         }
+    }
+}
+
+// Signing in is exempt from the daily ration, which is the whole of the fix for "it didn't say hello after
+// the boot": a development session spends the day's one hand long before the evening reboot.
+public class SigninGreetingTests
+{
+    private static readonly DateOnly Today = new(2026, 8, 11);
+    private static string Version => GreetingGate.Version;
+
+    [Fact]
+    public void Arriving_says_hello_even_though_today_already_had_one()
+    {
+        var spent = new GreetingMark(Version, Today);
+
+        Assert.Equal(GreetingKind.None, GreetingGate.Decide(spent, Version, Today, false, true));
+        Assert.Equal(GreetingKind.Signin, GreetingGate.Decide(spent, Version, Today, true, true));
+    }
+
+    // A build that has never run here has something to say that is not "hello", and it outranks the arrival.
+    [Fact]
+    public void A_new_version_still_introduces_itself_rather_than_only_waving()
+        => Assert.Equal(GreetingKind.Install,
+                        GreetingGate.Decide(new GreetingMark("0.0.0.1", Today), Version, Today, true, true));
+
+    [Fact]
+    public void The_switch_still_silences_an_arrival()
+        => Assert.Equal(GreetingKind.None,
+                        GreetingGate.Decide(new GreetingMark(Version, null), Version, Today, true, false));
+
+    // The pill opens for this one - that is the point of it, and the request was "make it grow".
+    [Fact]
+    public void The_signin_pill_opens_wider_than_collapsed_and_comes_back()
+    {
+        Assert.Equal(GreetingPlan.CollapsedW, GreetingPlan.Signin(0f).PillW, 1);
+        Assert.True(GreetingPlan.Signin(0.5f).PillW > GreetingPlan.CollapsedW + 100f,
+                    $"got {GreetingPlan.Signin(0.5f).PillW}");
+        Assert.Equal(GreetingPlan.CollapsedW, GreetingPlan.Signin(1f).PillW, 1);
+    }
+
+    [Fact]
+    public void The_signin_pen_never_goes_backwards_and_never_shrinks_the_pill_below_collapsed()
+    {
+        float pen = 0f;
+        for (float t = 0f; t <= 1.0001f; t += 0.01f)
+        {
+            var f = GreetingPlan.Signin(t);
+            Assert.True(f.Written >= pen - 1e-4f, $"the pen went backwards at {t}");
+            Assert.True(f.PillW >= GreetingPlan.CollapsedW - 0.5f, $"narrower than collapsed at {t}");
+            Assert.True(f.PillH >= GreetingPlan.CollapsedH - 0.5f, $"shorter than collapsed at {t}");
+            pen = f.Written;
+        }
+    }
+
+    // It says hello and nothing else: the two lines of introduction are what makes install a ten-second
+    // speech, and one of those at every sign-in is a different request from the one that was made.
+    [Fact]
+    public void The_signin_greeting_writes_no_introduction_lines()
+    {
+        for (float t = 0f; t <= 1.0001f; t += 0.02f)
+        {
+            Assert.Equal(0f, GreetingPlan.Signin(t).LineWritten);
+            Assert.Equal(0f, GreetingPlan.Signin(t).LineAlpha);
+        }
+    }
+
+    [Fact]
+    public void Each_kind_gets_its_own_animation_and_length()
+    {
+        Assert.Equal(GreetingPlan.SigninSeconds, GreetingPlan.SecondsOf(GreetingKind.Signin));
+        Assert.Equal(GreetingPlan.InstallSeconds, GreetingPlan.SecondsOf(GreetingKind.Install));
+        Assert.Equal(GreetingPlan.LoginSeconds, GreetingPlan.SecondsOf(GreetingKind.Login));
+        // the login hand never opens the pill, the sign-in one does - that is how they differ
+        Assert.Equal(GreetingPlan.CollapsedW, GreetingPlan.Of(GreetingKind.Login, 0.5f).PillW, 1);
+        Assert.True(GreetingPlan.Of(GreetingKind.Signin, 0.5f).PillW > GreetingPlan.CollapsedW);
     }
 }

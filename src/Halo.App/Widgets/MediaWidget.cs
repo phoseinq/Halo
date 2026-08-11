@@ -267,7 +267,6 @@ internal sealed class MediaWidget : IWidget
                 chase = _thumb is not { Length: > 0 };
                 epoch = _trackEpoch;
             }
-            if (trackChanged) DebugLog(title);
             if (chase) ChaseArt(s, epoch);
         }
         catch { }
@@ -345,19 +344,6 @@ internal sealed class MediaWidget : IWidget
     }
 
     private volatile bool _chasing;
-
-    private void DebugLog(string title)
-    {
-        try
-        {
-            string app = App, id; bool video; lock (_lock) { id = _appId ?? ""; video = _isVideo; }
-            System.IO.File.AppendAllText(
-                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Halo", "media-debug.txt"),
-                $"{DateTime.Now:HH:mm:ss} app='{app}' aumid='{id}' video={video} title='{title}'\r\n");
-        }
-        catch { }
-    }
 
     private void RefreshPlayback(GlobalSystemMediaTransportControlsSession s)
     {

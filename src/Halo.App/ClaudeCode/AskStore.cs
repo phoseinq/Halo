@@ -8,7 +8,7 @@ namespace Halo.ClaudeCode;
 
 internal sealed record AskOption(string Label, string Description);
 
-internal enum AskDelivery { Option, FreeText, Chat }
+internal enum AskDelivery { Option, FreeText, Chat, Submit }
 
 internal sealed record PendingAsk(
     string Nonce,
@@ -152,6 +152,19 @@ internal sealed class AskStore
     private bool Press(PendingAsk ask, string label, AskDelivery delivery)
     {
         if (ask.Pid <= 0) { Trace($"no pid for {ask.Nonce}"); return false; }
+
+        if (delivery == AskDelivery.Submit)
+        {
+
+            Trace($"submit -> pid {ask.Pid} (queued)");
+            System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { WalkToSubmit(ask); } catch { } });
+            lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); }
+            Forget(ask.Nonce);
+            try { File.Delete(Path.Combine(_dir, $"ask-{ask.Nonce}.json")); } catch { }
+            System.Threading.Interlocked.Increment(ref _version);
+            return true;
+        }
+
         int index = -1;
 
         if (delivery == AskDelivery.Option)
@@ -162,14 +175,53 @@ internal sealed class AskStore
 
             ? Interop.ConsoleRead.Type(ask.Pid, (index + 1).ToString())
             : Write(ask, label, delivery);
-        Trace($"{(index >= 0 ? "row " + (index + 1) : delivery.ToString())} -> pid {ask.Pid} = {sent}");
+        Trace($"{(index >= 0 ? "row " + (index + 1) : delivery.ToString())} -> pid {ask.Pid} = {sent}"
+            + (ask.MultiSelect ? " (multiSelect: toggled, still open)" : ""));
         if (!sent) return false;
 
-        lock (_lock) _queue.Remove(ask.Nonce);
+        if (ask.MultiSelect)
+        {
+
+            if (index >= 0)
+                lock (_lock)
+                {
+                    if (!_ticked.TryGetValue(ask.Nonce, out var set)) _ticked[ask.Nonce] = set = [];
+                    if (!set.Add(index)) set.Remove(index);
+                }
+
+            System.Threading.Interlocked.Increment(ref _version);
+            return true;
+        }
+
+        lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); }
         Forget(ask.Nonce);
         try { File.Delete(Path.Combine(_dir, $"ask-{ask.Nonce}.json")); } catch { }
         System.Threading.Interlocked.Increment(ref _version);
         return true;
+    }
+
+    private static void WalkToSubmit(PendingAsk ask)
+    {
+        for (int step = 0; step < 5; step++)
+        {
+            if (!Interop.ConsoleRead.Press(ask.Pid, Interop.ConsoleRead.VkRight)) return;
+            System.Threading.Thread.Sleep(140);
+            if (ShowingList(ask.Pid)) continue;
+            bool sent = Interop.ConsoleRead.Press(ask.Pid, Interop.ConsoleRead.VkEnter);
+            Trace($"submit walk -> pid {ask.Pid} after {step + 1} right = {sent}");
+            return;
+        }
+        Trace($"submit walk -> pid {ask.Pid} never left the list");
+    }
+
+    private static bool ShowingList(int pid)
+    {
+        try
+        {
+            string text = Interop.ConsoleRead.Dump(pid, 20) ?? "";
+            return System.Text.RegularExpressions.Regex.IsMatch(text, @"\d+\.\s*\[");
+        }
+        catch { return true; }
     }
 
     internal static int RowNumber(int optionCount, AskDelivery delivery) => delivery switch
@@ -196,6 +248,8 @@ internal sealed class AskStore
 
                 System.Threading.Thread.Sleep(140);
                 if (!Interop.ConsoleRead.Type(pid, text)) return;
+
+                if (ask.MultiSelect) return;
                 System.Threading.Thread.Sleep(140);
                 Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkEnter);
             }
@@ -210,9 +264,18 @@ internal sealed class AskStore
         {
             string path = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "ask-debug.txt");
-            File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {line}\n");
+            Halo.Reports.DebugFile.Append(path, $"{DateTime.Now:HH:mm:ss.fff} {line}\n");
         }
         catch { }
+    }
+
+    private readonly Dictionary<string, HashSet<int>> _ticked = [];
+
+    internal IReadOnlySet<int> Ticked(string nonce)
+    {
+
+        lock (_lock)
+            return _ticked.TryGetValue(nonce, out var set) ? new HashSet<int>(set) : new HashSet<int>();
     }
 
     private void Forget(string nonce)

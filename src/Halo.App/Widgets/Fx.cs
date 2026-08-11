@@ -87,9 +87,12 @@ internal static class Fx
         return bmp;
     }
 
+    internal static float AmbientScale = 1f;
+
     public static void Glow(Graphics g, int w, int h, float fade, float cx, float cy,
         float rx, float ry, float alpha, Color accent)
     {
+        fade *= AmbientScale;
         if (accent == White || fade <= 0.01f) return;
         using var clip = PillClip(w, h);
         var old = g.Clip;
@@ -117,6 +120,7 @@ internal static class Fx
     public static void PillBar(Graphics g, int w, int h, float fade, float frac, Color accent, float strength,
                                bool alive = false, bool track = true, bool decorated = true)
     {
+        fade *= AmbientScale;
         if (accent == White || fade <= 0.01f || strength <= 0f) return;
         frac = Math.Clamp(frac, 0f, 1f);
 

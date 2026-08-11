@@ -21,6 +21,8 @@ internal static class GreetingPlan
     internal const float InstallSeconds = 10.2f;
     internal const float LoginSeconds = 2.6f;
 
+    internal const float SigninSeconds = 4.6f;
+
     internal static GreetingFrame Install(float t)
     {
         t = Math.Clamp(t, 0f, 1f);
@@ -45,6 +47,37 @@ internal static class GreetingPlan
             second ? 1f - out2 : (write1 <= 0f ? 0f : 1f - out1),
             second ? 1 : 0);
     }
+
+    internal static GreetingFrame Signin(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        float open = Span(t, 0f, 0.14f), shut = Span(t, 0.88f, 1f);
+        float size = EaseOutBack(open) * (1f - EaseInOut(shut));
+        float written = Span(t, 0.10f, 0.56f);
+
+        float gone = EaseInOut(Span(t, 0.80f, 0.94f));
+        return new GreetingFrame(
+            Lerp(CollapsedW, OpenW, size),
+            Lerp(CollapsedH, OpenH, size),
+            Lerp(CollapsedR, OpenR, size),
+            written,
+            (1f - gone) * Math.Min(1f, open * 3f),
+            0f, 0f, 0);
+    }
+
+        internal static GreetingFrame Of(GreetingKind kind, float t) => kind switch
+    {
+        GreetingKind.Install => Install(t),
+        GreetingKind.Signin => Signin(t),
+        _ => Login(t),
+    };
+
+    internal static float SecondsOf(GreetingKind kind) => kind switch
+    {
+        GreetingKind.Install => InstallSeconds,
+        GreetingKind.Signin => SigninSeconds,
+        _ => LoginSeconds,
+    };
 
     internal static GreetingFrame Login(float t)
     {

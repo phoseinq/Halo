@@ -216,11 +216,14 @@ public class AskBannerLayoutTests
         Assert.True(AskBanner.IsBuiltIn(AskBanner.FreeText));
     }
 
-    // A question whose options carry previews is drawn by a different component in the box - a Notes field
-    // and no numbered rows past the options - so appending them would be inventing rows that are not there,
-    // and every number after them would be wrong.
+    // This used to assert the opposite, on the grounds that previews render a component with a Notes field
+    // and no numbered rows. The component is real; the condition selecting it is
+    // `!multiSelect && options.some(o => o.preview) && !Bot`, and the chat row's condition is
+    // `Bot && !multiSelect` - the same flag, opposite sense. A session showing a chat row therefore cannot be
+    // showing the preview component, so suppressing both rows on HasPreview alone stripped them from a box
+    // that still had them. Reported as "chat about this doesn't appear, the pill's box has only the options".
     [Fact]
-    public void A_question_with_previews_gets_no_built_in_rows()
+    public void A_question_with_previews_still_gets_both_built_in_rows()
     {
         var withPreview = new PendingAsk("n", 1, "s", "AskUserQuestion", null, "pick one",
             [new AskOption("a", ""), new AskOption("b", "")],
@@ -228,8 +231,53 @@ public class AskBannerLayoutTests
 
         var rows = AskBanner.Layout(withPreview, AskBanner.W).Rows;
 
-        Assert.Equal(2, rows.Count);
-        Assert.DoesNotContain(rows, r => AskBanner.IsBuiltIn(r.Option));
+        Assert.Equal(4, rows.Count);
+        Assert.True(AskBanner.IsFreeText(rows[2].Option));
+        Assert.True(AskBanner.IsChat(rows[3].Option));
+    }
+
+    // The dangerous one. The box appends the chat row only when `!multiSelect`, so on a multi-select question
+    // it is not there - and its digit would be Options.Count + 2 against a list one row shorter, which WRAPS,
+    // so tapping it answered with one of Claude's own options instead.
+    [Fact]
+    public void A_multi_select_question_gets_the_free_text_row_but_no_chat_row()
+    {
+        var multi = new PendingAsk("n", 1, "s", "AskUserQuestion", null, "pick some",
+            [new AskOption("a", ""), new AskOption("b", "")],
+            DateTimeOffset.UtcNow.AddMinutes(10), MultiSelect: true);
+
+        var rows = AskBanner.Layout(multi, AskBanner.W).Rows;
+
+        // options, the free-text row, and Halo's own submit. The chat row is the one the box drops here,
+        // and returning it anyway once wrapped the list round onto a real option.
+        Assert.Equal(4, rows.Count);
+        Assert.True(AskBanner.IsFreeText(rows[2].Option));
+        Assert.True(AskBanner.IsSubmit(rows[3].Option));
+        Assert.DoesNotContain(rows, r => AskBanner.IsChat(r.Option));
+    }
+
+    // The submit row must never earn a digit. The box has no row for it - its Submit is a tab in the
+    // question strip - so a number here would be a keyboard hint for a key that ticks a real option.
+    [Fact]
+    public void The_submit_row_carries_no_digit()
+    {
+        Assert.Equal(0, AskStore.RowNumber(2, AskDelivery.Submit));
+        Assert.Equal(3, AskStore.RowNumber(2, AskDelivery.FreeText));
+        Assert.Equal(4, AskStore.RowNumber(2, AskDelivery.Chat));
+        Assert.Equal(0, AskStore.RowNumber(2, AskDelivery.Option));
+    }
+
+    // A single-select question is answered by one digit, so a submit row there would be a control that
+    // means nothing.
+    [Fact]
+    public void A_single_select_question_has_no_submit_row()
+    {
+        var single = new PendingAsk("n", 1, "s", "AskUserQuestion", null, "pick one",
+            [new AskOption("a", ""), new AskOption("b", "")],
+            DateTimeOffset.UtcNow.AddMinutes(10));
+
+        Assert.DoesNotContain(AskBanner.Layout(single, AskBanner.W).Rows,
+                              r => AskBanner.IsSubmit(r.Option));
     }
 
     [Fact]

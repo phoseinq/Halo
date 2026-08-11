@@ -32,13 +32,33 @@ public sealed class LocalAlertTests
     [InlineData(true, true, false, "offline")]     // NetMon only asserts NetDown alongside ApiDown
     [InlineData(true, true, true, "offline")]
     public void WorstTroubleWins(bool netDown, bool apiDown, bool slow, string? expected)
-        => Assert.Equal(expected, NotchController.NetTrouble(netDown, apiDown, slow));
+        => Assert.Equal(expected, NotchController.NetTrouble(netDown, apiDown, slow, busy: false));
 
     // with nothing reaching the internet, "their API is unreachable" is true and useless - the router is
     // the thing to go and look at, and only one banner may say so
     [Fact]
     public void OfflineSupersedesTheApiBeingUnreachable()
-        => Assert.Equal("offline", NotchController.NetTrouble(netDown: true, apiDown: true, slow: true));
+        => Assert.Equal("offline", NotchController.NetTrouble(netDown: true, apiDown: true, slow: true, busy: false));
+
+    // A link moving megabytes is not slow. "Slow" is inferred from a latency probe, and a saturated link is
+    // precisely when that probe crawls - so the banner used to fire in the middle of the one activity that
+    // explains it, which is what "do not tell me the internet is bad while I am downloading" was about.
+    [Fact]
+    public void A_busy_link_is_not_reported_as_slow()
+        => Assert.Null(NotchController.NetTrouble(netDown: false, apiDown: false, slow: true, busy: true));
+
+    [Fact]
+    public void An_idle_slow_link_is_still_reported()
+        => Assert.Equal("slow", NotchController.NetTrouble(false, false, slow: true, busy: false));
+
+    // netDown and apiDown are facts rather than inferences from latency, so being mid-download must not
+    // silence them: a download running off a captive portal with no route out is exactly when they matter.
+    [Fact]
+    public void Being_busy_does_not_hide_a_dead_link_or_a_dead_api()
+    {
+        Assert.Equal("offline", NotchController.NetTrouble(netDown: true, apiDown: false, slow: false, busy: true));
+        Assert.Equal("api", NotchController.NetTrouble(netDown: false, apiDown: true, slow: false, busy: true));
+    }
 
     [Theory]
     [InlineData("weekly", true)]

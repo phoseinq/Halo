@@ -16,12 +16,15 @@ internal static class BannerGate
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo");
     private static readonly string StatePath = Path.Combine(HaloDir, "banner-orig.tsv");
     private static readonly string DebugPath = Path.Combine(HaloDir, "notif-debug.txt");
-    private static void Log(string m) { try { File.AppendAllText(DebugPath, $"{DateTime.Now:HH:mm:ss} [banner] {m}\r\n"); } catch { } }
+    private static void Log(string m)
+        => Reports.DebugFile.Append(DebugPath, $"{DateTime.Now:HH:mm:ss} [banner] {m}\r\n");
 
     private static Timer? _applyTimer;
     private static long _lastRestart = -60_000;
     private static long _lastToast = -QuietGapMs;
     private static bool _applyPending;
+
+    private static bool _on;
     private static long _applySince;
 
     private const int QuietGapMs = 12_000;
@@ -39,6 +42,7 @@ internal static class BannerGate
     public static void Enable()
     {
         Log("enable (per-app banner suppression)");
+        _on = true;
         LoadState();
         lock (_lock)
         {
@@ -101,6 +105,7 @@ internal static class BannerGate
     public static void SuppressApp(string aumid)
     {
         if (string.IsNullOrEmpty(aumid)) return;
+        if (!_on) return;
         bool changed;
         lock (_lock)
         {
@@ -225,6 +230,7 @@ internal static class BannerGate
 
     public static void Restore()
     {
+        _on = false;
         lock (_lock)
         {
 
@@ -243,6 +249,22 @@ internal static class BannerGate
             int ok = BannerWriter.Commit(edits);
             Log($"restored native banners ({ok}/{edits.Count} verified)");
         }
+    }
+
+    internal static (bool Restore, bool Restart, bool Forget) ExitPlan(bool on, bool live)
+        => on ? (true, live, false) : (false, false, false);
+
+    public static void RestoreForExit(bool live)
+    {
+        var plan = ExitPlan(_on, live);
+        if (!plan.Restore) return;
+        try
+        {
+            Log($"exit: restoring native banners ({(live ? "quit" : "session end")})");
+            Restore();
+            if (plan.Restart) RestartService();
+        }
+        catch (Exception ex) { Log("exit restore failed: " + ex.Message); }
     }
 
     public static void Uninstall()

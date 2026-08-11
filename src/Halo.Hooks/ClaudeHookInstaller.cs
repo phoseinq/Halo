@@ -64,7 +64,7 @@ internal static class ClaudeHookInstaller
         Save(settingsPath, settings, createBackup: false);
     }
 
-    internal static bool IsInstalled(string settingsPath)
+    internal static bool IsInstalled(string settingsPath, string? ownExe = null)
     {
         try
         {
@@ -74,7 +74,7 @@ internal static class ClaudeHookInstaller
                 hooks[managed.Event] is JsonArray entries && entries.Any(entry =>
                     entry is JsonObject o && o["hooks"] is JsonArray handlers && handlers.Any(h =>
                         h is JsonObject hj && hj["command"] is JsonValue v &&
-                        v.TryGetValue<string>(out var c) && IsManagedCommand(c))));
+                        v.TryGetValue<string>(out var c) && IsManagedCommand(c) && Runnable(c, ownExe))));
         }
 
         catch { return false; }
@@ -147,6 +147,27 @@ internal static class ClaudeHookInstaller
         if (tail.StartsWith("codex ", StringComparison.OrdinalIgnoreCase)) return false;
         return ManagedHooks.Any(managed =>
             tail.Equals(managed.Command, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string ExeOf(string command)
+    {
+        command = command.Trim();
+        if (command.StartsWith('"'))
+        {
+            int close = command.IndexOf('"', 1);
+            if (close > 1) return command[1..close];
+        }
+        int cut = command.IndexOf("Halo.Hooks.exe", StringComparison.OrdinalIgnoreCase);
+        return cut < 0 ? "" : command[..(cut + "Halo.Hooks.exe".Length)];
+    }
+
+    private static bool Runnable(string command, string? ownExe)
+    {
+        string exe = ExeOf(command);
+        if (exe.Length == 0 || !File.Exists(exe)) return false;
+
+        if (ownExe is not { Length: > 0 } own || !File.Exists(own)) return true;
+        return string.Equals(Path.GetFullPath(exe), Path.GetFullPath(own), StringComparison.OrdinalIgnoreCase);
     }
 
     private static void Save(string settingsPath, JsonObject settings, bool createBackup = true)

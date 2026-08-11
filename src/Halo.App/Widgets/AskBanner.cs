@@ -45,22 +45,33 @@ internal static class AskBanner
     internal static readonly AskOption FreeText = new("__free__", "");
     internal static readonly AskOption Chat = new("__chat__", "");
 
+    internal static readonly AskOption Submit = new("__submit__", "");
+
         internal static (string Label, string Sub) Words(AskOption option)
         => IsFreeText(option) ? (global::Halo.Localization.Strings.Get("ask.typeSomething"), global::Halo.Localization.Strings.Get("ask.freeTextSub"))
          : IsChat(option) ? (global::Halo.Localization.Strings.Get("ask.chat"), global::Halo.Localization.Strings.Get("ask.chatSub"))
+
+         : IsSubmit(option) ? (global::Halo.Localization.Strings.Get("ask.submit"), "")
          : (option.Label, option.Description);
 
     internal static bool IsFreeText(AskOption option) => ReferenceEquals(option, FreeText);
     internal static bool IsChat(AskOption option) => ReferenceEquals(option, Chat);
-    internal static bool IsBuiltIn(AskOption option) => IsFreeText(option) || IsChat(option);
+    internal static bool IsSubmit(AskOption option) => ReferenceEquals(option, Submit);
+    internal static bool IsBuiltIn(AskOption option)
+        => IsFreeText(option) || IsChat(option) || IsSubmit(option);
 
     internal static IReadOnlyList<AskOption> BuiltInsFor(PendingAsk ask)
-        => ask.IsQuestion && !ask.HasPreview ? [FreeText, Chat] : [];
+        => !ask.IsQuestion ? [] : ask.MultiSelect ? [FreeText, Submit] : [FreeText, Chat];
 
     internal sealed record AskRow(
         RectangleF Rect, RectangleF Body, RectangleF Label, RectangleF Desc, AskOption Option);
     internal sealed record AskLayout(
         RectangleF Title, RectangleF Target, IReadOnlyList<AskRow> Rows, int Height);
+
+    private static readonly StringFormat Measure = new(StringFormat.GenericTypographic)
+    {
+        FormatFlags = StringFormat.GenericTypographic.FormatFlags | StringFormatFlags.MeasureTrailingSpaces,
+    };
 
     private static readonly object LayoutLock = new();
     private static Graphics? _measure;
@@ -150,7 +161,8 @@ internal static class AskBanner
     internal static int Height(PendingAsk ask, int w) => Layout(ask, w).Height;
 
     internal static void Draw(Graphics g, int w, int h, float a, PendingAsk ask, int hover,
-        int tint = DeskTint, string? typed = null, bool closeHover = false)
+        int tint = DeskTint, string? typed = null, bool closeHover = false,
+        IReadOnlySet<int>? ticked = null)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -176,8 +188,13 @@ internal static class AskBanner
 
             bool typing = typed != null && IsFreeText(row.Option);
 
-            DrawRow(g, row, i + 1, a, typing || i == hover, Accent(ask, row.Option.Label), seeThrough,
-                typing ? typed : null);
+            bool isTicked = ticked != null && ticked.Count > 0
+                            && i < ask.Options.Count && ticked.Contains(i);
+
+            bool submit = IsSubmit(row.Option);
+            DrawRow(g, row, submit ? 0 : i + 1, a, submit || typing || i == hover,
+                submit ? SubmitTint : Accent(ask, row.Option.Label), seeThrough,
+                typing ? typed : null, isTicked);
         }
     }
 
@@ -201,6 +218,8 @@ internal static class AskBanner
             seeThrough ? DimClear : Dim, a, seeThrough);
     }
 
+    private static readonly Color SubmitTint = Color.FromArgb(255, 122, 186, 228);
+
     private static Color Accent(PendingAsk ask, string label)
     {
         if (ask.IsQuestion) return Amber;
@@ -208,20 +227,36 @@ internal static class AskBanner
     }
 
     private static void DrawRow(Graphics g, AskRow row, int number, float a, bool hover, Color accent,
-        bool seeThrough, string? typed)
+        bool seeThrough, string? typed, bool ticked = false)
     {
         var r = row.Rect;
         var numRect = new RectangleF(r.X, r.Y + (r.Height - NumD) / 2f, NumD, NumD);
-        DrawVessel(g, row.Body, a, hover, accent, seeThrough);
 
-        DrawBead(g, numRect, a, hover, seeThrough);
+        DrawVessel(g, row.Body, a, hover || ticked, accent, seeThrough);
 
-        DrawGlyph(g, number.ToString(), numRect,
-            Color.FromArgb((int)(a * (hover ? 225 : 170)), 255, 255, 255), seeThrough ? a : 0f);
+        if (number > 0)
+        {
+            DrawBead(g, numRect, a, hover, seeThrough);
+
+            DrawGlyph(g, number.ToString(), numRect,
+                Color.FromArgb((int)(a * (hover ? 225 : 170)), 255, 255, 255), seeThrough ? a : 0f);
+        }
 
         using var sf = Wrap(StringAlignment.Near);
         using var lf = new Font("Segoe UI Semibold", LabelPx, GraphicsUnit.Pixel);
         using var df = new Font("Segoe UI", DescPx, GraphicsUnit.Pixel);
+
+        if (number <= 0)
+        {
+            using var bsf = new StringFormat(StringFormat.GenericTypographic)
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap,
+            };
+            Ink(g, Words(row.Option).Label, lf, row.Body, bsf, White, a, seeThrough);
+            return;
+        }
 
         if (typed != null)
         {
@@ -234,8 +269,8 @@ internal static class AskBanner
             if (rtl) fmt.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
 
             Ink(g, shown, lf, Slack(row.Label), fmt, White, a, seeThrough);
-            float run = shown.Length == 0 ? 0f
-                : g.MeasureString(shown, lf, int.MaxValue, StringFormat.GenericTypographic).Width;
+
+            float run = shown.Length == 0 ? 0f : g.MeasureString(shown, lf, int.MaxValue, Measure).Width;
             float caretX = rtl ? row.Label.Right - run - CaretW - 1f : row.Label.X + run + 1f;
             using (var cb = new SolidBrush(Mul(accent, a)))
                 g.FillRectangle(cb, caretX, row.Label.Y + 1f, CaretW, LabelLineH - 4f);

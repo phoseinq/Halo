@@ -81,4 +81,41 @@ public class BannerGateTests
     {
         Assert.Equal(0, BannerGate.ApplyDelayMs(now: 10_000_000, lastRestart: 0, lastToast: 0));
     }
+
+    // Halo hands the native banners back when it goes away. MSIX has no uninstall-time code execution, so
+    // Halo.iss's [UninstallRun] --restore-notifications has no counterpart in the Store build and removing it
+    // left every app the gate had learned still silenced - 141 of them on the audited machine.
+    //
+    // A gate that never ran must not write. `notifications.silence` defaults on now, but it is a toggle, and a
+    // user who turned it off has a ledger on disk from before that Halo has no business re-applying OR
+    // reverting on the way out.
+    [Fact]
+    public void A_gate_that_was_never_on_writes_nothing_on_the_way_out()
+    {
+        Assert.Equal((false, false, false), BannerGate.ExitPlan(on: false, live: true));
+        Assert.Equal((false, false, false), BannerGate.ExitPlan(on: false, live: false));
+    }
+
+    // Quitting pushes it live, because WpnUserService reads these values when IT starts: registry alone would
+    // leave the banners suppressed for the rest of the session.
+    [Fact]
+    public void Quitting_restores_and_pushes_it_to_the_service()
+        => Assert.Equal((true, true, false), BannerGate.ExitPlan(on: true, live: true));
+
+    // Logoff and shutdown restore the registry and stop there. There is nothing to push it to, the next logon
+    // starts the service fresh and reads the restored values, and spawning a PowerShell child while the
+    // session is tearing down is the kind of thing that gets killed halfway.
+    [Fact]
+    public void A_session_that_is_ending_restores_without_spawning_anything()
+        => Assert.Equal((true, false, false), BannerGate.ExitPlan(on: true, live: false));
+
+    // Forget is Uninstall()'s alone. An exit that cleared the ledger would come back next launch having
+    // forgotten every app it had learned to silence, and would have to re-learn them one toast at a time -
+    // each of which is one banner that got through.
+    [Fact]
+    public void No_exit_forgets_what_the_gate_has_learned()
+    {
+        Assert.False(BannerGate.ExitPlan(on: true, live: true).Forget);
+        Assert.False(BannerGate.ExitPlan(on: true, live: false).Forget);
+    }
 }

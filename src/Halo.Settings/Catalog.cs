@@ -132,7 +132,9 @@ internal static class Catalog
             ]),
             new(S("notifications"), "\uE8BD", [
                 Toggle("feature.notifications", L("feature.notifications"), D("feature.notifications")),
-                Toggle("notifications.silence", L("notifications.silence"), D("notifications.silence"), false),
+
+                Toggle("notifications.silence", L("notifications.silence"),
+                    D("notifications.silence" + (Halo.Interop.AppModel.IsPackaged ? ".packaged" : ""))),
             ]),
             new(S("alertsaboutthismachine"), "\uE9D9", [
                 Toggle("alert.battery", L("alert.battery"), D("alert.battery")),
@@ -148,6 +150,8 @@ internal static class Catalog
                 Toggle("alert.clipboard", L("alert.clipboard"), D("alert.clipboard")),
                 Toggle("alert.language", L("alert.language"), D("alert.language")),
                 Toggle("alert.hourly", L("alert.hourly"), D("alert.hourly"), false),
+
+                Toggle("alert.weather", L("alert.weather"), D("alert.weather"), false),
             ]),
         ]),
         new(PageId.Agents, P("Agents"), PD("Agents"),

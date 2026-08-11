@@ -254,6 +254,10 @@ internal sealed partial class NotchController
     private bool _notifDetailOn;
     private float _notifDetail;
     private int _notifDetailH = NotifBanner.SummaryH + 60;
+    private int _notifInk, _drawnNotifInk;
+
+    private float _notifFold = 1f;
+    private const float FoldSecs = 0.34f;
     private DateTime _notifDeadline;
     private int _curW = CollapsedW, _curH = CollapsedH;
     private bool _lastDesktop = true;
@@ -321,7 +325,8 @@ internal sealed partial class NotchController
         _settings = new Halo.Settings.SettingsStore();
         Halo.Settings.SettingsStore.Shared = _settings;
 
-        _greet = GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now), GreetingWanted);
+        _greet = GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now),
+                                   arriving: !ScreenWatchable(), GreetingWanted);
         _appliedSettings = _settings.Version;
 
         ApplyLanguage(_settings.Current);
@@ -329,16 +334,19 @@ internal sealed partial class NotchController
         _api.Reconcile();
         _startupApplied = _settings.Current.Bool(Halo.Settings.SettingsKeys.StartWithWindows, true);
         ReconcileAutostart(_startupApplied);
-        _silenceApplied = _settings.Current.Bool("notifications.silence", false);
+
+        _silenceApplied = _settings.Current.Bool("notifications.silence", true);
         if (_silenceApplied) System.Threading.ThreadPool.QueueUserWorkItem(
             _ => { try { Halo.Notifications.BannerGate.Enable(); } catch { } });
 
         _mediaSessions = new MediaSessions();
         var widgets = new List<IWidget>();
+
+        widgets.Add(new NetWidget(_net));
+        widgets.Add(new DownloadWidget());
         for (int s = 0; s < MediaSessions.MaxSlots; s++)
             widgets.Add(new MediaWidget(_mediaSessions, s));
         widgets.Add(new VlcWidget(_mediaSessions));
-        widgets.Add(new DownloadWidget());
         widgets.Add(new FileTray());
         widgets.Add(_btWidget);
         Privacy.Poke();
@@ -354,6 +362,7 @@ internal sealed partial class NotchController
         for (int s = 0; s < StatusStore.MaxSessions; s++)
             widgets.Add(new GenericAgentWidget(agentStore, s));
         _widgets = [.. widgets];
+        FlushNet = _net.Flush;
 
         var active = ActiveIndices();
         LoadOffset();
@@ -468,6 +477,8 @@ internal sealed partial class NotchController
     }
 
     internal const float MiniOut = 0.50f, ContentIn = 0.20f;
+
+    internal const float StripSwallowOut = 0.30f;
     internal static float ContentFade(float t) => Math.Clamp((t - ContentIn) / (1f - ContentIn), 0f, 1f);
     internal static float MiniFade(float t) => Math.Clamp(1f - t / MiniOut, 0f, 1f);
 
@@ -530,22 +541,32 @@ internal sealed partial class NotchController
 
     private int _drawnSs = 2;
     private bool _timerRaised, _timerCapped;
+    private int _ptrX = int.MinValue, _ptrY = int.MinValue;
     private long _timerRaisedAt;
     internal const long TimerRaiseCapMs = 600_000;
 
-    private void RaiseTimer(bool want)
+    internal static (bool Raise, bool Capped, long RaisedAt) TimerLatch(
+        bool want, bool raised, bool capped, long raisedAt, long now, bool inputEdge)
+    {
+        if (!want) return (false, false, raisedAt);
+        if (capped && inputEdge) capped = false;
+        else if (raised && now - raisedAt >= TimerRaiseCapMs) capped = true;
+        if (capped) return (false, true, raisedAt);
+        return (true, false, raised ? raisedAt : now);
+    }
+
+    private void RaiseTimer(bool want, bool inputEdge)
     {
         long now = Environment.TickCount64;
 
-        if (!want) _timerCapped = false;
-        else if (_timerRaised && now - _timerRaisedAt >= TimerRaiseCapMs) _timerCapped = true;
-        if (_timerCapped) want = false;
-        else if (want && !_timerRaised) _timerRaisedAt = now;
-        if (want == _timerRaised) return;
+        var next = TimerLatch(want, _timerRaised, _timerCapped, _timerRaisedAt, now, inputEdge);
+        _timerCapped = next.Capped;
+        _timerRaisedAt = next.RaisedAt;
+        if (next.Raise == _timerRaised) return;
         try
         {
-            if (want) Win32.timeBeginPeriod(1); else Win32.timeEndPeriod(1);
-            _timerRaised = want;
+            if (next.Raise) Win32.timeBeginPeriod(1); else Win32.timeEndPeriod(1);
+            _timerRaised = next.Raise;
         }
         catch { }
     }
@@ -715,7 +736,7 @@ internal sealed partial class NotchController
 
         _api.Reconcile();
 
-        bool silence = current.Bool("notifications.silence", false);
+        bool silence = current.Bool("notifications.silence", true);
         if (silence != _silenceApplied)
         {
             _silenceApplied = silence;
@@ -837,6 +858,8 @@ internal sealed partial class NotchController
         CheckCompact();
         CheckApiRetry();
         if (Alert("hourly", on: false)) CheckHourly();
+        if (Alert("weather", on: false)) CheckHeat();
+        _net.Poll();
         Almanac.Poke();
     }
 
@@ -901,6 +924,24 @@ internal sealed partial class NotchController
         else ClaudeCode.ApiRetry.Done();
     }
 
+    private readonly HeatWatch _heat = new();
+
+    private readonly NetMeter _net = new();
+
+    internal static Action? FlushNet;
+    private void CheckHeat()
+    {
+        if (Almanac.Latest is not { } wx) return;
+        if (_heat.Observe(wx.TempC, DateTime.Now) is not { } rise) return;
+        _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+        {
+            App = Halo.Localization.Strings.Get("notice.weather.app"),
+            Title = Halo.Localization.Strings.Format("notice.heat.title", wx.TempC),
+            Body = Halo.Localization.Strings.Format("notice.heat.body", rise),
+            Kind = "weather", Duration = 6, Icon = Badges.Hot(),
+        });
+    }
+
     private int _chimedHour = DateTime.Now.Hour;
     private void CheckHourly()
     {
@@ -958,6 +999,16 @@ internal sealed partial class NotchController
                             Icon = fail ? Badges.HookFailed() : Badges.Hooked(),
                         });
                     }
+                    break;
+                case "heat": case "weather":
+                    int hot = int.TryParse(arg, out var hc) ? hc : 34;
+                    _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+                    {
+                        App = Halo.Localization.Strings.Get("notice.weather.app"),
+                        Title = Halo.Localization.Strings.Format("notice.heat.title", hot),
+                        Body = Halo.Localization.Strings.Format("notice.heat.body", HeatWatch.RiseC + 1),
+                        Kind = "weather", Duration = 6, Icon = Badges.Hot(),
+                    });
                     break;
                 case "clock": case "hour": case "hourly":
                     var t = int.TryParse(arg, out var hr) && hr is >= 0 and <= 23 ? DateTime.Today.AddHours(hr) : DateTime.Now;
@@ -1052,7 +1103,8 @@ internal sealed partial class NotchController
     private string? _netShown;
     private void CheckInternet()
     {
-        var trouble = NetTrouble(ClaudeCode.NetMon.NetDown, ClaudeCode.NetMon.ApiDown, ClaudeCode.NetMon.Slow);
+        var trouble = NetTrouble(ClaudeCode.NetMon.NetDown, ClaudeCode.NetMon.ApiDown, ClaudeCode.NetMon.Slow,
+                                 _net.Busy);
         if (trouble == _netShown) return;
         _netShown = trouble;
         if (trouble is null) return;
@@ -1082,8 +1134,8 @@ internal sealed partial class NotchController
         _notifSrc.EnqueueLocal(item);
     }
 
-    internal static string? NetTrouble(bool netDown, bool apiDown, bool slow)
-        => netDown ? "offline" : apiDown ? "api" : slow ? "slow" : null;
+    internal static string? NetTrouble(bool netDown, bool apiDown, bool slow, bool busy)
+        => netDown ? "offline" : apiDown ? "api" : slow && !busy ? "slow" : null;
 
     internal static readonly TimeSpan WakeGap = TimeSpan.FromSeconds(90);
     private DateTime _lastTickUtc = DateTime.UtcNow;
@@ -1114,7 +1166,7 @@ internal sealed partial class NotchController
 
         if (gap < WakeGap || _greet != GreetingKind.None || _notif != null || _ask != null) return;
 
-        if (GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now), GreetingWanted)
+        if (GreetingGate.Take(GreetedPath, DateOnly.FromDateTime(DateTime.Now), arriving: false, GreetingWanted)
             == GreetingKind.None) return;
         _greet = GreetingKind.Login;
         _greetT = 0f;
@@ -1297,6 +1349,9 @@ internal sealed partial class NotchController
 
         Win32.GetCursorPos(out var p);
 
+        bool pointerMoved = p.X != _ptrX || p.Y != _ptrY;
+        _ptrX = p.X; _ptrY = p.Y;
+
         float prevGreetT = _greetT;
         var prevGreet = _greet;
         CheckWake();
@@ -1309,8 +1364,7 @@ internal sealed partial class NotchController
                     GreetingArm.Step(ScreenWatchable(), _greetHeld, _greetWaited, _dt);
             else
             {
-                float secs = _greet == GreetingKind.Install
-                    ? GreetingPlan.InstallSeconds : GreetingPlan.LoginSeconds;
+                float secs = GreetingPlan.SecondsOf(_greet);
                 _greetT += _dt / secs;
                 if (_greetT >= 1f) { _greetT = 0f; _greet = GreetingKind.None; }
             }
@@ -1325,8 +1379,23 @@ internal sealed partial class NotchController
             _notif = item;
             _notifDetailOn = false;
             _notifDetail = 0f;
+            _notifFold = 1f;
             _notifDetailH = NotifBanner.DetailHeight(item);
             _notifDeadline = DateTime.UtcNow.AddSeconds(item.Duration);
+        }
+
+        else if (_notif is { } live && !_notifClosing && _notifSrc.DequeueFoldable(live) is { } more)
+        {
+            live.Body = Halo.Notifications.LiveText.Append(live.Body, more.Body);
+            live.Time = more.Time;
+
+            _notifFold = 0f;
+            live.Duration = Halo.Notifications.LiveText.Extend(live.Duration);
+            _notifDetailH = NotifBanner.DetailHeight(live);
+
+            _notifDeadline = DateTime.UtcNow.AddSeconds(live.Duration);
+
+            _notifInk++;
         }
 
         if (_notif != null && _asks.Pending != null && !_notifDetailOn) _notifClosing = true;
@@ -1368,7 +1437,7 @@ internal sealed partial class NotchController
             }
         }
 
-        float prevNotifT = _notifT, prevNotifDetail = _notifDetail;
+        float prevNotifT = _notifT, prevNotifDetail = _notifDetail, prevNotifFold = _notifFold;
         bool overNotif = false;
         if (_notif != null)
         {
@@ -1378,6 +1447,7 @@ internal sealed partial class NotchController
             if (!_notifDetailOn && DateTime.UtcNow > _notifDeadline) _notifClosing = true;
             _notifT = Math.Clamp(_notifT + (_notifClosing ? -_dt / 0.30f : _dt / 0.24f), 0f, 1f);
             _notifDetail = Math.Clamp(_notifDetail + (_notifDetailOn ? 1 : -1) * _dt / 0.22f, 0f, 1f);
+            _notifFold = Math.Clamp(_notifFold + _dt / FoldSecs, 0f, 1f);
             if (_notifClosing && _notifT <= 0f)
             {
                 _notif = null;
@@ -1534,6 +1604,7 @@ internal sealed partial class NotchController
             || _rowOpen != prevRowOpen || forceAnim || mouseMoved || rescaled || _handle != prevHandle
             || _shrink != prevShrink || _stripT != prevStrip || _notifT != prevNotifT || _notifDetail != prevNotifDetail
             || _offsetX != prevOffsetX || _holdT != prevHoldT || !ReferenceEquals(_notif, notifStart)
+            || _notifInk != _drawnNotifInk || _notifFold != prevNotifFold
             || _askT != prevAskT || _askHover != prevAskHover || _askTyped != _drawnTyped
             || _greetT != prevGreetT || _greet != prevGreet
 
@@ -1550,7 +1621,8 @@ internal sealed partial class NotchController
 
         bool watched = hovered || notice
                        || _notif != null || _ask != null || _greet != GreetingKind.None;
-        RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)));
+        RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)),
+                   pointerMoved);
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 
         bool steady = !morphing && watched;
@@ -1569,6 +1641,7 @@ internal sealed partial class NotchController
         _drawnDragRow = _dragRow;
         if (changed) Apply(_progress);
         _drawnSs = ss;
+        _drawnNotifInk = _notifInk;
     }
 
     private bool InChip(Win32.POINT p, RectangleF r)
@@ -1661,6 +1734,8 @@ internal sealed partial class NotchController
     {
         MediaWidget => "media",
         VlcWidget => "vlc",
+
+        NetWidget => "net",
         DownloadWidget => "download",
         FileTray => "filetray",
         ClaudeCodeWidget => "claude",
@@ -1914,14 +1989,24 @@ internal sealed partial class NotchController
 
                     if (AskBanner.IsFreeText(_askChips[i].Option)) BeginTyping();
 
-                    else if (_asks.Answer(ask, _askChips[i].Option.Label,
-                        AskBanner.IsChat(_askChips[i].Option) ? AskDelivery.Chat : AskDelivery.Option))
+                    else
                     {
-                        EndTyping();
-                        ClearDraft();
-                        _askGhost = ask;
-                        _ask = null;
-                        _askHover = -1;
+                        var how = AskBanner.IsChat(_askChips[i].Option) ? AskDelivery.Chat
+                                : AskBanner.IsSubmit(_askChips[i].Option) ? AskDelivery.Submit
+                                : AskDelivery.Option;
+
+                        bool stays = ask.MultiSelect && how == AskDelivery.Option;
+                        if (_asks.Answer(ask, _askChips[i].Option.Label, how))
+                        {
+                            if (!stays)
+                            {
+                                EndTyping();
+                                ClearDraft();
+                                _askGhost = ask;
+                                _ask = null;
+                            }
+                            _askHover = -1;
+                        }
                     }
                     break;
                 }
@@ -2197,6 +2282,8 @@ internal sealed partial class NotchController
             Show = _greet == GreetingKind.None && (groups.Count >= 1 || _stripT > 0.01f),
             Appear = SmoothStep(_stripT),
 
+            Swallow = Math.Min(1f - fade, 1f - Math.Clamp(t / StripSwallowOut, 0f, 1f)),
+
             RowIcons = groups.ConvertAll(gr => _widgets[gr[0]].Icon).ToArray(),
             RowImages = groups.ConvertAll(gr => MenuRowImage(_widgets, gr)).ToArray(),
             RowImageOffsets = groups.ConvertAll(gr => MenuRowImageOffset(_widgets, gr)).ToArray(),
@@ -2232,8 +2319,7 @@ internal sealed partial class NotchController
 
         if (_greet != GreetingKind.None)
         {
-            var gf = _greet == GreetingKind.Install
-                ? GreetingPlan.Install(_greetT) : GreetingPlan.Login(_greetT);
+            var gf = GreetingPlan.Of(_greet, _greetT);
             w = (int)gf.PillW;
             h = (int)gf.PillH;
             r = (int)gf.Radius;
@@ -2248,9 +2334,11 @@ internal sealed partial class NotchController
         Action<Graphics, int, int, float> content = _greet != GreetingKind.None
             ? (g, cw, ch, f) => DrawGreeting(g, cw, ch)
             : _notif == null && (_ask ?? _askGhost) is { } q && _askT > 0f
-            ? (g, cw, ch, f) => AskBanner.Draw(g, cw, ch, f, q, _askHover, tint, _askTyped, _askCloseHover)
+            ? (g, cw, ch, f) => AskBanner.Draw(g, cw, ch, f, q, _askHover, tint, _askTyped, _askCloseHover,
+                                               _asks.Ticked(q.Nonce))
             : _notif is { } toast && _notifT > 0f
-            ? (g, cw, ch, f) => NotifBanner.Draw(g, cw, ch, f, toast, SmoothStep(_notifDetail), _notifDetailOn)
+            ? (g, cw, ch, f) => NotifBanner.Draw(g, cw, ch, f, toast, SmoothStep(_notifDetail), _notifDetailOn,
+                                                SmoothStep(_notifFold))
             : _empty ? static (_, _, _, _) => { } : _widgets[_primary].DrawContent;
 
         bool pin = _notif == null && _ask == null && _askGhost == null
@@ -2277,14 +2365,25 @@ internal sealed partial class NotchController
 
                 if (pin) DrawPin(g, cw, ch, f);
             },
-            _empty ? static (_, _, _, _) => { } : _widgets[_primary].DrawCollapsed,
+            _empty ? static (_, _, _, _) => { } : DrawCollapsedLayer,
             glassFade, banner ? BannerClarity : 0f);
     }
 
+    private void DrawCollapsedLayer(Graphics g, int w, int h, float fade)
+    {
+        Fx.AmbientScale = CollapsedAmbient(h);
+
+        try { _widgets[_primary].DrawCollapsed(g, w, h, fade); }
+        finally { Fx.AmbientScale = 1f; }
+    }
+
+    internal const int AmbientOutH = CollapsedH * 5 / 2;
+    internal static float CollapsedAmbient(int h)
+        => Math.Clamp((AmbientOutH - h) / (float)(AmbientOutH - CollapsedH), 0f, 1f);
+
     private void DrawGreeting(Graphics g, int w, int h)
     {
-        var f = _greet == GreetingKind.Install
-            ? GreetingPlan.Install(_greetT) : GreetingPlan.Login(_greetT);
+        var f = GreetingPlan.Of(_greet, _greetT);
         var box = Greeting.InkBox(w, h);
 
         Greeting.DrawHello(g, box, f.Written, f.HelloAlpha, Color.White,
@@ -3016,6 +3115,14 @@ internal sealed partial class NotchController
             Body = Almanac.Detail(DateTime.Today.AddHours(1), CalendarKind.SolarHijri),
             Icon = Badges.Local(0xE708, 232, 32f),
         },
+
+        new Halo.Notifications.NotifItem
+        {
+            App = Halo.Localization.Strings.Get("notice.weather.app"),
+            Title = Halo.Localization.Strings.Format("notice.heat.title", 34),
+            Body = Halo.Localization.Strings.Format("notice.heat.body", HeatWatch.RiseC + 1),
+            Icon = Badges.Hot(),
+        },
     };
 
     private int NotifLeft() => _notch.WorkLeft + (_notch.WorkWidth - Sc(_curW)) / 2 + (int)_offsetX;
@@ -3169,7 +3276,7 @@ internal sealed partial class NotchController
 
     private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
-    private static float EaseOutBack(float t)
+    internal static float EaseOutBack(float t)
     {
         const float c1 = 1.2f;
         const float c3 = c1 + 1f;

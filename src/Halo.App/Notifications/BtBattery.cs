@@ -24,7 +24,8 @@ internal sealed class BtBattery
 
     private static readonly string DebugPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "bt-debug.txt");
-    private static void Log(string m) { try { System.IO.File.AppendAllText(DebugPath, $"{DateTime.Now:HH:mm:ss} {m}\r\n"); } catch { } }
+    private static void Log(string m)
+        => Halo.Reports.DebugFile.Append(DebugPath, $"{DateTime.Now:HH:mm:ss} {m}\r\n");
 
     public BtBattery(Action<string, int, int, int> onConnect)
     {

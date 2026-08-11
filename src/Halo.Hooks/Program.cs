@@ -154,7 +154,8 @@ internal static class Program
                         ClaudeHookInstaller.Uninstall(settingsPath);
                         break;
                     default:
-                        return ClaudeHookInstaller.IsInstalled(settingsPath) ? 0 : 2;
+
+                        return ClaudeHookInstaller.IsInstalled(settingsPath, OwnHookPath()) ? 0 : 2;
                 }
                 return 0;
             }
@@ -184,7 +185,7 @@ internal static class Program
                 else
                 {
 
-                    return CodexHookInstaller.IsInstalled(settingsPath) ? 0 : 2;
+                    return CodexHookInstaller.IsInstalled(settingsPath, OwnHookPath()) ? 0 : 2;
                 }
                 return 0;
             }
@@ -342,7 +343,7 @@ internal static class Program
         }
     }
 
-    private static string OwnHookPath()
+    internal static string OwnHookPath()
     {
         try
         {

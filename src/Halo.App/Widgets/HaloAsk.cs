@@ -82,14 +82,14 @@ internal static class HaloAsk
         using (var brush = new SolidBrush(Mul(Ink, fade)))
         {
             int n = Lines(title, tf, inner, TitleMaxLines);
-            g.DrawString(Fx.CleanText(title), tf, brush, new RectangleF(Pad, Pad, inner, n * TitleLineH + 3f), sf);
+            Fx.Text(g, Fx.CleanText(title), tf, brush, new RectangleF(Pad, Pad, inner, n * TitleLineH + 3f), sf);
             if (!string.IsNullOrWhiteSpace(body))
             {
                 using var bf = new Font("Segoe UI", BodyPx, GraphicsUnit.Pixel);
                 using var db = new SolidBrush(Mul(Dim, fade));
                 float by = Pad + n * TitleLineH + TitleGap;
                 int bn = Lines(body, bf, inner, BodyMaxLines);
-                g.DrawString(Fx.CleanText(body), bf, db, new RectangleF(Pad, by, inner, bn * BodyLineH + 3f), sf);
+                Fx.Text(g, Fx.CleanText(body), bf, db, new RectangleF(Pad, by, inner, bn * BodyLineH + 3f), sf);
             }
         }
 
@@ -113,7 +113,7 @@ internal static class HaloAsk
             ? Color.FromArgb(248, Lighten(Green)) : Color.FromArgb(hover ? 248 : 224, 255, 255, 255), fade));
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(Fx.CleanText(chip.Label), f, brush, chip.Rect, sf);
+        Fx.Text(g, Fx.CleanText(chip.Label), f, brush, chip.Rect, sf);
     }
 
     private static Color Lighten(Color c) =>

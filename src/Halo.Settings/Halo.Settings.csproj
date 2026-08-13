@@ -41,6 +41,9 @@
          exes reading one settings.json have to resolve it identically. The twinning that Intake and
          Destination use is about one exe not being able to stop the other STARTING; this is not that. -->
     <Compile Include="..\Halo.App\Localization\Strings.cs" Link="Strings.cs" />
+    <!-- the fourth, and the one that has to be shared rather than twinned: the pill writes the request stamp
+         and the panel consumes it, so the path, the format and the freshness window are one definition -->
+    <Compile Include="..\Halo.App\Shell\PanelLaunch.cs" Link="PanelLaunch.cs" />
   </ItemGroup>
 
 </Project>

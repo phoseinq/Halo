@@ -407,6 +407,19 @@ internal static class Win32
         public UIntPtr dwExtraInfo;
     }
 
+    public const int WH_MOUSE_LL = 14;
+    public const uint WM_MOUSEWHEEL = 0x020A;
+    public const int WHEEL_DELTA = 120;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public uint mouseData;
+        public uint flags, time;
+        public UIntPtr dwExtraInfo;
+    }
+
     public delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]

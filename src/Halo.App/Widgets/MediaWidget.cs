@@ -980,15 +980,15 @@ internal sealed class MediaWidget : IWidget
 
             var span = end - start;
             var shown = _scrubbing ? span * _scrubFrac : now - start;
-            g.DrawString(Fmt(shown), timeF, eb, tx, ty);
+            Fx.Text(g, Fmt(shown), timeF, eb, tx, ty);
             var ts = g.MeasureString(Fmt(span), timeF);
-            g.DrawString(Fmt(span), timeF, eb, tx + tw - ts.Width, ty);
+            Fx.Text(g, Fmt(span), timeF, eb, tx + tw - ts.Width, ty);
         }
         else if (wall >= TimeSpan.Zero)
         {
 
             using var eb = new SolidBrush(Mul(Dim, fade));
-            g.DrawString(Fmt(wall), timeF, eb, tx, barCy + bh / 2f + 3f);
+            Fx.Text(g, Fmt(wall), timeF, eb, tx, barCy + bh / 2f + 3f);
         }
 
         var (vbar, mute) = VolLayout(w);
@@ -1090,7 +1090,7 @@ internal sealed class MediaWidget : IWidget
             using var sf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
             var textBox = new RectangleF(label.X, label.Y, label.Width - 11f, label.Height);
-            g.DrawString(RateText(rate), lf, lb, textBox, sf);
+            Fx.Text(g, RateText(rate), lf, lb, textBox, sf);
 
             float cx = label.Right - 5f, cy = label.Y + label.Height / 2f + 1f;
             float armY = -1.6f + 3.2f * _speedT, tipY = 1.9f - 3.8f * _speedT;
@@ -1155,7 +1155,7 @@ internal sealed class MediaWidget : IWidget
                     g.FillPath(hb, hp);
 
             using (var tb2 = new SolidBrush(Mul(White, ia * (0.58f + 0.40f * MathF.Max(cur ? 1f : 0f, ih)))))
-                g.DrawString(RateText(Rates[i]), itemF, tb2, r, isf);
+                Fx.Text(g, RateText(Rates[i]), itemF, tb2, r, isf);
         }
     }
 
@@ -1568,7 +1568,7 @@ internal sealed class MediaWidget : IWidget
     {
         using var sf = new StringFormat(StringFormatFlags.NoWrap) { Trimming = StringTrimming.EllipsisCharacter };
         if (IsRtl(text)) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
-        g.DrawString(text, f, b, new RectangleF(x, y, w, f.Height + 4), sf);
+        Fx.Text(g, text, f, b, new RectangleF(x, y, w, f.Height + 4), sf);
     }
 
     private static bool IsRtl(string s)

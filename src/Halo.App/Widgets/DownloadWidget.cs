@@ -53,6 +53,36 @@ internal sealed class DownloadWidget : IWidget
         return a == Fx.White ? Blue : a;
     }
 
+    private DlRate _rate;
+    private Drift _tint;
+
+    private const float TintSeconds = 2.4f;
+    private const float RimWeight = 2.2f;
+
+    private float TintLevel(long nowMs)
+    {
+        if (Downloads.Paused) return _tint.Level;
+        long bytes = Downloads.NoBytes ? 0 : Downloads.Downloaded;
+        return _tint.Step(NetWidget.WashFrac(_rate.Sample(bytes, nowMs)), TintSeconds, nowMs);
+    }
+
+    internal static Color RimColor(float level)
+    {
+        level = Math.Clamp(level, 0f, 1f);
+        return Color.FromArgb(
+            (int)(236 + 19 * level),
+            (int)(38 + (96 - 38) * level),
+            (int)(50 + (38 - 50) * level),
+            (int)(58 + (176 - 58) * level));
+    }
+
+        internal void Seed(double bytesPerSecond)
+    {
+        long now = Environment.TickCount64;
+        _rate.Seed((float)bytesPerSecond, now);
+        _tint.Seed(NetWidget.WashFrac(bytesPerSecond), now);
+    }
+
     private const float ArtX = 26, ArtY = 26, ArtSize = 132;
     private static RectangleF[] CtlRects(int n)
     {
@@ -193,7 +223,7 @@ internal sealed class DownloadWidget : IWidget
                 using (var pb = new SolidBrush(Mul(Color.FromArgb(115, 255, 255, 255), fade)))
                 using (var psf = new StringFormat(StringFormat.GenericTypographic)
                 { Trimming = StringTrimming.EllipsisPath, FormatFlags = StringFormatFlags.NoWrap })
-                    g.DrawString(dir, smallF, pb, new RectangleF(tx, y, tw, 18), psf);
+                    Fx.Text(g, dir, smallF, pb, new RectangleF(tx, y, tw, 18), psf);
         }
 
         DrawControls(g, fade);
@@ -279,7 +309,7 @@ internal sealed class DownloadWidget : IWidget
             string tail = it.NoPct ? Bytes(it.Downloaded) : $"{it.Percent}%";
             var tsz = g.MeasureString(tail, f);
             using (var tb = new SolidBrush(Mul(cur ? Dim : Color.FromArgb(112, 255, 255, 255), fade)))
-                g.DrawString(tail, f, tb, r.Right - tsz.Width - 10, r.Y + (RowH - tsz.Height) / 2f);
+                Fx.Text(g, tail, f, tb, r.Right - tsz.Width - 10, r.Y + (RowH - tsz.Height) / 2f);
             using (var nb = new SolidBrush(Mul(cur ? White : Dim, fade)))
                 DrawEllipsized(g, it.Name, cur ? bold : f, nb, r.X + 14, r.Y + (RowH - 17) / 2f,
                                r.Width - tsz.Width - 32, 17);
@@ -375,6 +405,14 @@ internal sealed class DownloadWidget : IWidget
 
     public void DrawCollapsed(Graphics g, int w, int h, float fade)
     {
+        if (Downloads.Name == null) { _menuOpen = false; return; }
+        DrawRow(g, w, h, fade);
+
+        Fx.PillRim(g, w, h, RimColor(TintLevel(Environment.TickCount64)), RimWeight, fade);
+    }
+
+    private void DrawRow(Graphics g, int w, int h, float fade)
+    {
         _menuOpen = false;
         string? name = Downloads.Name;
         if (name == null) return;
@@ -403,7 +441,7 @@ internal sealed class DownloadWidget : IWidget
                 using var sf2 = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
                 using var sb2 = new SolidBrush(Mul(Dim, fade));
                 var gsz = g.MeasureString(got, sf2);
-                g.DrawString(got, sf2, sb2, w - gsz.Width - 14, (h - gsz.Height) / 2f);
+                Fx.Text(g, got, sf2, sb2, w - gsz.Width - 14, (h - gsz.Height) / 2f);
                 right -= gsz.Width + 8;
             }
             DrawEllipsized(g, name, nf, nb, tx, (h - 18f) / 2f, right, 18);
@@ -465,9 +503,9 @@ internal sealed class DownloadWidget : IWidget
         }
         var zone = new RectangleF(left, -Fx.CenterLift(f), right - left, h);
         using (var shadow = new SolidBrush(Mul(Color.FromArgb(110, 0, 0, 0), fade)))
-            g.DrawString(text, f, shadow, new RectangleF(zone.X + 0.6f, zone.Y + 0.6f, zone.Width, zone.Height), sf);
+            Fx.Text(g, text, f, shadow, new RectangleF(zone.X + 0.6f, zone.Y + 0.6f, zone.Width, zone.Height), sf);
         using (var nb = new SolidBrush(Mul(White, fade)))
-            g.DrawString(text, f, nb, zone, sf);
+            Fx.Text(g, text, f, nb, zone, sf);
         g.TextRenderingHint = oldHint;
 
     }
@@ -486,7 +524,7 @@ internal sealed class DownloadWidget : IWidget
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
         using var b = new SolidBrush(Mul(White, fade));
-        g.DrawString(n > 9 ? "9+" : n.ToString(), f, b,
+        Fx.Text(g, n > 9 ? "9+" : n.ToString(), f, b,
                      new RectangleF(bx, by - Fx.CenterLift(f), d, d), sf);
     }
 
@@ -534,7 +572,7 @@ internal sealed class DownloadWidget : IWidget
     {
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(s, f, b, new RectangleF(x, y, w, h), sf);
+        Fx.Text(g, s, f, b, new RectangleF(x, y, w, h), sf);
     }
 
     private static void DrawGlyph(Graphics g, RectangleF r, string glyph, float px, float fade, Color? tint = null)

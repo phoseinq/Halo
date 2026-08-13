@@ -93,7 +93,7 @@ internal sealed class GenericAgentWidget : IWidget
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
 
-        g.DrawString(text, f, b, new RectangleF(x + sz + 8, -1.5f, w - (x + sz + 8) - 14, h), sf);
+        Fx.Text(g, text, f, b, new RectangleF(x + sz + 8, -1.5f, w - (x + sz + 8) - 14, h), sf);
     }
 
     public void DrawContent(Graphics g, int w, int h, float fade)
@@ -113,12 +113,12 @@ internal sealed class GenericAgentWidget : IWidget
         using var bodyF = new Font("Segoe UI", 15f, GraphicsUnit.Pixel);
         using var dimB = new SolidBrush(Mul(Dim, fade));
         using var whiteB = new SolidBrush(Mul(White, fade));
-        g.DrawString(st.Name ?? "Agent", titleF, whiteB, x + 56, 28);
-        g.DrawString(Verb(st) + Elapsed(st), bodyF, dimB, x + 56, 60);
+        Fx.Text(g, st.Name ?? "Agent", titleF, whiteB, x + 56, 28);
+        Fx.Text(g, Verb(st) + Elapsed(st), bodyF, dimB, x + 56, 60);
         if (!string.IsNullOrEmpty(st.Cwd))
-            g.DrawString(st.Cwd, bodyF, dimB, x, 108);
+            Fx.Text(g, st.Cwd, bodyF, dimB, x, 108);
         if (!string.IsNullOrEmpty(st.Message))
-            g.DrawString(st.Message, bodyF, whiteB, x, 136);
+            Fx.Text(g, st.Message, bodyF, whiteB, x, 136);
     }
 
     private void DrawIconCircle(Graphics g, float x, float y, float sz, float fade)
@@ -138,7 +138,7 @@ internal sealed class GenericAgentWidget : IWidget
         using var f = new Font("Segoe MDL2 Assets", sz * 0.62f, GraphicsUnit.Pixel);
         using var b = new SolidBrush(Mul(White, fade));
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(Icon, f, b, new RectangleF(x, y, sz, sz), sf);
+        Fx.Text(g, Icon, f, b, new RectangleF(x, y, sz, sz), sf);
     }
 
     private static string Verb(CcStatus st) => st.State switch

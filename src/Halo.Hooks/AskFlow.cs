@@ -21,9 +21,11 @@ internal static class AskFlow
             var toolInput = input?["tool_input"] as JsonObject;
             if (!AskGate.ShouldAsk(tool, toolInput, AskSettings.AllowRules(cwd))) return;
 
-            var ask = Envelope(tool!, toolInput!, sessionId, pid);
+            var asks = Envelopes(tool!, toolInput!, sessionId, pid);
+            if (asks.Count == 0) return;
+            var ask = asks[0];
 
-            if (ask.IsQuestion) { Publish(dir, ask, pid); return; }
+            if (ask.IsQuestion) { Publish(dir, asks, pid); return; }
 
             var answer = Wait(dir, ask);
             if (answer is not null) Console.Out.Write(answer.ToHookStdout());
@@ -31,13 +33,14 @@ internal static class AskFlow
         catch { }
     }
 
-    private static void Publish(string dir, AskEnvelope ask, int pid)
+    private static void Publish(string dir, IReadOnlyList<AskEnvelope> asks, int pid)
     {
         try
         {
             Directory.CreateDirectory(dir);
             Clear(dir, pid);
-            WriteAtomic(Path.Combine(dir, $"ask-{ask.Nonce}.json"), ask.ToJson());
+            foreach (var ask in asks)
+                WriteAtomic(Path.Combine(dir, $"ask-{ask.Nonce}.json"), ask.ToJson());
         }
         catch { }
     }
@@ -61,40 +64,41 @@ internal static class AskFlow
         catch { }
     }
 
-    private static AskEnvelope Envelope(string tool, JsonObject toolInput, string? sessionId, int pid)
+    private static List<AskEnvelope> Envelopes(string tool, JsonObject toolInput, string? sessionId, int pid)
     {
-        var options = new List<AskOption>();
-        string? question = null;
-        bool multiSelect = false, hasPreview = false;
-
-        if (tool == "AskUserQuestion" && toolInput["questions"] is JsonArray qs && qs.Count == 1
-            && qs[0] is JsonObject q)
+        var asks = new List<AskEnvelope>();
+        if (tool == "AskUserQuestion" && toolInput["questions"] is JsonArray qs && qs.Count >= 1)
         {
-            question = q["question"]?.GetValue<string>();
+            for (int i = 0; i < qs.Count; i++)
+            {
+                if (qs[i] is not JsonObject q) continue;
+                var options = new List<AskOption>();
+                bool hasPreview = false;
 
-            multiSelect = q["multiSelect"] is JsonValue mv && mv.TryGetValue<bool>(out var m) && m;
-            if (q["options"] is JsonArray opts)
-                foreach (var n in opts)
-                    if (n is JsonObject o && o["label"]?.GetValue<string>() is { Length: > 0 } label)
-                    {
-                        options.Add(new AskOption(label, o["description"]?.GetValue<string>() ?? ""));
-                        if (o["preview"] is JsonValue pv && pv.TryGetValue<string>(out var p)
-                            && !string.IsNullOrEmpty(p)) hasPreview = true;
-                    }
+                bool multiSelect = q["multiSelect"] is JsonValue mv && mv.TryGetValue<bool>(out var m) && m;
+                if (q["options"] is JsonArray opts)
+                    foreach (var n in opts)
+                        if (n is JsonObject o && o["label"]?.GetValue<string>() is { Length: > 0 } label)
+                        {
+                            options.Add(new AskOption(label, o["description"]?.GetValue<string>() ?? ""));
+                            if (o["preview"] is JsonValue pv && pv.TryGetValue<string>(out var p)
+                                && !string.IsNullOrEmpty(p)) hasPreview = true;
+                        }
+                asks.Add(new AskEnvelope(
+                    Guid.NewGuid().ToString("n"), pid, sessionId, tool,
+                    AskGate.TargetOf(tool, toolInput), q["question"]?.GetValue<string>(), options,
+                    DateTimeOffset.UtcNow.AddMilliseconds(QuestionMs),
+                    multiSelect, hasPreview, i, qs.Count));
+            }
+            return asks;
         }
-        else
-        {
 
-            options.Add(new AskOption("allow", "run it"));
-            options.Add(new AskOption("deny", "skip it"));
-        }
-
-        bool isQuestion = tool == "AskUserQuestion";
-        return new AskEnvelope(
+        asks.Add(new AskEnvelope(
             Guid.NewGuid().ToString("n"), pid, sessionId, tool,
-            AskGate.TargetOf(tool, toolInput), question, options,
-            DateTimeOffset.UtcNow.AddMilliseconds(isQuestion ? QuestionMs : AnswerMs),
-            multiSelect, hasPreview);
+            AskGate.TargetOf(tool, toolInput), null,
+            [new AskOption("allow", "run it"), new AskOption("deny", "skip it")],
+            DateTimeOffset.UtcNow.AddMilliseconds(AnswerMs)));
+        return asks;
     }
 
     private static AskAnswer? Wait(string dir, AskEnvelope ask)

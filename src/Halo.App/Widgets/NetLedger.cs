@@ -24,6 +24,17 @@ internal sealed class NetLedger
         _days[(day, link)] = (cur.Down + down, cur.Up + up);
     }
 
+    internal DateOnly? Oldest
+    {
+        get
+        {
+            DateOnly? oldest = null;
+            foreach (var ((day, _), _) in _days)
+                if (oldest is null || day < oldest) oldest = day;
+            return oldest;
+        }
+    }
+
     internal (long Down, long Up) Total(DateOnly from, DateOnly to, NetLink? link = null)
     {
         long down = 0, up = 0;

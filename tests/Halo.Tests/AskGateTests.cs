@@ -29,10 +29,14 @@ public sealed class AskGateTests
     public void SingleQuestionIsAskable()
         => Assert.True(AskGate.ShouldAsk("AskUserQuestion", Input(OneQuestion), NoRules));
 
-    // a 220px pill is not a four-question form, and half an answer is worse than none
+    // This used to assert the opposite, on the reasoning that a 220px pill is not a four-question form and half
+    // an answer is worse than none. What it actually bought was total silence: a two-question box - Claude asking
+    // about a layout and a feature set in one call - published nothing, so no banner appeared and the user never
+    // learned the terminal was waiting. The pill shows them one at a time now, in the box's own order, which is
+    // neither a form nor half an answer.
     [Fact]
-    public void MultiQuestionIsNotIntercepted()
-        => Assert.False(AskGate.ShouldAsk("AskUserQuestion", Input(TwoQuestions), NoRules));
+    public void MultiQuestionIsAskableOneAtATime()
+        => Assert.True(AskGate.ShouldAsk("AskUserQuestion", Input(TwoQuestions), NoRules));
 
     [Theory]
     [InlineData("""{"questions":[]}""")]

@@ -77,7 +77,7 @@ internal static class Badges
         using var f = new Font("Segoe UI Semibold", 25f, GraphicsUnit.Pixel);
         using var wb = new SolidBrush(Color.FromArgb(245, 255, 255, 255));
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(code, f, wb, new RectangleF(0, 0, 64, 64), sf);
+        Fx.Text(g, code, f, wb, new RectangleF(0, 0, 64, 64), sf);
         return b;
     }
 

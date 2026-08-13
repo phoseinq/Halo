@@ -59,8 +59,8 @@ internal static class NotifBanner
         float cy = r.Y + r.Height / 2f;
         string glyph = n.Copied ? "" : "";
         string label = n.Copied ? Halo.Localization.Strings.Get("pill.copied") : n.Code;
-        g.DrawString(glyph, gf, b, new PointF(r.X + 15f, cy + Fx.InkCentreOffset(gf, glyph)), sf);
-        g.DrawString(label, cf, b, new PointF(r.X + 24f + (r.Width - 30f) / 2f, cy + Fx.CapCentreOffset(cf)), sf);
+        Fx.Text(g, glyph, gf, b, new PointF(r.X + 15f, cy + Fx.InkCentreOffset(gf, glyph)), sf);
+        Fx.Text(g, label, cf, b, new PointF(r.X + 24f + (r.Width - 30f) / 2f, cy + Fx.CapCentreOffset(cf)), sf);
     }
 
     private static string _fitBody = "\0";
@@ -132,7 +132,7 @@ internal static class NotifBanner
             using var f0 = new Font("Segoe UI Semibold", IconD * 0.5f, GraphicsUnit.Pixel);
             using var b0 = new SolidBrush(Mul(White, a));
             using var sf0 = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(n.App.Length > 0 ? n.App[..1].ToUpperInvariant() : "•", f0, b0,
+            Fx.Text(g, n.App.Length > 0 ? n.App[..1].ToUpperInvariant() : "•", f0, b0,
                 new RectangleF(IconX, iy, IconD, IconD), sf0);
         }
 
@@ -150,7 +150,7 @@ internal static class NotifBanner
             {
                 timeW = g.MeasureString(time, eyeF, 999, StringFormat.GenericTypographic).Width;
                 using var rf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far };
-                g.DrawString(time, eyeF, b, new RectangleF(tx, EyebrowTop + ts, tw, EyebrowH), rf);
+                Fx.Text(g, time, eyeF, b, new RectangleF(tx, EyebrowTop + ts, tw, EyebrowH), rf);
             }
             using var lf = new StringFormat(StringFormat.GenericTypographic)
             { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
@@ -158,13 +158,13 @@ internal static class NotifBanner
             string app = n.Stacked > 0
                 ? $"{n.App.ToUpperInvariant()}  +{n.Stacked} MORE"
                 : n.App.ToUpperInvariant();
-            g.DrawString(app, eyeF, b,
+            Fx.Text(g, app, eyeF, b,
                 new RectangleF(tx, EyebrowTop + ts, Math.Max(10, tw - timeW - 10), EyebrowH), lf);
         }
 
         using (var b = new SolidBrush(Mul(White, a)))
         using (var f = LineFmt(n.Title))
-            g.DrawString(n.Title, titleF, b, new RectangleF(tx, TitleTop + ts, tw, TitleH), f);
+            Fx.Text(g, n.Title, titleF, b, new RectangleF(tx, TitleTop + ts, tw, TitleH), f);
 
         if (detail < 0.999f && n.Body.Length > 0)
             using (var b = new SolidBrush(Mul(BodyInk, a * (1f - detail))))
@@ -257,7 +257,7 @@ internal static class NotifBanner
         if (icon != null) DrawAppIcon(g, icon, x0, cy - bd / 2f, bd, a);
         using var b = new SolidBrush(Mul(White, a));
         using var sf = new StringFormat(StringFormat.GenericTypographic) { LineAlignment = StringAlignment.Center };
-        g.DrawString(text, f, b, new RectangleF(x0 + bd + gap, cy - sz.Height / 2f, sz.Width + 6, sz.Height), sf);
+        Fx.Text(g, text, f, b, new RectangleF(x0 + bd + gap, cy - sz.Height / 2f, sz.Width + 6, sz.Height), sf);
     }
 
     private static string RelTime(DateTime t)
@@ -324,7 +324,7 @@ internal static class NotifBanner
             if (IsRtl(all[i])) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
 
             using var lb = new SolidBrush(Mul(((SolidBrush)b).Color, alpha));
-            g.DrawString(all[i], f, lb, new RectangleF(box.X, y, box.Width, BodyLinePx + 4), sf);
+            Fx.Text(g, all[i], f, lb, new RectangleF(box.X, y, box.Width, BodyLinePx + 4), sf);
         }
         g.Clip = clip;
     }
@@ -365,7 +365,7 @@ internal static class NotifBanner
                 using var sf = new StringFormat(StringFormat.GenericTypographic)
                 { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
                 if (IsRtl(line)) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
-                g.DrawString(line, f, b, new RectangleF(box.X, y, box.Width, BodyLinePx + 4), sf);
+                Fx.Text(g, line, f, b, new RectangleF(box.X, y, box.Width, BodyLinePx + 4), sf);
                 y += BodyLinePx;
             }
         }

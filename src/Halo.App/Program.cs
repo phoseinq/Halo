@@ -72,6 +72,10 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-net") { RenderNet(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--probe-text") { ProbeText(args[1]); return; }
+
+        if (args.Length >= 2 && args[0] == "--render-dlspeed") { RenderDlSpeed(args[1]); return; }
+
         if (args.Length >= 2 && args[0] == "--render-livetext") { RenderLiveText(args[1]); return; }
 
         if (args.Length >= 1 && args[0] == "--probe-mini")
@@ -144,6 +148,12 @@ internal static class Program
                     => Halo.Interop.ConsoleRead.Press(tpid, Halo.Interop.ConsoleRead.VkDown, n),
                 var s when s.StartsWith("up:") && int.TryParse(s[3..], out var n)
                     => Halo.Interop.ConsoleRead.Press(tpid, Halo.Interop.ConsoleRead.VkUp, n),
+
+                var s when s.StartsWith("right:") && int.TryParse(s[6..], out var n)
+                    => Halo.Interop.ConsoleRead.Press(tpid, Halo.Interop.ConsoleRead.VkRight, n),
+                var s when s.StartsWith("back:") && int.TryParse(s[5..], out var n)
+                    => Halo.Interop.ConsoleRead.Press(tpid, Halo.Interop.ConsoleRead.VkBack, n),
+                "esc" => Halo.Interop.ConsoleRead.Press(tpid, Halo.Interop.ConsoleRead.VkEscape),
                 _ => Halo.Interop.ConsoleRead.Type(tpid, args[2]),
             };
             System.Threading.Thread.Sleep(400);
@@ -441,14 +451,17 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "--moods") { Moods(); return; }
 
         _instance = new System.Threading.Mutex(true, "Halo.Notch.SingleInstance", out bool created);
+        bool askedForSettings = args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
         if (!created)
         {
-            if (Halo.Shell.DuplicateLaunch.ShouldOpenPanel(
-                    args.Contains("--settings", StringComparer.OrdinalIgnoreCase), RunningPillAge()))
-                OpenSettingsPanel();
+            double? winnerAge = RunningPillAge();
+            bool openPanel = Halo.Shell.DuplicateLaunch.ShouldOpenPanel(askedForSettings, winnerAge);
+            Halo.Shell.LaunchLog.Launch(won: false, askedForSettings, winnerAge, openPanel);
+            if (openPanel) OpenSettingsPanel("duplicate");
             return;
         }
-        if (args.Contains("--settings", StringComparer.OrdinalIgnoreCase)) OpenSettingsPanel();
+        Halo.Shell.LaunchLog.Launch(won: true, askedForSettings, null, askedForSettings);
+        if (askedForSettings) OpenSettingsPanel("argv");
 
         try
         {
@@ -1949,7 +1962,9 @@ internal static class Program
              new Halo.ClaudeCode.AskOption("Icon", "the visible one"),
              new Halo.ClaudeCode.AskOption("Measure more first",
                  "no code yet - sit on the profiler until the regression names itself, "
-                 + "which is the option that costs a day and saves three")], expires);
+                 + "which is the option that costs a day and saves three")], expires,
+
+            MultiSelect: false, HasPreview: false, Index: 0, Total: 2);
 
         var permission = new Halo.ClaudeCode.PendingAsk(
             "n2", 100, "sess", "Bash", "git push --force-with-lease origin master", null,
@@ -2007,6 +2022,58 @@ internal static class Program
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
     }
 
+    private static void ProbeText(string outPath)
+    {
+        const string sample = "usually 3.35 GB/day · busiest 2 Aug · 58.09 GB";
+        using var bmp = new System.Drawing.Bitmap(700, 260, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            using (var bg = new System.Drawing.Drawing2D.LinearGradientBrush(
+                       new System.Drawing.Rectangle(0, 0, 700, 260),
+                       System.Drawing.Color.FromArgb(255, 236, 120, 190),
+                       System.Drawing.Color.FromArgb(255, 120, 190, 240), 30f))
+                g.FillRectangle(bg, 0, 0, 700, 260);
+            using (var plate = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(150, 18, 18, 24)))
+                g.FillRectangle(plate, 0, 0, 700, 260);
+
+            using var label = new System.Drawing.Font("Consolas", 11f, System.Drawing.GraphicsUnit.Pixel);
+            using var tag = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 132, 231, 196));
+            using var ink = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(190, 255, 255, 255));
+
+            var rows = new (string Name, float S, float X, float Y)[]
+            {
+                ("1  S=1, origin on the pixel grid", 1f, 12f, 0f),
+                ("2  S=1, origin at x+0.37 (what layout floats give)", 1f, 12.37f, 0f),
+                ("3  S=1.25, logical integer origin -> device x15.0 y fractional", 1.25f, 12f, 0f),
+                ("4  S=1.25, origin snapped to the DEVICE grid", 1.25f, 12f, 0f),
+            };
+
+            float y = 10f;
+            foreach (var r in rows)
+            {
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(r.Name, label, tag, 10f, y);
+                y += 15f;
+
+                var state = g.Save();
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                float px = 11f * r.S;
+                using (var f = new System.Drawing.Font("Segoe UI Semibold", px,
+                                                       System.Drawing.GraphicsUnit.Pixel))
+                {
+                    float dx = r.X * r.S, dy = y + 3.4f;
+                    if (r.Name[0] == '4') { dx = MathF.Round(dx); dy = MathF.Round(dy); }
+                    g.DrawString(sample, f, ink, dx, dy);
+                    g.DrawString(sample, f, ink, dx, dy);
+                }
+                g.Restore(state);
+                y += px + 16f;
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"wrote {outPath}");
+    }
+
     private static void RenderNet(string outPath)
     {
         var th = new System.Threading.Thread(() =>
@@ -2024,6 +2091,32 @@ internal static class Program
             var oneDay = new Halo.Widgets.NetLedger();
             oneDay.Add(today, Halo.Widgets.NetLink.Wifi, 900L * 1024 * 1024, 40L * 1024 * 1024);
 
+            var young = new Halo.Widgets.NetLedger();
+            long[] youngGb = [2, 5, 3, 1];
+            for (int i = 0; i < youngGb.Length; i++)
+                young.Add(today.AddDays(i - youngGb.Length + 1), Halo.Widgets.NetLink.Wifi,
+                          youngGb[i] * 1024L * 1024 * 1024, youngGb[i] * 1024L * 1024 * 110);
+
+            var hours = new Halo.Widgets.NetHours();
+            var nowHour = Halo.Widgets.NetHours.HourOf(DateTime.Now);
+            long[] mb = [0, 0, 0, 0, 0, 12, 40, 210, 180, 90, 60, 330, 150, 70, 480, 260, 120, 95, 640, 310,
+                         180, 220, 90, 45];
+            for (int i = 0; i < mb.Length; i++)
+            {
+                if (mb[i] <= 0) continue;
+                hours.Add(nowHour.AddHours(i - mb.Length + 1),
+                          i == 14 ? Halo.Widgets.NetLink.Lan : Halo.Widgets.NetLink.Wifi,
+                          mb[i] * 1024L * 1024, mb[i] * 1024L * 90);
+            }
+            var oneHour = new Halo.Widgets.NetHours();
+            oneHour.Add(nowHour, Halo.Widgets.NetLink.Wifi, 900L * 1024 * 1024, 40L * 1024 * 1024);
+
+            Halo.ClaudeCode.NetMon.SeedNetMs(24);
+
+            double[] traceMb = [0.2, 0.3, 0.9, 2.4, 3.1, 2.8, 1.2, 0.6, 0.4, 0.5, 1.9, 4.2, 3.6, 2.1, 0.8, 0.3,
+                                0.2, 0.7, 1.4, 1.1, 0.9, 2.6, 3.9, 2.2, 1.0, 0.5, 0.3, 0.4, 1.6, 1.4];
+            Halo.ClaudeCode.IpCountry.Cc = "NL";
+
             (double Down, double Up, Halo.Widgets.NetLink Link)[] speeds =
             [
                 (200 * 1024.0, 20 * 1024.0, Halo.Widgets.NetLink.Wifi),
@@ -2032,10 +2125,12 @@ internal static class Program
                 (3.0 * 1024 * 1024, 640 * 1024.0, Halo.Widgets.NetLink.Lan),
             ];
             using var bmp = new System.Drawing.Bitmap(W + pad * 2,
-                speeds.Length * (PillH + pad) + 2 * (PanelH + pad) + pad);
+                speeds.Length * (PillH + pad) + 10 * (PanelH + pad) + pad);
             using (var g = System.Drawing.Graphics.FromImage(bmp))
             {
                 g.Clear(System.Drawing.Color.FromArgb(255, 18, 18, 22));
+
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                 var notch = new Halo.Shell.LayeredNotch();
                 float y = pad;
                 foreach (var (down, up, link) in speeds)
@@ -2054,19 +2149,103 @@ internal static class Program
                     g.Restore(st);
                     y += PillH + pad;
                 }
-                foreach (var led in new[] { full, oneDay })
+
+                var noAim = new System.Drawing.PointF(-1000f, -1000f);
+                var ratesAim = new System.Drawing.PointF(Halo.Widgets.NetPanelLayout.Pad + 40f, 40f);
+
+                float chartSpan = Halo.Widgets.NetPanelLayout.TrackRight - Halo.Widgets.NetPanelLayout.ChartLeft;
+                var chartAim = new System.Drawing.PointF(
+                    Halo.Widgets.NetPanelLayout.ChartLeft + chartSpan * (6.5f / 14f), PanelH - 60f);
+                var linkAim = new System.Drawing.PointF(Halo.Widgets.NetPanelLayout.Pad + 30f, PanelH - 40f);
+                (Halo.Widgets.NetLedger Led, Halo.Widgets.NetHours Hrs, Halo.Widgets.NetWindow Win,
+                 bool Split, System.Drawing.PointF Aim)[] panels =
+                [
+                    (full, hours, Halo.Widgets.NetWindow.Today, false, noAim),
+                    (full, hours, Halo.Widgets.NetWindow.Today, false, ratesAim),
+                    (full, hours, Halo.Widgets.NetWindow.Today, false, chartAim),
+                    (full, hours, Halo.Widgets.NetWindow.Today, false, linkAim),
+                    (full, hours, Halo.Widgets.NetWindow.Week, false, noAim),
+                    (full, hours, Halo.Widgets.NetWindow.Month, false, chartAim),
+                    (full, hours, Halo.Widgets.NetWindow.Today, true, noAim),
+                    (oneDay, oneHour, Halo.Widgets.NetWindow.Today, false, noAim),
+
+                    (young, hours, Halo.Widgets.NetWindow.Week, false, noAim),
+
+                    (full, hours, Halo.Widgets.NetWindow.Week, true, noAim),
+                ];
+                foreach (var (led, hrs, win, split, aim) in panels)
                 {
 
                     var panelMeter = new Halo.Widgets.NetMeter();
-                    panelMeter.Seed(1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi, led);
-                    var panel = new Halo.Widgets.NetWidget(panelMeter);
+                    panelMeter.Seed(1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi, led, hrs);
+                    panelMeter.SeedTrace(traceMb.Select(mb => mb * 1024 * 1024));
+                    var panel = new Halo.Widgets.NetWidget(panelMeter) { Window = win, SplitOpen = split };
+
+                    bool aimed = aim.X > 0f;
+                    Halo.Widgets.WidgetInput.Over = aimed;
+                    Halo.Widgets.WidgetInput.Mouse = aim;
+                    panel.SettlePanel(W, PanelH);
                     var st = g.Save();
                     g.TranslateTransform(pad, y);
                     g.SetClip(new System.Drawing.RectangleF(0, 0, W, PanelH));
                     notch.DrawShape(g, W, PanelH, 30, 245, glass: false);
                     panel.DrawContent(g, W, PanelH, 1f);
                     g.Restore(st);
+                    Halo.Widgets.WidgetInput.Over = false;
                     y += PanelH + pad;
+                }
+            }
+            bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine("wrote " + outPath);
+        });
+        th.SetApartmentState(System.Threading.ApartmentState.STA);
+        th.Start();
+        th.Join();
+    }
+
+    private static void RenderDlSpeed(string outPath)
+    {
+        var th = new System.Threading.Thread(() =>
+        {
+            const int PillW = 220, PillH = 40, pad = 16, labelW = 150;
+
+            double[] speeds = [0, 120 * 1024.0, 900 * 1024.0, 3.0 * 1024 * 1024, 9.0 * 1024 * 1024,
+                               25.0 * 1024 * 1024, 50.0 * 1024 * 1024];
+            using var bmp = new System.Drawing.Bitmap(labelW + PillW + pad * 3,
+                speeds.Length * (PillH + pad) + pad,
+                System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(255, 18, 18, 22));
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var label = new System.Drawing.Font("Segoe UI", 13f, System.Drawing.GraphicsUnit.Pixel);
+                using var lb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(225, 225, 230));
+
+                Halo.Widgets.Downloads.Name = "Fedora-Workstation-Live-x86_64-41.iso";
+                Halo.Widgets.Downloads.ExePath = new[]
+                {
+                    @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                    @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                }.FirstOrDefault(System.IO.File.Exists) ?? @"C:\Windows\explorer.exe";
+                Halo.Widgets.Downloads.Percent = 42;
+                Halo.Widgets.Downloads.Downloaded = 1_180L * 1024 * 1024;
+                Halo.Widgets.Downloads.Total = 2_810L * 1024 * 1024;
+                var notch = new Halo.Shell.LayeredNotch();
+                float y = pad;
+                foreach (double rate in speeds)
+                {
+
+                    var widget = new Halo.Widgets.DownloadWidget();
+                    widget.Seed(rate);
+                    g.DrawString(rate <= 0 ? "idle" : Halo.Widgets.NetRate.Format(rate), label, lb,
+                                 pad, y + PillH / 2f - 8f);
+                    var st = g.Save();
+                    g.TranslateTransform(labelW + pad * 2, y);
+                    g.SetClip(new System.Drawing.RectangleF(0, 0, PillW, PillH));
+                    notch.DrawShape(g, PillW, PillH, 20, 200, glass: false);
+                    widget.DrawCollapsed(g, PillW, PillH, 1f);
+                    g.Restore(st);
+                    y += PillH + pad;
                 }
             }
             bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
@@ -2796,21 +2975,30 @@ internal static class Program
         catch { return null; }
     }
 
-    private static void OpenSettingsPanel()
+    private static void OpenSettingsPanel(string reason)
     {
+        bool started = false, stamped = false;
         try
         {
             string exe = System.IO.Path.Combine(AppContext.BaseDirectory, "Halo.Settings.exe");
-            if (!System.IO.File.Exists(exe)) return;
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+            if (System.IO.File.Exists(exe))
+            {
+
+                stamped = Halo.Shell.PanelLaunch.Request();
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+                started = true;
+            }
         }
         catch { }
+        Halo.Shell.LaunchLog.Panel(reason, started, stamped);
     }
 
-    internal static void OpenSettings() => OpenSettingsPanel();
+    internal static void OpenSettings() => OpenSettingsPanel("tray");
 
     private static void Teardown()
     {
+        try { Halo.Interop.WheelGrab.Stop(); } catch { }
         try { _tray?.Dispose(); _tray = null; } catch { }
         try { _instance?.ReleaseMutex(); } catch { }
         try { _instance?.Dispose(); _instance = null; } catch { }

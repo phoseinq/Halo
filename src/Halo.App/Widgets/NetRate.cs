@@ -53,6 +53,15 @@ internal static class NetRate
         return $"{mb:0} MB/s";
     }
 
+    internal static string LinkSpeed(long bitsPerSecond)
+    {
+        if (bitsPerSecond <= 0) return "";
+        double mbit = bitsPerSecond / 1_000_000.0;
+        if (mbit < 1000) return $"{mbit:0} Mb/s";
+        double gbit = mbit / 1000.0;
+        return gbit < 10 ? $"{gbit:0.0} Gb/s" : $"{gbit:0} Gb/s";
+    }
+
         internal static string Size(long bytes)
     {
         if (bytes < 0) bytes = 0;

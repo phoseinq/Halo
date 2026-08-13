@@ -204,14 +204,14 @@ internal sealed class ClaudeCodeWidget : IWidget
 
         float zoneW = (centred ? rightEdge - 34f : rightEdge) - originX;
 
-        g.DrawString(verb, f, b, new RectangleF(originX, -Fx.CenterLift(f), zoneW, h), sf);
+        Fx.Text(g, verb, f, b, new RectangleF(originX, -Fx.CenterLift(f), zoneW, h), sf);
         g.Clip = clip;
 
         if (elW > 0)
             using (var eb = new SolidBrush(Mul(Dim, fade * e)))
             using (var esf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
-                g.DrawString(el, tf2, eb, new RectangleF(w - 14 - elW - 4, -Fx.CenterLift(tf2), elW + 4, h), esf);
+                Fx.Text(g, el, tf2, eb, new RectangleF(w - 14 - elW - 4, -Fx.CenterLift(tf2), elW + 4, h), esf);
 
     }
 
@@ -319,7 +319,7 @@ internal sealed class ClaudeCodeWidget : IWidget
         => MathF.Round(baseline - f.FontFamily.GetCellAscent(f.Style) / (float)f.FontFamily.GetEmHeight(f.Style) * f.Size);
 
     private static void Text(Graphics g, string t, Font f, Brush b, float x, float baseline)
-        => g.DrawString(t, f, b, MathF.Round(x), TextTop(f, baseline), StringFormat.GenericTypographic);
+        => Fx.Text(g, t, f, b, MathF.Round(x), TextTop(f, baseline), StringFormat.GenericTypographic);
 
     private static readonly StringFormat AdvanceFmt =
         new(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.MeasureTrailingSpaces };
@@ -331,7 +331,7 @@ internal sealed class ClaudeCodeWidget : IWidget
     {
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
-        g.DrawString(t, f, b, new RectangleF(MathF.Round(x), TextTop(f, baseline), w, f.Size * 1.6f), sf);
+        Fx.Text(g, t, f, b, new RectangleF(MathF.Round(x), TextTop(f, baseline), w, f.Size * 1.6f), sf);
     }
 
     private void DrawExpanded(Graphics g, int w, int h, float a, CcStatus? st)
@@ -431,10 +431,10 @@ internal sealed class ClaudeCodeWidget : IWidget
             using var mid = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
             using (var cb = new SolidBrush(Mul(rf < 0 ? Dim : rc, a * show)))
-                g.DrawString(big, centreF, cb, new RectangleF(RingCx - 30, RingCy - 11, 60, 22), mid);
+                Fx.Text(g, big, centreF, cb, new RectangleF(RingCx - 30, RingCy - 11, 60, 22), mid);
             using (var ub = new SolidBrush(Mul(Dim, a * show * 0.95f)))
 
-                g.DrawString(cap2, underF, ub,
+                Fx.Text(g, cap2, underF, ub,
                     new RectangleF(RingCx - 74, RingCy + RingOuter + RingBand / 2f + 7f, 148, 16), mid);
         }
 
@@ -528,7 +528,7 @@ internal sealed class ClaudeCodeWidget : IWidget
                     : Halo.Localization.Strings.Format(
                         "agent.updated", AgeText(DateTime.UtcNow - Limits.LastSuccess)) + Dot + glyph)
                 : glyph;
-            g.DrawString(label, keySub, rb, rr, rsf);
+            Fx.Text(g, label, keySub, rb, rr, rsf);
         }
 
         DrawNetHover(g, a);
@@ -583,7 +583,7 @@ internal sealed class ClaudeCodeWidget : IWidget
             using var wb = new SolidBrush(Mul(Dim, a * 0.7f));
             using var wsf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(Halo.Localization.Strings.Get("agent.sampling"), wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
+            Fx.Text(g, Halo.Localization.Strings.Get("agent.sampling"), wf, wb, new RectangleF(colX, topY, colW, colH), wsf);
             return;
         }
 
@@ -709,7 +709,7 @@ internal sealed class ClaudeCodeWidget : IWidget
         }
         for (int i = 0; i < lines.Count; i++)
             using (var b = new SolidBrush(Mul(lines[i].c, a)))
-                g.DrawString(lines[i].t, f2, b, bx + 8, by + 5 + i * 15);
+                Fx.Text(g, lines[i].t, f2, b, bx + 8, by + 5 + i * 15);
     }
 
     private static int LastSample(int[] s)
@@ -745,10 +745,10 @@ internal sealed class ClaudeCodeWidget : IWidget
         double frac, Color fill, float a, Font labelFont, Font valueFont)
     {
         using (var lb = new SolidBrush(Mul(White, a)))
-            g.DrawString(label, labelFont, lb, x, y);
+            Fx.Text(g, label, labelFont, lb, x, y);
         var sz = g.MeasureString(value, valueFont);
         using (var vb = new SolidBrush(Mul(Dim, a)))
-            g.DrawString(value, valueFont, vb, x + w - sz.Width, y + 1);
+            Fx.Text(g, value, valueFont, vb, x + w - sz.Width, y + 1);
 
         float by = y + 24, bh = 6;
         Fill(g, x, by, w, bh, Mul(Track, a));

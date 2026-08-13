@@ -38,6 +38,24 @@ public partial class App : Application
             return;
         }
 
+        if (e.Args.Length >= 1 && e.Args[0] == "--probe-launch")
+        {
+            bool stamped = Halo.Shell.PanelLaunch.TakeRequest();
+            Halo.Shell.PanelLaunch.LogProbe(
+                $"requested={(stamped ? "yes" : "no")} "
+                + $"sessionAge={Halo.Shell.PanelLaunch.Age(Halo.Shell.PanelLaunch.SessionAgeSeconds())} "
+                + $"show={(Halo.Shell.PanelLaunch.ShouldShow(stamped) ? "yes" : "no")}");
+            Shutdown();
+            return;
+        }
+
+        if (!Halo.Shell.PanelLaunch.ShouldShow(Halo.Shell.PanelLaunch.TakeRequest()))
+        {
+            Halo.Shell.PanelLaunch.LogRefused(Halo.Shell.PanelLaunch.SessionAgeSeconds());
+            Shutdown();
+            return;
+        }
+
         _instance = new Mutex(true, "Halo.Settings.SingleInstance", out bool created);
         if (!created)
         {

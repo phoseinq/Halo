@@ -21,7 +21,10 @@ internal sealed record PendingAsk(
     DateTimeOffset ExpiresAt,
 
     bool MultiSelect = false,
-    bool HasPreview = false)
+    bool HasPreview = false,
+
+    int Index = 0,
+    int Total = 1)
 {
     internal bool IsQuestion => Tool == "AskUserQuestion";
 }
@@ -36,8 +39,14 @@ internal sealed class AskQueue
     {
         foreach (var existing in _items)
             if (existing.Nonce == ask.Nonce) return;
-        _items.Add(ask);
+        int at = _items.Count;
+        for (int i = 0; i < _items.Count; i++)
+            if (SameBox(_items[i], ask) && _items[i].Index > ask.Index) { at = i; break; }
+        _items.Insert(at, ask);
     }
+
+    private static bool SameBox(PendingAsk a, PendingAsk b)
+        => a.Pid == b.Pid && a.Session == b.Session && a.Total == b.Total && a.Total > 1;
 
     internal PendingAsk? Head(DateTimeOffset now)
     {
@@ -214,6 +223,10 @@ internal sealed class AskStore
             return true;
         }
 
+        if (WantsEnter(delivery, ask.MultiSelect, ask.HasPreview) && index >= 0)
+            System.Threading.ThreadPool.QueueUserWorkItem(
+                _ => { try { Confirm(ask.Pid, index + 1); } catch { } });
+
         lock (_lock) { _queue.Remove(ask.Nonce); _ticked.Remove(ask.Nonce); _sent.Remove(ask.Nonce); }
         Forget(ask.Nonce);
         try { File.Delete(Path.Combine(_dir, $"ask-{ask.Nonce}.json")); } catch { }
@@ -279,38 +292,167 @@ internal sealed class AskStore
 
         if (row is <= 0 or > 9) return false;
 
-        if (delivery == AskDelivery.FreeText && string.IsNullOrWhiteSpace(text))
-            return !string.IsNullOrEmpty(prior) && Interop.ConsoleRead.Type(pid, row.ToString());
+        if (delivery != AskDelivery.FreeText) return Interop.ConsoleRead.Type(pid, row.ToString());
 
-        bool alreadyOn = delivery == AskDelivery.FreeText && !string.IsNullOrEmpty(prior);
-        if (!alreadyOn && !Interop.ConsoleRead.Type(pid, row.ToString())) return false;
-
-        if (delivery == AskDelivery.FreeText && !string.IsNullOrEmpty(prior))
+        string want = text ?? "";
+        if (string.IsNullOrWhiteSpace(want))
         {
-            System.Threading.Thread.Sleep(90);
-            Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkBack, prior.Length);
+            if (string.IsNullOrEmpty(prior)) return false;
+            want = "";
         }
-        if (delivery != AskDelivery.FreeText) return true;
+
         System.Threading.ThreadPool.QueueUserWorkItem(_ =>
         {
             try
             {
-
-                System.Threading.Thread.Sleep(140);
-
-                foreach (char ch in text)
+                if (!WalkCaretTo(pid, row))
                 {
-                    if (!Interop.ConsoleRead.Type(pid, ch.ToString())) return;
-                    System.Threading.Thread.Sleep(18);
+                    Trace($"free text -> pid {pid} caret never reached row {row}");
+                    return;
+                }
+                TypeInto(pid, row, want);
+
+                if (!ask.MultiSelect && want.Length > 0)
+                {
+                    System.Threading.Thread.Sleep(140);
+                    Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkEnter);
+                    return;
                 }
 
-                if (ask.MultiSelect) return;
-                System.Threading.Thread.Sleep(140);
-                Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkEnter);
+                StepOffField(pid, row);
             }
             catch { }
         });
         return true;
+    }
+
+    private const char Caret = '\u276F';
+
+    internal static int CaretRowIn(string dump)
+    {
+        if (string.IsNullOrEmpty(dump)) return -1;
+        var m = System.Text.RegularExpressions.Regex.Match(dump, Caret + @"\s*(\d+)\.");
+        return m.Success && int.TryParse(m.Groups[1].Value, out int n) ? n : 0;
+    }
+
+    internal static bool WantsEnter(AskDelivery delivery, bool multiSelect, bool hasPreview)
+        => delivery == AskDelivery.Option && !multiSelect && hasPreview;
+
+        internal static bool NeedsConfirm(string dump, int row, bool multiSelect)
+    {
+
+        if (multiSelect || row < 1) return false;
+
+        if (CaretRowIn(dump) != row) return false;
+
+        return !System.Text.RegularExpressions.Regex.IsMatch(
+            dump, Caret + @"\s*" + row + @"\.\s*\[");
+    }
+
+    private const int ReadAbove = 10, ReadBelow = 26;
+
+    private static void Confirm(int pid, int row)
+    {
+        System.Threading.Thread.Sleep(180);
+        string dump = Interop.ConsoleRead.Dump(pid, ReadAbove, ReadBelow);
+        int caret = CaretRowIn(dump);
+
+        bool blind = caret < 0;
+        if (!blind && !NeedsConfirm(dump, row, multiSelect: false))
+        {
+            Trace($"confirm row {row} -> pid {pid}: caret on {caret}, no enter");
+            return;
+        }
+        bool sent = Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkEnter);
+        Trace($"confirm row {row} -> pid {pid} enter = {sent}"
+            + (blind ? " (console unreadable, sent on hasPreview)" : ""));
+    }
+
+    internal static string? RowTextIn(string dump, int row)
+    {
+        if (string.IsNullOrEmpty(dump)) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(
+            dump, "(?m)^[ " + Caret + "]*" + row + @"\.\s*\[(.?)\]\s*(.*)$");
+        if (!m.Success) return null;
+        return string.IsNullOrWhiteSpace(m.Groups[1].Value) ? "" : m.Groups[2].Value.TrimEnd();
+    }
+
+    private static bool WalkCaretTo(int pid, int row)
+    {
+        for (int step = 0; step < 12; step++)
+        {
+            int at = CaretRowIn(Interop.ConsoleRead.Dump(pid, 24) ?? "");
+            if (at == row) return true;
+            if (at < 0) return false;
+            if (!Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkDown)) return false;
+            System.Threading.Thread.Sleep(120);
+        }
+        return false;
+    }
+
+    private static void StepOffField(int pid, int row)
+    {
+        for (int step = 0; step < 4; step++)
+        {
+            if (CaretRowIn(Interop.ConsoleRead.Dump(pid, 24) ?? "") != row) return;
+            if (!Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkUp)) return;
+            System.Threading.Thread.Sleep(120);
+        }
+    }
+
+    private static void TypeInto(int pid, int row, string want)
+    {
+        string dump = Interop.ConsoleRead.Dump(pid, 24) ?? "";
+
+        int width = 0;
+        foreach (string line in dump.Split('\n')) width = Math.Max(width, line.TrimEnd().Length);
+        bool verify = width > 0 && want.Length + 12 < width;
+
+        for (int round = 0; round < 3; round++)
+        {
+            string? have = RowTextIn(dump, row);
+            if (have is null) return;
+            if (SameWords(have, want)) return;
+            CursorToEnd(pid, have.Length);
+            if (have.Length < want.Length && want.StartsWith(have, StringComparison.Ordinal))
+                SendText(pid, want[have.Length..]);
+            else
+            {
+                Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkBack, have.Length);
+                System.Threading.Thread.Sleep(120);
+                SendText(pid, want);
+            }
+            if (!verify) return;
+            System.Threading.Thread.Sleep(160);
+            dump = Interop.ConsoleRead.Dump(pid, 24) ?? "";
+        }
+        Trace($"free text -> pid {pid} row {row} never settled on the words");
+    }
+
+    private static void CursorToEnd(int pid, int len)
+    {
+        if (len <= 0) return;
+        Interop.ConsoleRead.Press(pid, Interop.ConsoleRead.VkRight, len + 2);
+        System.Threading.Thread.Sleep(80);
+    }
+
+    internal static bool SameWords(string have, string want)
+    {
+        if (have.Length != want.Length) return false;
+        if (string.Equals(have, want, StringComparison.Ordinal)) return true;
+        char[] a = have.ToCharArray(), b = want.ToCharArray();
+        Array.Sort(a);
+        Array.Sort(b);
+        return new string(a) == new string(b);
+    }
+
+    private static void SendText(int pid, string text)
+    {
+        foreach (char ch in text)
+        {
+            if (!Interop.ConsoleRead.Type(pid, ch.ToString())) return;
+            System.Threading.Thread.Sleep(18);
+        }
     }
 
     private static void Trace(string line)
@@ -378,7 +520,10 @@ internal sealed class AskStore
                 expires,
 
                 o["multiSelect"] is JsonValue mv && mv.TryGetValue<bool>(out var multi) && multi,
-                o["hasPreview"] is JsonValue hv && hv.TryGetValue<bool>(out var prev) && prev);
+                o["hasPreview"] is JsonValue hv && hv.TryGetValue<bool>(out var prev) && prev,
+                o["index"] is JsonValue iv && iv.TryGetValue<int>(out var index) ? index : 0,
+
+                o["total"] is JsonValue tv && tv.TryGetValue<int>(out var total) && total > 0 ? total : 1);
         }
         catch { return null; }
     }

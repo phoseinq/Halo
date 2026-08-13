@@ -11,6 +11,33 @@ internal static class Fx
 {
     public static readonly Color White = Color.FromArgb(238, 255, 255, 255);
 
+    private static bool NeedsFilling(Font font, Brush brush)
+        => font.Size < 15f || (brush is SolidBrush sb && sb.Color.A < 235);
+
+    public static void Text(Graphics g, string s, Font font, Brush brush, float x, float y)
+    {
+        g.DrawString(s, font, brush, x, y);
+        if (NeedsFilling(font, brush)) g.DrawString(s, font, brush, x, y);
+    }
+
+    public static void Text(Graphics g, string s, Font font, Brush brush, float x, float y, StringFormat fmt)
+    {
+        g.DrawString(s, font, brush, x, y, fmt);
+        if (NeedsFilling(font, brush)) g.DrawString(s, font, brush, x, y, fmt);
+    }
+
+    public static void Text(Graphics g, string s, Font font, Brush brush, RectangleF layout, StringFormat fmt)
+    {
+        g.DrawString(s, font, brush, layout, fmt);
+        if (NeedsFilling(font, brush)) g.DrawString(s, font, brush, layout, fmt);
+    }
+
+    public static void Text(Graphics g, string s, Font font, Brush brush, PointF at, StringFormat fmt)
+    {
+        g.DrawString(s, font, brush, at, fmt);
+        if (NeedsFilling(font, brush)) g.DrawString(s, font, brush, at, fmt);
+    }
+
     public static string NetLabel => Halo.Localization.Strings.Get("net.label");
     public static string ApiLabel => Halo.Localization.Strings.Get("net.api");
     public static string LossLabel => Halo.Localization.Strings.Get("net.loss");
@@ -378,6 +405,25 @@ internal static class Fx
         if (step <= 0) return c;
         RgbToHsv(c, out float h, out float s, out float v);
         return HsvToRgb(h, Math.Min(1f, s * (1f + 0.22f * step)), Math.Max(0.35f, v * (1f - 0.26f * step)));
+    }
+
+    public static void PillRim(Graphics g, int w, int h, Color lit, float weight, float fade)
+    {
+        if (fade <= 0.01f) return;
+        float i = weight / 2f, r = Math.Min(h / 2f, 30f) - i;
+        float l = i, t = 0f, b = h - i, rt = w - i, d = r * 2f;
+
+        if (r <= 0f || b - r <= t || rt - r <= l + r) return;
+        using var path = new GraphicsPath();
+        path.AddLine(l, t, l, b - r);
+        path.AddArc(l, b - d, d, d, 180f, -90f);
+        path.AddLine(l + r, b, rt - r, b);
+        path.AddArc(rt - d, b - d, d, d, 90f, -90f);
+        path.AddLine(rt, b - r, rt, t);
+
+        using var pen = new Pen(Alpha(lit, fade), weight)
+        { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
+        g.DrawPath(pen, path);
     }
 
     public static void RgbToHsv(Color c, out float h, out float s, out float v)

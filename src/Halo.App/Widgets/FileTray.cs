@@ -264,14 +264,14 @@ internal sealed class FileTray : IWidget
         using var title = new Font("Segoe UI Semibold", 21f, GraphicsUnit.Pixel);
         using var body = new Font("Segoe UI", 14f, GraphicsUnit.Pixel);
         using (var tb = new SolidBrush(Mul(White, fade)))
-            g.DrawString(Halo.Localization.Strings.Get("tray.title"), title, tb, Pad + 20, 10);
+            Fx.Text(g, Halo.Localization.Strings.Get("tray.title"), title, tb, Pad + 20, 10);
 
         int sel = SelectedCount;
         if (sel > 0) DrawRemoveChip(g, w, fade, sel);
         else if (items.Length > 0)
             using (var cb = new SolidBrush(Mul(Dim, fade)))
             using (var rf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far })
-                g.DrawString($"{items.Length} item{(items.Length == 1 ? "" : "s")}", body, cb,
+                Fx.Text(g, $"{items.Length} item{(items.Length == 1 ? "" : "s")}", body, cb,
                     new RectangleF(Pad, 20, w - Pad * 2, 24), rf);
 
         if (DragActive || items.Length == 0) { DrawDropZone(g, w, h, fade); return; }
@@ -308,7 +308,7 @@ internal sealed class FileTray : IWidget
         if (order.Length > vis)
             using (var mb = new SolidBrush(Mul(Dim, fade)))
             using (var cf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far })
-                g.DrawString($"+{order.Length - vis} more", body, mb, new RectangleF(Pad, h - Pad + 2, w - Pad * 2, 18), cf);
+                Fx.Text(g, $"+{order.Length - vis} more", body, mb, new RectangleF(Pad, h - Pad + 2, w - Pad * 2, 18), cf);
     }
 
     private static string[] DisplayOrder(string[] items)
@@ -344,7 +344,7 @@ internal sealed class FileTray : IWidget
         using var f = new Font("Segoe UI Semibold", 14f, GraphicsUnit.Pixel);
         using var b = new SolidBrush(Mul(hov ? White : Color.FromArgb(255, 200, 195), fade));
         using var sf = new StringFormat { LineAlignment = StringAlignment.Center };
-        g.DrawString($"Remove {n}", f, b, new RectangleF(r.X + 34, r.Y, r.Width - 40, r.Height), sf);
+        Fx.Text(g, $"Remove {n}", f, b, new RectangleF(r.X + 34, r.Y, r.Width - 40, r.Height), sf);
     }
 
     private void DrawDropZone(Graphics g, int w, int h, float fade)
@@ -374,10 +374,10 @@ internal sealed class FileTray : IWidget
         using var f2 = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
         using var sf = new StringFormat { Alignment = StringAlignment.Center };
         using (var b1 = new SolidBrush(Mul(White, fade)))
-            g.DrawString(active ? Halo.Localization.Strings.Get("tray.releaseToAdd") : "Drop files here", f1, b1, new RectangleF(box.X, cy + rad + 6, box.Width, 24), sf);
+            Fx.Text(g, active ? Halo.Localization.Strings.Get("tray.releaseToAdd") : "Drop files here", f1, b1, new RectangleF(box.X, cy + rad + 6, box.Width, 24), sf);
         if (!active)
             using (var b2 = new SolidBrush(Mul(Dim, fade)))
-                g.DrawString("they'll stay in the tray", f2, b2, new RectangleF(box.X, cy + rad + 30, box.Width, 20), sf);
+                Fx.Text(g, "they'll stay in the tray", f2, b2, new RectangleF(box.X, cy + rad + 30, box.Width, 20), sf);
     }
 
     private void DrawCell(Graphics g, RectangleF cell, string path, float fade, bool selected, bool lifted)
@@ -508,7 +508,7 @@ internal sealed class FileTray : IWidget
     {
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-        g.DrawString(s, f, b, new RectangleF(x, y, w, h), sf);
+        Fx.Text(g, s, f, b, new RectangleF(x, y, w, h), sf);
     }
 
     private static Color Mul(Color c, float a) => Color.FromArgb((int)(c.A * a), c.R, c.G, c.B);

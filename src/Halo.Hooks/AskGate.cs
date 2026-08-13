@@ -11,7 +11,7 @@ internal static class AskGate
         if (string.IsNullOrEmpty(toolName) || toolInput is null) return false;
 
         if (toolName == "AskUserQuestion")
-            return toolInput["questions"] is JsonArray q && q.Count == 1;
+            return toolInput["questions"] is JsonArray q && q.Count >= 1;
 
         if (!AnswerPermissions) return false;
 

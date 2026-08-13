@@ -18,7 +18,10 @@ internal sealed record AskEnvelope(
     DateTimeOffset ExpiresAt,
 
     bool MultiSelect = false,
-    bool HasPreview = false)
+    bool HasPreview = false,
+
+    int Index = 0,
+    int Total = 1)
 {
     internal bool IsExpired(DateTimeOffset now) => now >= ExpiresAt;
 
@@ -41,6 +44,8 @@ internal sealed record AskEnvelope(
             ["expiresAt"] = ExpiresAt.ToString("o"),
             ["multiSelect"] = MultiSelect,
             ["hasPreview"] = HasPreview,
+            ["index"] = Index,
+            ["total"] = Total,
         }.ToJsonString();
     }
 
@@ -73,7 +78,10 @@ internal sealed record AskEnvelope(
                 options,
                 expires,
                 o["multiSelect"] is JsonValue mv && mv.TryGetValue<bool>(out var multi) && multi,
-                o["hasPreview"] is JsonValue hv && hv.TryGetValue<bool>(out var prev) && prev);
+                o["hasPreview"] is JsonValue hv && hv.TryGetValue<bool>(out var prev) && prev,
+                o["index"] is JsonValue iv && iv.TryGetValue<int>(out var index) ? index : 0,
+
+                o["total"] is JsonValue tv && tv.TryGetValue<int>(out var total) && total > 0 ? total : 1);
         }
         catch { return null; }
     }

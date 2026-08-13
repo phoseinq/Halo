@@ -240,7 +240,7 @@ public class AskBannerLayoutTests
     // it is not there - and its digit would be Options.Count + 2 against a list one row shorter, which WRAPS,
     // so tapping it answered with one of Claude's own options instead.
     [Fact]
-    public void A_multi_select_question_gets_the_free_text_row_but_no_chat_row()
+    public void A_multi_select_question_carries_the_same_rows_the_box_does()
     {
         var multi = new PendingAsk("n", 1, "s", "AskUserQuestion", null, "pick some",
             [new AskOption("a", ""), new AskOption("b", "")],
@@ -248,12 +248,36 @@ public class AskBannerLayoutTests
 
         var rows = AskBanner.Layout(multi, AskBanner.W).Rows;
 
-        // options, the free-text row, and Halo's own submit. The chat row is the one the box drops here,
-        // and returning it anyway once wrapped the list round onto a real option.
-        Assert.Equal(4, rows.Count);
+        // Two options, the free-text row, the chat row, and Halo's own submit. The chat row was dropped here
+        // for a while on the bundle's word that multiSelect has none - reported as "chat about this was in
+        // Claude Code and not in the pill" - and three live dumps show it present every time, numbered
+        // continuously with the list. Its digit was measured too: pressing it took the box off the list.
+        Assert.Equal(5, rows.Count);
         Assert.True(AskBanner.IsFreeText(rows[2].Option));
-        Assert.True(AskBanner.IsSubmit(rows[3].Option));
-        Assert.DoesNotContain(rows, r => AskBanner.IsChat(r.Option));
+        Assert.True(AskBanner.IsChat(rows[3].Option));
+        Assert.True(AskBanner.IsSubmit(rows[4].Option));
+    }
+
+    // The order is the box's, not a choice: the free-text row's digit is Options.Count + 1 and the chat
+    // row's is one past it, so swapping them on the banner would have every tap answer with the other row.
+    [Fact]
+    public void The_two_numbered_built_ins_keep_the_order_their_digits_have()
+    {
+        var multi = new PendingAsk("n", 1, "s", "AskUserQuestion", null, "pick some",
+            [new AskOption("a", ""), new AskOption("b", "")],
+            DateTimeOffset.UtcNow.AddMinutes(10), MultiSelect: true);
+
+        var rows = AskBanner.Layout(multi, AskBanner.W).Rows;
+
+        Assert.Equal(3, AskStore.RowNumber(2, AskDelivery.FreeText));
+        Assert.Equal(4, AskStore.RowNumber(2, AskDelivery.Chat));
+        int free = -1, chat = -1;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (AskBanner.IsFreeText(rows[i].Option)) free = i;
+            if (AskBanner.IsChat(rows[i].Option)) chat = i;
+        }
+        Assert.True(free >= 0 && chat == free + 1);
     }
 
     // The submit row must never earn a digit. The box has no row for it - its Submit is a tab in the

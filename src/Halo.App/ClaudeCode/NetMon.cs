@@ -95,6 +95,21 @@ internal static class NetMon
         }
     }
 
+    internal static int? LatestNetMs()
+    {
+        lock (_net)
+        {
+            for (int step = 0; step < _net.Length; step++)
+            {
+                int at = ((_idx - 1 - step) % _net.Length + _net.Length) % _net.Length;
+                if (_net[at] >= 0) return _net[at];
+            }
+        }
+        return null;
+    }
+
+    internal static void SeedNetMs(int ms) => RecordSample(ms, ms);
+
     private static void RecordSample(int netMs, int apiMs)
     {
         lock (_net) { _net[_idx] = netMs; _api[_idx] = apiMs; _idx = (_idx + 1) % _net.Length; }

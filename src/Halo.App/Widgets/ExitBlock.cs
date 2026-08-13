@@ -36,7 +36,7 @@ internal static class ExitBlock
         => MathF.Round(baseline - f.FontFamily.GetCellAscent(f.Style) / (float)f.FontFamily.GetEmHeight(f.Style) * f.Size);
 
     private static void Text(Graphics g, string t, Font f, Brush b, float x, float baseline)
-        => g.DrawString(t, f, b, MathF.Round(x), TextTop(f, baseline), StringFormat.GenericTypographic);
+        => Fx.Text(g, t, f, b, MathF.Round(x), TextTop(f, baseline), StringFormat.GenericTypographic);
 
     private static readonly StringFormat AdvanceFmt =
         new(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.MeasureTrailingSpaces };
@@ -173,7 +173,7 @@ internal static class ExitBlock
         {
             using var sf = new StringFormat(StringFormat.GenericTypographic)
             { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
-            g.DrawString(who, body, wb, new RectangleF(ColR + fw + 13, TextTop(body, y),
+            Fx.Text(g, who, body, wb, new RectangleF(ColR + fw + 13, TextTop(body, y),
                 RightEdge - ColR - fw - 13, body.Size * 1.6f), sf);
         }
 
@@ -244,13 +244,13 @@ internal static class ExitBlock
                 string rest = text.Substring(lead.Length);
                 if (rest.Length > 0)
                     using (var rb2 = new SolidBrush(Mul(Dim, a * 0.85f)))
-                        g.DrawString(rest, cap, rb2,
+                        Fx.Text(g, rest, cap, rb2,
                             new RectangleF(ColR + Advance(g, lead, cap), by,
                                 RightEdge - ColR - Advance(g, lead, cap), cap.Size * 1.6f), sf2);
                 continue;
             }
             using var rb = new SolidBrush(Mul(col, a * alpha));
-            g.DrawString(text, cap, rb, new RectangleF(ColR, by, RightEdge - ColR, cap.Size * 1.6f), sf2);
+            Fx.Text(g, text, cap, rb, new RectangleF(ColR, by, RightEdge - ColR, cap.Size * 1.6f), sf2);
         }
     }
 

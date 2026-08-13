@@ -69,4 +69,8 @@ internal interface IWidget
 
     IReadOnlyList<(RectangleF rect, Action<PointF> onClick)> CollapsedButtons(int w, int h)
         => Array.Empty<(RectangleF, Action<PointF>)>();
+
+    bool WantsWheel => false;
+
+    void Wheel(int notches) { }
 }

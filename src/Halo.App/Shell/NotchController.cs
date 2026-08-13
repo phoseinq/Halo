@@ -40,6 +40,28 @@ internal static class NotchVisibility
         => (activeCount == 0, activeCount == 0 ? 1f : 0f);
 }
 
+internal static class HoverHold
+{
+
+    internal const double GraceSeconds = 2.5;
+
+    internal static bool Holding(bool over, float progress, bool banner, bool dropping)
+        => over && progress > 0.9f && !banner && !dropping;
+
+    internal static int[] Keep(int[] active, int primary, bool holding)
+    {
+        if (!holding || primary < 0 || Array.IndexOf(active, primary) >= 0) return active;
+        var kept = new List<int>(active.Length + 1);
+        foreach (int i in active)
+        {
+            if (i > primary && !kept.Contains(primary)) kept.Add(primary);
+            kept.Add(i);
+        }
+        if (!kept.Contains(primary)) kept.Add(primary);
+        return [.. kept];
+    }
+}
+
 internal sealed class AgentNoticeCoordinator
 {
     private readonly Dictionary<int, AgentNotice> _previous = new();
@@ -78,6 +100,13 @@ internal sealed class AgentNoticeCoordinator
 
         if (allowSelection)
             Select(now, static _ => true);
+    }
+
+    internal void Hold(DateTimeOffset until)
+    {
+        foreach (var (index, window) in _pending.ToArray())
+            if (window.Until < until)
+                _pending[index] = window with { Until = until };
     }
 
     internal void Tick(DateTimeOffset now, Func<int, bool>? isActive = null, bool allowSelection = true)
@@ -171,6 +200,9 @@ internal sealed partial class NotchController
     private int _lastSec = -1;
     private bool _lastMouseDown;
     private bool _prevDragActive;
+
+    private static readonly bool PinOpen = Environment.GetEnvironmentVariable("HALO_PIN_OPEN") == "1";
+
     private long _trayShowUntil;
 
     private string? _trayPressPath;
@@ -343,6 +375,8 @@ internal sealed partial class NotchController
         var widgets = new List<IWidget>();
 
         widgets.Add(new NetWidget(_net));
+
+        Halo.Interop.WheelGrab.Start();
         widgets.Add(new DownloadWidget());
         for (int s = 0; s < MediaSessions.MaxSlots; s++)
             widgets.Add(new MediaWidget(_mediaSessions, s));
@@ -390,7 +424,32 @@ internal sealed partial class NotchController
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
 
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try { Frame(); } catch (Exception ex) { CrashLog(ex); }
+        FrameStat(t0);
+    }
+
+    private bool _sheetDbg;
+    private string _raiseDbg = "";
+
+    private int _fdbgN;
+    private double _fdbgMs;
+    private long _fdbgSince;
+
+    private void FrameStat(long t0)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        _fdbgN++;
+        _fdbgMs += (now - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (_fdbgSince == 0) { _fdbgSince = now; return; }
+        double span = (now - _fdbgSince) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (span < 1000.0) return;
+        if (_sheetDbg)
+            LayeredNotch.GlassNote($"loop {_fdbgN / (span / 1000.0):0.0}fps avg={_fdbgMs / _fdbgN:0.0}ms "
+                + $"asked={_cadence} raised={_timerRaised} capped={_timerCapped} {_raiseDbg}");
+        _fdbgN = 0;
+        _fdbgMs = 0;
+        _fdbgSince = now;
     }
 
     private static void CrashLog(Exception ex)
@@ -554,6 +613,11 @@ internal sealed partial class NotchController
         if (capped) return (false, true, raisedAt);
         return (true, false, raised ? raisedAt : now);
     }
+
+    internal const int GlassLiveStreak = 30;
+
+    internal static bool GlassWantsFineTimer(bool panelOpen, bool watched, bool overDesktop, int staleStreak)
+        => panelOpen && watched && !overDesktop && staleStreak < GlassLiveStreak;
 
     private void RaiseTimer(bool want, bool inputEdge)
     {
@@ -1212,6 +1276,9 @@ internal sealed partial class NotchController
         bool fullscreen = !Pinned(_pinned) && _notch.IsFullscreen(fg);
 
         _overFullscreen = fullscreen;
+
+        for (int i = 0; i < _widgets.Length; i++)
+            if (_widgets[i] is Widgets.NetWidget nw) nw.Pinned = i == _userPicked;
         var active = fullscreen ? [] : ActiveIndices();
 
         if (!fullscreen)
@@ -1252,6 +1319,9 @@ internal sealed partial class NotchController
         if (visibility.ReturnEarly)
             return;
 
+        bool holding = HoverHold.Holding(WidgetInput.Over, _progress, _notif != null, _drop >= 0f);
+        active = HoverHold.Keep(active, _primary, holding);
+
         bool wasEmpty = _empty;
         _empty = active.Length == 0;
         if (justShown) LogVis("show:settled", fg, active.Length);
@@ -1268,7 +1338,10 @@ internal sealed partial class NotchController
             bool desktopBacked = _widgets[i] is CodexWidget codex && codex.IsDesktop;
             _agentNotices.Observe(i, _widgets[i].AgentNotice, now, desktopBacked, allowSelection: _drop < 0f);
         }
-        _agentNotices.Tick(now, Live, allowSelection: _drop < 0f);
+
+        if (holding) _agentNotices.Hold(now.AddSeconds(HoverHold.GraceSeconds));
+
+        _agentNotices.Tick(now, i => Live(i) || (holding && i == _primary), allowSelection: _drop < 0f);
         if (_drop < 0f)
             _primary = _agentNotices.Primary;
         if (!_empty && Array.IndexOf(active, _primary) < 0)
@@ -1312,9 +1385,14 @@ internal sealed partial class NotchController
         bool notice = _drop < 0f && _agentNotices.IsOpen(now);
 
         if (_drop < 0f && !_empty && _userPicked < 0 && !notice)
-            for (int i = 0; i < _widgets.Length; i++)
-                if (_widgets[i] is DownloadWidget && Live(i))
-                { _primary = i; _agentNotices.SetPrimary(i); break; }
+        {
+            int rank = -1;
+            for (int i = 0; i < _widgets.Length && rank < 0; i++)
+                if (_widgets[i] is NetWidget && Live(i)) rank = i;
+            for (int i = 0; i < _widgets.Length && rank < 0; i++)
+                if (_widgets[i] is DownloadWidget && Live(i)) rank = i;
+            if (rank >= 0) { _primary = rank; _agentNotices.SetPrimary(rank); }
+        }
 
         if (_drop < 0f && _btWidget.IsActive && _settings.Enabled(Halo.Settings.FeatureId.Bluetooth))
             for (int i = 0; i < _widgets.Length; i++)
@@ -1491,7 +1569,7 @@ internal sealed partial class NotchController
         float prevOffsetX = _offsetX, prevHoldT = _holdT;
         UpdateMove(p, down, hovered);
 
-        bool open = (hovered || notice || FileTray.DragActive || _apiHold)
+        bool open = (hovered || notice || FileTray.DragActive || _apiHold || PinOpen)
             && !_empty && _notif == null && !_moving;
 
         int dir = open ? 1 : -1;
@@ -1556,12 +1634,18 @@ internal sealed partial class NotchController
             if (deskChanged && !desk) _lastCaptureAt = 0;
         }
 
-        int captureEveryMs = _progress > 0.5f ? CaptureOpenMs : CaptureCollapsedMs;
+        bool sheet = _progress > 0.5f || _notif != null || _ask != null || _greet != GreetingKind.None;
+        _sheetDbg = sheet;
+        int captureEveryMs = sheet ? CaptureOpenMs : CaptureCollapsedMs;
         if (_heavy) captureEveryMs *= 3;
 
-        if (_progress <= 0.5f) captureEveryMs *= Math.Clamp(1 + _notch.StaleStreak / 6, 1, 4);
+        if (!sheet) captureEveryMs *= Math.Clamp(1 + _notch.StaleStreak / 6, 1, 4);
         if (!_lastDesktop && _behind != IntPtr.Zero && frameNow - _lastCaptureAt >= captureEveryMs)
         {
+
+            if (sheet)
+                LayeredNotch.GlassNote($"req every={captureEveryMs} late={frameNow - _lastCaptureAt} "
+                    + $"prog={_progress:0.00} heavy={_heavy} stale={_notch.StaleStreak} cad={_cadence}");
             _lastCaptureAt = frameNow;
             _notch.CaptureFrom(_behind);
         }
@@ -1592,6 +1676,16 @@ internal sealed partial class NotchController
 
         WidgetInput.Down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0;
 
+        bool wheelWidget = _primary >= 0 && _primary < _widgets.Length && _widgets[_primary].WantsWheel;
+        Halo.Interop.WheelGrab.WantWheel = overNow && wheelWidget && next > 0.98f;
+        int notches = Halo.Interop.WheelGrab.TakeNotches();
+        bool wheeled = false;
+        if (notches != 0 && wheelWidget)
+        {
+            try { _widgets[_primary].Wheel(notches); } catch { }
+            wheeled = true;
+        }
+
         float prevStrip = _stripT;
         _stripT = Math.Clamp(_stripT + (AltIndices().Length >= 1 ? 1 : -1) * _dt / 0.22f, 0f, 1f);
 
@@ -1603,6 +1697,7 @@ internal sealed partial class NotchController
             || refreshed || tick || _menu != prevMenu || _drop != prevDrop || _arrive != prevArrive
             || _rowOpen != prevRowOpen || forceAnim || mouseMoved || rescaled || _handle != prevHandle
             || _shrink != prevShrink || _stripT != prevStrip || _notifT != prevNotifT || _notifDetail != prevNotifDetail
+            || wheeled
             || _offsetX != prevOffsetX || _holdT != prevHoldT || !ReferenceEquals(_notif, notifStart)
             || _notifInk != _drawnNotifInk || _notifFold != prevNotifFold
             || _askT != prevAskT || _askHover != prevAskHover || _askTyped != _drawnTyped
@@ -1621,7 +1716,11 @@ internal sealed partial class NotchController
 
         bool watched = hovered || notice
                        || _notif != null || _ask != null || _greet != GreetingKind.None;
-        RaiseTimer(morphing || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)),
+
+        bool glassLive = GlassWantsFineTimer(sheet, watched, _lastDesktop, _notch.StaleStreak);
+        _raiseDbg = $"sheet={sheet} watched={watched} desk={_lastDesktop} stale={_notch.StaleStreak} live={glassLive} morph={morphing}";
+        RaiseTimer(morphing || glassLive
+                   || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)),
                    pointerMoved);
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
 
@@ -2442,7 +2541,14 @@ internal sealed partial class NotchController
         {
             if (_askTyped.Length > 0) _askTyped = _askTyped[..^1];
         }
-        else if (vk == Win32.VK_ESCAPE) EndTyping();
+        else if (vk == Win32.VK_ESCAPE)
+        {
+
+            bool retracted = _ask is { } esc && _asks.Sent(esc.Nonce) is { Length: > 0 }
+                          && _asks.Answer(esc, "", AskDelivery.FreeText);
+            EndTyping();
+            if (retracted) ClearDraft();
+        }
         else if (vk == Win32.VK_RETURN)
         {
             string answer = _askTyped.Trim();
@@ -2451,7 +2557,8 @@ internal sealed partial class NotchController
             {
 
                 _asks.Answer(ask, answer, AskDelivery.FreeText);
-                _ask = null;
+
+                if (!ask.MultiSelect) { _askGhost = ask; _ask = null; }
                 _askHover = -1;
                 EndTyping();
                 ClearDraft();
@@ -2716,14 +2823,14 @@ internal sealed partial class NotchController
             var textHint = g.TextRenderingHint;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
             using (var gbrush = new SolidBrush(Color.FromArgb(A(headA), accent.R, accent.G, accent.B)))
-                g.DrawString(glyph, gfont, gbrush, new PointF(pad, top + (rowH - gsz.Height) / 2f), gfmt);
+                Fx.Text(g, glyph, gfont, gbrush, new PointF(pad, top + (rowH - gsz.Height) / 2f), gfmt);
             g.TextRenderingHint = textHint;
             using (var tb = new SolidBrush(Color.FromArgb(A(headA), accent.R, accent.G, accent.B)))
-                g.DrawString(title, tf, tb, new RectangleF(pad + gsz.Width + gapX, top + (rowH - tsz.Height) / 2f,
+                Fx.Text(g, title, tf, tb, new RectangleF(pad + gsz.Width + gapX, top + (rowH - tsz.Height) / 2f,
                                                           w - pad * 2 - gsz.Width - gapX, rowH), titleFmt);
 
             using (var bb = new SolidBrush(Color.FromArgb(A(190), 226, 231, 240)))
-                g.DrawString(body, bf, bb, new RectangleF(pad, top + rowH + rowH * 0.62f,
+                Fx.Text(g, body, bf, bb, new RectangleF(pad, top + rowH + rowH * 0.62f,
                                                          w - pad * 2, h - (top + rowH * 1.62f) - pad * 0.6f), bodyFmt);
         }
         g.Restore(st);

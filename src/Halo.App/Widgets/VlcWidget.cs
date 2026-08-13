@@ -207,7 +207,7 @@ internal sealed class VlcWidget : IWidget
         string info = MediaWidget.MetaLine(name, null, MediaFileInfo.Size(name, VlcMonitor.Poke) is { } sz
             ? MediaFileInfo.Human(sz) : null, res);
         using (var lb = new SolidBrush(Mul(Dim, fade)))
-            g.DrawString(info, bodyF, lb, tx, 76);
+            Fx.Text(g, info, bodyF, lb, tx, 76);
 
         var seek = SeekRect(w);
         float frac = Progress();
@@ -240,10 +240,10 @@ internal sealed class VlcWidget : IWidget
             using var eb = new SolidBrush(Mul(Dim, fade));
             float ty = barCy + bh / 2f + 3f;
             var shown = TimeSpan.FromSeconds(_scrubbing ? _scrubFrac * len : Math.Max(0f, Elapsed()));
-            g.DrawString(Fmt(shown), timeF, eb, tx, ty);
+            Fx.Text(g, Fmt(shown), timeF, eb, tx, ty);
             var total = Fmt(TimeSpan.FromSeconds(len));
             var ts = g.MeasureString(total, timeF);
-            g.DrawString(total, timeF, eb, tx + tw - ts.Width, ty);
+            Fx.Text(g, total, timeF, eb, tx + tw - ts.Width, ty);
         }
         else _wasDown = WidgetInput.Down;
 
@@ -312,7 +312,7 @@ internal sealed class VlcWidget : IWidget
         using var b = new SolidBrush(Mul(White, fade));
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap | (Fx.IsRtl(name) ? StringFormatFlags.DirectionRightToLeft : 0), LineAlignment = StringAlignment.Center };
-        g.DrawString(name, f, b, new RectangleF(x + sz + 10, 0, w - (x + sz + 10) - 12, h), sf);
+        Fx.Text(g, name, f, b, new RectangleF(x + sz + 10, 0, w - (x + sz + 10) - 12, h), sf);
     }
 
     internal const float MiniInsetFrac = 2f / 26f, PanelInsetFrac = 0.14f;
@@ -368,7 +368,7 @@ internal sealed class VlcWidget : IWidget
         using var b = new SolidBrush(Mul(White, a * 0.92f));
         using var sf = new StringFormat(StringFormat.GenericTypographic)
         { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(label, f, b, r, sf);
+        Fx.Text(g, label, f, b, r, sf);
     }
 
     private static readonly FontFamily Fluent = new("Segoe Fluent Icons");

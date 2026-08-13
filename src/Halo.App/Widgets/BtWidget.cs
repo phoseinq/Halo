@@ -133,7 +133,7 @@ internal sealed class BtWidget : IWidget
         { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
 
         float rise = (1f - pctIn) * 3f;
-        g.DrawString($"{pct}%", pf, pb, new RectangleF(cx + sz, rise, w - (cx + sz) - 14, h), sf);
+        Fx.Text(g, $"{pct}%", pf, pb, new RectangleF(cx + sz, rise, w - (cx + sz) - 14, h), sf);
     }
 
     private const float BandPen = 1.6f;
@@ -190,9 +190,9 @@ internal sealed class BtWidget : IWidget
         using var nf = new Font("Segoe UI Semibold", 22f, GraphicsUnit.Pixel);
         using var bf = new Font("Segoe UI", 15f, GraphicsUnit.Pixel);
         using (var nb = new SolidBrush(Mul(White, fade)))
-            g.DrawString(name, nf, nb, tx, cy - 26);
+            Fx.Text(g, name, nf, nb, tx, cy - 26);
         using (var bb = new SolidBrush(Mul(Dim, fade)))
-            g.DrawString($"{pct}% battery", bf, bb, tx, cy + 4);
+            Fx.Text(g, $"{pct}% battery", bf, bb, tx, cy + 4);
     }
 
     public IReadOnlyList<(RectangleF rect, Action<PointF> onClick)> Buttons(int w, int h)
@@ -223,7 +223,7 @@ internal sealed class BtWidget : IWidget
             using var sf = new StringFormat(StringFormat.GenericTypographic)
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             sf.FormatFlags |= StringFormatFlags.NoClip;
-            g.DrawString(((char)cp).ToString(), f, br, new RectangleF(0, 0, N, N), sf);
+            Fx.Text(g, ((char)cp).ToString(), f, br, new RectangleF(0, 0, N, N), sf);
         }
         var ink = InkBounds(full);
         if (ink.Width <= 0 || ink.Height <= 0) return full;

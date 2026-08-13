@@ -61,7 +61,7 @@ internal static class AskBanner
         => IsFreeText(option) || IsChat(option) || IsSubmit(option);
 
     internal static IReadOnlyList<AskOption> BuiltInsFor(PendingAsk ask)
-        => !ask.IsQuestion ? [] : ask.MultiSelect ? [FreeText, Submit] : [FreeText, Chat];
+        => !ask.IsQuestion ? [] : ask.MultiSelect ? [FreeText, Chat, Submit] : [FreeText, Chat];
 
     internal sealed record AskRow(
         RectangleF Rect, RectangleF Body, RectangleF Label, RectangleF Desc, AskOption Option);
@@ -331,10 +331,10 @@ internal static class AskBanner
         {
             using var sh = new SolidBrush(Color.FromArgb((int)(a * 72), 0, 0, 0));
             foreach (var d in Halo)
-                g.DrawString(text, f, sh, new RectangleF(r.X + d.X, r.Y + d.Y, r.Width, r.Height), sf);
+                Fx.Text(g, text, f, sh, new RectangleF(r.X + d.X, r.Y + d.Y, r.Width, r.Height), sf);
         }
         using var b = new SolidBrush(Mul(c, a));
-        g.DrawString(text, f, b, r, sf);
+        Fx.Text(g, text, f, b, r, sf);
     }
 
     private static Color Body(float a, bool hover)
@@ -508,8 +508,11 @@ internal static class AskBanner
 
     private static string Eyebrow(PendingAsk ask)
         => ask.IsQuestion
-            ? global::Halo.Localization.Strings.Get("ask.eyebrow.asks")
+            ? global::Halo.Localization.Strings.Get("ask.eyebrow.asks") + Counter(ask)
             : global::Halo.Localization.Strings.Format("ask.eyebrow.runs", ask.Tool.ToUpperInvariant());
+
+    private static string Counter(PendingAsk ask)
+        => ask.Total > 1 ? $"  {ask.Index + 1}/{ask.Total}" : "";
 
     private static string Title(PendingAsk ask)
         => !string.IsNullOrEmpty(ask.Question) ? ask.Question!

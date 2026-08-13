@@ -229,17 +229,23 @@ internal sealed class LayeredNotch
         return isDesktop;
     }
 
-    public void CaptureFrom(IntPtr behind)
+    public bool CaptureFrom(IntPtr behind)
     {
-        if (behind == IntPtr.Zero || _capturing) return;
+        if (behind == IntPtr.Zero) return false;
+
+        if (_capturing) { System.Threading.Interlocked.Increment(ref _drops); return false; }
         _capturing = true;
+        long asked = System.Diagnostics.Stopwatch.GetTimestamp();
         System.Threading.ThreadPool.QueueUserWorkItem(_ =>
         {
-            try { DoCapture(behind); } catch { } finally { _capturing = false; }
+            try { DoCapture(behind, asked); } catch { } finally { _capturing = false; }
         });
+        return true;
     }
 
-    private void DoCapture(IntPtr behind)
+    private int _drops;
+
+    private void DoCapture(IntPtr behind, long asked)
     {
         if (!Win32.GetWindowRect(behind, out var wr)) return;
 
@@ -304,15 +310,19 @@ internal sealed class LayeredNotch
             if (_staleStreak < 1000) _staleStreak++;
             blurred.Dispose();
             GlassTrace(how + " same", (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0
-                / System.Diagnostics.Stopwatch.Frequency);
+                / System.Diagnostics.Stopwatch.Frequency, Since(asked, t0));
             return;
         }
         _bgHash = hash;
         _staleStreak = 0;
         lock (_bgLock) { var old = _bg; _bg = blurred; old?.Dispose(); }
         System.Threading.Interlocked.Increment(ref _captureVersion);
-        GlassTrace(how, (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+        GlassTrace(how, (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
+                   Since(asked, t0));
     }
+
+    private static double Since(long from, long to)
+        => (to - from) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
     private ulong _bgHash;
     private int _staleStreak;
@@ -368,7 +378,7 @@ internal sealed class LayeredNotch
         Environment.GetEnvironmentVariable("HALO_DUMP_GLASS") == "1";
     private static long _lastDump;
 
-    private static void GlassTrace(string how, double ms)
+    private void GlassTrace(string how, double ms, double waited)
     {
         if (!GlassDebug) return;
         try
@@ -376,7 +386,23 @@ internal sealed class LayeredNotch
             if (++_traceCount > 600) return;
             string path = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "glass-debug.txt");
-            System.IO.File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {how} {ms:0.0}ms\n");
+            System.IO.File.AppendAllText(path,
+                $"{DateTime.Now:HH:mm:ss.fff} {how} {ms:0.0}ms q{waited:0.0}ms d{_drops}\n");
+        }
+        catch { }
+    }
+
+    private static int _noteCount;
+
+    internal static void GlassNote(string line)
+    {
+        if (!GlassDebug) return;
+        try
+        {
+            if (++_noteCount > 600) return;
+            string path = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "glass-req.txt");
+            System.IO.File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {line}\n");
         }
         catch { }
     }
@@ -492,6 +518,7 @@ internal sealed class LayeredNotch
             DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+
             if (collapsedFade > 0.01f) drawCollapsed(g, w, h, collapsedFade);
             drawContent(g, w, h, contentFade);
             if (HandleAlpha > 0.01f && contentFade > 0.5f)

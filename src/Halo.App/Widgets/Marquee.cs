@@ -40,7 +40,7 @@ internal sealed class Marquee
             _scrolling = false;
             using var pf = new StringFormat(StringFormatFlags.NoWrap) { Trimming = StringTrimming.EllipsisCharacter };
             if (Fx.IsRtl(text)) pf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
-            g.DrawString(text, f, b, new RectangleF(x, y, w, f.Height + 4), pf);
+            Fx.Text(g, text, f, b, new RectangleF(x, y, w, f.Height + 4), pf);
             return;
         }
         _scrolling = true;
@@ -81,7 +81,7 @@ internal sealed class Marquee
                            : x - (_offset - pass * span);
             var box = new RectangleF(ox, y, bw, bh);
             if (shaped != null) g.DrawImage(shaped, box);
-            else g.DrawString(text, f, b, box, sf);
+            else Fx.Text(g, text, f, b, box, sf);
         }
         g.InterpolationMode = oldInterp;
         g.PixelOffsetMode = oldOffset;
@@ -119,7 +119,7 @@ internal sealed class Marquee
                 bg.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
                 bg.ScaleTransform(s, s);
                 using var brush = new SolidBrush(c);
-                bg.DrawString(text, f, brush, new RectangleF(0f, 0f, w, h), sf);
+                Fx.Text(bg, text, f, brush, new RectangleF(0f, 0f, w, h), sf);
             }
             _bmp?.Dispose();
             _bmp = bmp;

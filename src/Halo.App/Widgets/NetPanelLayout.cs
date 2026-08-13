@@ -71,6 +71,21 @@ internal static class NetPanelLayout
         _ => 24,
     };
 
+    internal static int WindowDays(NetWindow window) => window switch
+    {
+        NetWindow.Week => 7,
+        NetWindow.Month => 30,
+        NetWindow.Quarter => 90,
+        _ => 1,
+    };
+
+        internal static string UnitKey(NetWindow window) => window switch
+    {
+        NetWindow.Hour => "net.avgMinute",
+        NetWindow.Today => "net.avgHour",
+        _ => "net.avg",
+    };
+
     private static readonly float[] ChipWidths = [50f, 50f, 56f, 64f, 64f];
     private const float ChipGap = 6f;
 

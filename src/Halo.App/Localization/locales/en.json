@@ -21,6 +21,7 @@
   "net.peak": "peak {0}",
   "net.avg": "avg {0}/day",
   "net.avgHour": "avg {0}/hour",
+  "net.avgMinute": "avg {0}/min",
   "net.quiet": "no traffic yet",
   "net.hour": "1 hour",
   "net.quarter": "90 days",

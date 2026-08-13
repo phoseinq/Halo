@@ -83,9 +83,9 @@ internal sealed class NetWidget : IWidget
     public bool IsActive => AlwaysOn || Pinned || _meter.Busy;
 
     public int Version => (int)(_meter.DownRate / 1024) ^ ((int)(_meter.UpRate / 1024) << 16)
-                          ^ ((int)_window << 12) ^ (_split ? 0x4000 : 0);
+                          ^ ((int)_window << 12) ^ (_split ? 0x8000 : 0);
 
-    public bool Animating => AlwaysOn || _meter.Busy;
+    public bool Animating => AlwaysOn || Pinned || _meter.Busy;
 
     public bool WantsWheel => true;
 
@@ -328,7 +328,8 @@ internal sealed class NetWidget : IWidget
         Fx.Text(g, glyph, f, b, new RectangleF(cx - px, cy - px, px * 2, px * 2), sf);
     }
 
-    private readonly record struct Point(long Down, long Up, string Label, DateOnly? Day, DateTime? Hour)
+    private readonly record struct Point(long Down, long Up, string Label, DateOnly? Day, DateTime? Hour,
+                                         DateTime? Minute = null)
     {
         internal long Total => Down + Up;
     }
@@ -343,7 +344,8 @@ internal sealed class NetWidget : IWidget
             var live = new Point[minutes.Count];
             for (int i = 0; i < minutes.Count; i++)
                 live[i] = new Point(minutes[i].Down, minutes[i].Up,
-                                    minutes[i].Minute.ToString("HH:mm", culture), null, minutes[i].Minute);
+                                    minutes[i].Minute.ToString("HH:mm", culture), null, null,
+                                    minutes[i].Minute);
             return live;
         }
         if (_window == NetWindow.Today)
@@ -365,6 +367,11 @@ internal sealed class NetWidget : IWidget
 
         private long LanBytesAt(in Point p)
     {
+        if (p.Minute is { } minute)
+        {
+            var v = _meter.Minutes.Minute(minute, NetLink.Lan);
+            return v.Down + v.Up;
+        }
         if (p.Hour is { } hour)
         {
             var v = _meter.Hours.Hour(hour, NetLink.Lan);
@@ -513,12 +520,10 @@ internal sealed class NetWidget : IWidget
         var led = _meter.Ledger;
         int count = NetPanelLayout.Span(_window);
         var points = Points(today, count);
-        (long Down, long Up) Window(NetLink? link) => _window switch
-        {
-            NetWindow.Week => led.Week(today, link),
-            NetWindow.Month => led.Month(today, link),
-            _ => led.Today(today, link),
-        };
+
+        (long Down, long Up) Window(NetLink? link) => _window == NetWindow.Hour
+            ? _meter.Minutes.Total(DateTime.Now, NetPanelLayout.Span(NetWindow.Hour), link)
+            : led.Total(today.AddDays(-(NetPanelLayout.WindowDays(_window) - 1)), today, link);
 
         using var heroF = new Font("Segoe UI Semibold", 22f, GraphicsUnit.Pixel);
         using var valF = new Font("Segoe UI Semibold", 15f, GraphicsUnit.Pixel);
@@ -593,12 +598,12 @@ internal sealed class NetWidget : IWidget
         DrawDayCard(g, w, h, bars, top, baseY, points, tinyF, fade * _chartT);
     }
 
-    private bool UsualRowShown() =>
-        Learned() is not null || NetForecast.Learning(_usualDays) is not null;
+    private bool UsualRowShown() => Learned() is not null || Learning() is not null;
 
     private void DrawUsual(Graphics g, NetColumn col, DateOnly today, Font tinyF, float fade)
     {
-        if (fade <= 0.01f || !UsualRowShown()) return;
+
+        if (fade <= 0.01f) return;
         if (Learned() is { } usual)
         {
 
@@ -610,7 +615,7 @@ internal sealed class NetWidget : IWidget
                          tinyF, ink, NetPanelLayout.Pad, col.BandRow2);
         }
 
-        else if (NetForecast.Learning(_usualDays) is { } sofar)
+        else if (Learning() is { } sofar)
         {
             using var dim = new SolidBrush(Mul(Dim, fade));
             Fx.Text(g, Halo.Localization.Strings.Format("net.learning",
@@ -644,7 +649,7 @@ internal sealed class NetWidget : IWidget
         if (!UsualRowShown())
 
             Fx.Text(g, Halo.Localization.Strings.Format(
-                             _window == NetWindow.Today ? "net.avgHour" : "net.avg",
+                             NetPanelLayout.UnitKey(_window),
                              NetRate.Size(totals.Length > 0 ? sum / totals.Length : 0)),
                          tinyF, dim, NetPanelLayout.Pad, col.BandRow2);
 
@@ -664,10 +669,10 @@ internal sealed class NetWidget : IWidget
 
     private int _usualDays;
 
-    private NetForecast.Usage? Learned()
+    private void RefreshUsual()
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
-        if (_usualDay == today) return _usual;
+        if (_usualDay == today) return;
         _usualDay = today;
 
         var days = new List<long>(NetForecast.LearnDays);
@@ -676,12 +681,26 @@ internal sealed class NetWidget : IWidget
                 if (d.Day >= oldest && d.Day < today) days.Add(d.Down + d.Up);
         _usualDays = days.Count;
         _usual = NetForecast.Learn(days);
+    }
+
+    private NetForecast.Usage? Learned()
+    {
+        RefreshUsual();
         return _usual;
+    }
+
+        private NetForecast.Progress? Learning()
+    {
+        RefreshUsual();
+        return NetForecast.Learning(_usualDays);
     }
 
     private long? PreviousWindow(DateOnly today)
     {
-        int span = _window switch { NetWindow.Week => 7, NetWindow.Month => 30, _ => 1 };
+
+        if (_window == NetWindow.Hour) return null;
+
+        int span = NetPanelLayout.WindowDays(_window);
         var to = today.AddDays(-span);
         var from = to.AddDays(-(span - 1));
         if (_meter.Ledger.Oldest is not { } oldest || oldest > from) return null;

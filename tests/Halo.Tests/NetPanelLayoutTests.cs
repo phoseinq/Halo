@@ -24,6 +24,55 @@ public class NetPanelLayoutTests
         Assert.Equal(NetLedger.KeepDays, NetPanelLayout.Span(NetWindow.Quarter));
     }
 
+    // The three tests below are the guard the compiler will not give. A switch with a `_ =>` arm cannot warn
+    // about a new enum member, and a switch without one warns about casts instead (CS8524) - which would have to
+    // be silenced with a throw on the render path. So the exhaustiveness lives here: every one of these walks
+    // Enum.GetValues, so a sixth window fails a test the moment it is added rather than quietly inheriting
+    // whatever the catch-all arm returns. That inheritance is exactly what shipped Hour and Quarter showing
+    // today's bytes.
+    [Fact]
+    public void Every_window_maps_to_a_day_span_and_only_the_day_windows_are_longer_than_one()
+    {
+        foreach (NetWindow w in System.Enum.GetValues<NetWindow>())
+        {
+            int days = NetPanelLayout.WindowDays(w);
+            Assert.True(days >= 1, $"{w} mapped to {days} days");
+            // Hour and Today are both "one day of the ledger" - the hour window totals from the minute store
+            // and never uses this, and today is a single day by definition.
+            bool sub = w is NetWindow.Hour or NetWindow.Today;
+            Assert.True(sub ? days == 1 : days > 1, $"{w} mapped to {days} days");
+        }
+        Assert.Equal(1, NetPanelLayout.WindowDays(NetWindow.Today));
+        Assert.Equal(7, NetPanelLayout.WindowDays(NetWindow.Week));
+        Assert.Equal(30, NetPanelLayout.WindowDays(NetWindow.Month));
+        Assert.Equal(NetLedger.KeepDays, NetPanelLayout.WindowDays(NetWindow.Quarter));
+    }
+
+    [Fact]
+    public void Every_window_names_a_unit_that_matches_one_of_its_bars()
+    {
+        // The unit belongs to the BAR, not to the window: the hour window draws minutes, so its average is per
+        // minute. It used to read `Today ? perHour : perDay`, which called the hour window's per-minute average
+        // "per day" from the moment that window existed.
+        Assert.Equal("net.avgMinute", NetPanelLayout.UnitKey(NetWindow.Hour));
+        Assert.Equal("net.avgHour", NetPanelLayout.UnitKey(NetWindow.Today));
+        foreach (NetWindow w in System.Enum.GetValues<NetWindow>())
+            Assert.False(string.IsNullOrEmpty(NetPanelLayout.UnitKey(w)), $"{w} has no unit");
+    }
+
+    [Fact]
+    public void The_windows_span_in_bars_agrees_with_its_span_in_days()
+    {
+        // The two tables answer different questions - bars drawn versus days totalled - and the day windows are
+        // the ones where they must agree. Hour and Today are where they legitimately differ, and conflating
+        // them is what made a total in bars-units land in a row labelled in days.
+        foreach (NetWindow w in System.Enum.GetValues<NetWindow>())
+        {
+            if (w is NetWindow.Hour or NetWindow.Today) continue;
+            Assert.Equal(NetPanelLayout.Span(w), NetPanelLayout.WindowDays(w));
+        }
+    }
+
     [Fact]
     public void The_chips_sit_inside_the_panel_and_do_not_overlap()
     {

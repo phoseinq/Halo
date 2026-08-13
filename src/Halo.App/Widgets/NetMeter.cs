@@ -14,6 +14,8 @@ internal sealed class NetMeter
     private bool _on, _upOn;
     private double _quietFor, _upQuietFor;
     private DateOnly _day = DateOnly.FromDateTime(DateTime.Now);
+
+    private DateTime _minute = NetMinutes.MinuteOf(DateTime.Now);
     private long _savedAt;
     private bool _dirty;
 
@@ -107,6 +109,9 @@ internal sealed class NetMeter
             var today = DateOnly.FromDateTime(DateTime.Now);
             if (today != _day) { _day = today; Ledger.Trim(today); _dirty = true; }
 
+            var minute = NetMinutes.MinuteOf(DateTime.Now);
+            if (minute != _minute) { _minute = minute; Minutes.Trim(DateTime.Now); }
+
             long down = 0, up = 0;
             NetLink? busiest = null;
             string? busiestKey = null;
@@ -170,9 +175,12 @@ internal sealed class NetMeter
 
         internal void Flush() => Save(Environment.TickCount64);
 
-        internal void Seed(double down, double up, NetLink link, NetLedger ledger, NetHours? hours = null)
+        internal void Seed(double down, double up, NetLink link, NetLedger ledger, NetHours? hours = null,
+                       NetMinutes? minutes = null)
     {
         if (hours is not null) Hours = hours;
+
+        if (minutes is not null) Minutes = minutes;
 
         _downRate = down;
         _upRate = up;

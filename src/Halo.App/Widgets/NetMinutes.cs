@@ -33,16 +33,35 @@ internal sealed class NetMinutes
         return (down, up);
     }
 
-        internal IReadOnlyList<(DateTime Minute, long Down, long Up)> Series(DateTime now, int minutes)
+    internal (long Down, long Up) Total(DateTime now, int minutes, NetLink? link = null)
     {
-        var list = new List<(DateTime, long, long)>(minutes);
         var newest = MinuteOf(now);
-        for (int i = minutes - 1; i >= 0; i--)
+        var oldest = newest.AddMinutes(-(minutes - 1));
+        long down = 0, up = 0;
+        foreach (var ((minute, l), v) in _minutes)
         {
-            var at = newest.AddMinutes(-i);
-            var v = Minute(at);
-            list.Add((at, v.Down, v.Up));
+            if (minute < oldest || minute > newest) continue;
+            if (link is { } want && l != want) continue;
+            down += v.Down; up += v.Up;
         }
+        return (down, up);
+    }
+
+    internal IReadOnlyList<(DateTime Minute, long Down, long Up)> Series(DateTime now, int minutes)
+    {
+        var newest = MinuteOf(now);
+        var down = new long[minutes];
+        var up = new long[minutes];
+        foreach (var ((minute, _), v) in _minutes)
+        {
+            int back = (int)Math.Round((newest - minute).TotalMinutes);
+            if (back < 0 || back >= minutes) continue;
+            down[minutes - 1 - back] += v.Down;
+            up[minutes - 1 - back] += v.Up;
+        }
+        var list = new List<(DateTime, long, long)>(minutes);
+        for (int i = 0; i < minutes; i++)
+            list.Add((newest.AddMinutes(-(minutes - 1 - i)), down[i], up[i]));
         return list;
     }
 

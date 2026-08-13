@@ -2111,6 +2111,18 @@ internal static class Program
             var oneHour = new Halo.Widgets.NetHours();
             oneHour.Add(nowHour, Halo.Widgets.NetLink.Wifi, 900L * 1024 * 1024, 40L * 1024 * 1024);
 
+            var mins = new Halo.Widgets.NetMinutes();
+            var nowMin = Halo.Widgets.NetMinutes.MinuteOf(DateTime.Now);
+            for (int i = 0; i < 60; i++)
+            {
+
+                long each = i < 12 ? 0 : (i % 7) * 3 + (i > 40 ? 1 : 9);
+                if (each <= 0) continue;
+                mins.Add(nowMin.AddMinutes(i - 59),
+                         i is >= 22 and <= 27 ? Halo.Widgets.NetLink.Lan : Halo.Widgets.NetLink.Wifi,
+                         each * 1024L * 1024, each * 1024L * 80);
+            }
+
             Halo.ClaudeCode.NetMon.SeedNetMs(24);
 
             double[] traceMb = [0.2, 0.3, 0.9, 2.4, 3.1, 2.8, 1.2, 0.6, 0.4, 0.5, 1.9, 4.2, 3.6, 2.1, 0.8, 0.3,
@@ -2125,7 +2137,7 @@ internal static class Program
                 (3.0 * 1024 * 1024, 640 * 1024.0, Halo.Widgets.NetLink.Lan),
             ];
             using var bmp = new System.Drawing.Bitmap(W + pad * 2,
-                speeds.Length * (PillH + pad) + 10 * (PanelH + pad) + pad);
+                speeds.Length * (PillH + pad) + 12 * (PanelH + pad) + pad);
             using (var g = System.Drawing.Graphics.FromImage(bmp))
             {
                 g.Clear(System.Drawing.Color.FromArgb(255, 18, 18, 22));
@@ -2172,12 +2184,15 @@ internal static class Program
                     (young, hours, Halo.Widgets.NetWindow.Week, false, noAim),
 
                     (full, hours, Halo.Widgets.NetWindow.Week, true, noAim),
+
+                    (full, hours, Halo.Widgets.NetWindow.Hour, false, chartAim),
+                    (full, hours, Halo.Widgets.NetWindow.Quarter, false, chartAim),
                 ];
                 foreach (var (led, hrs, win, split, aim) in panels)
                 {
 
                     var panelMeter = new Halo.Widgets.NetMeter();
-                    panelMeter.Seed(1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi, led, hrs);
+                    panelMeter.Seed(1.4 * 1024 * 1024, 220 * 1024.0, Halo.Widgets.NetLink.Wifi, led, hrs, mins);
                     panelMeter.SeedTrace(traceMb.Select(mb => mb * 1024 * 1024));
                     var panel = new Halo.Widgets.NetWidget(panelMeter) { Window = win, SplitOpen = split };
 

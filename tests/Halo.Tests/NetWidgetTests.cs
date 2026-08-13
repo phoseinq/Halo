@@ -222,4 +222,38 @@ public class NetUploadLatchTests
 
         Assert.False(on);
     }
+
+    [Fact]
+    public void Every_window_and_split_pair_asks_for_its_own_frame()
+    {
+        // Version is what tells the controller a redraw is owed, and on an idle link it is the ONLY thing that
+        // does - the rates are 0 and nothing else moves. The split's flag was 0x4000, which is also the window's
+        // own contribution at index 4, so Quarter+closed and Hour+open hashed the same and one of those chip
+        // clicks drew nothing at all. Every pair, so a sixth window colliding fails here.
+        var meter = new NetMeter();
+        meter.Seed(0, 0, NetLink.Wifi, new NetLedger());
+        var seen = new Dictionary<int, string>();
+        foreach (NetWindow w in System.Enum.GetValues<NetWindow>())
+            foreach (bool split in new[] { false, true })
+            {
+                var widget = new NetWidget(meter) { Window = w, SplitOpen = split };
+                string label = $"{w}+{(split ? "split" : "closed")}";
+                Assert.False(seen.TryGetValue(widget.Version, out var clash),
+                             $"{label} hashes the same as {clash}");
+                seen[widget.Version] = label;
+            }
+    }
+
+    [Fact]
+    public void A_pinned_panel_keeps_asking_for_frames_after_the_link_goes_quiet()
+    {
+        // IsActive and Animating have to agree about the pin, or a pinned panel stays on screen with its
+        // reveals frozen: the eases only advance on frames, and with no traffic nothing else requests one.
+        var meter = new NetMeter();
+        meter.Seed(0, 0, NetLink.Wifi, new NetLedger());
+        var widget = new NetWidget(meter) { Pinned = true };
+
+        Assert.True(widget.IsActive);
+        Assert.True(widget.Animating);
+    }
 }

@@ -1,6 +1,6 @@
 # Privacy
 
-**Halo 4.0.9** · Last updated 14 August 2026
+**Halo 4.0.10** · Last updated 14 August 2026
 
 Halo runs entirely on your machine. There is no Halo account, no analytics and no telemetry. Nothing
 that appears in the pill — no notification, no track title, no file name, no coding-session text — is

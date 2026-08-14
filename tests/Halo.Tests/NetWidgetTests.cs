@@ -183,12 +183,60 @@ public class NetLeadInkTests
         => Assert.True(NetWidget.DownLeads(leading: true, down: 0, up: 0));
 }
 
-// Sending is almost never something the machine does on its own, so half a megabit up earns the pill where
-// the same figure coming down is just a page loading.
+// Upload keeps its own latch and its own constant, even though the bar is the same megabit as down today.
+// It was half a megabit, on the reasoning that sending is rarely something the machine does by itself - which
+// is false on a machine with a VPN, whose tunnel idles at 30-95 KB/s up and crossed that bar every few
+// seconds, holding the row on permanently.
 public class NetUploadLatchTests
 {
     [Fact]
-    public void Half_a_megabit_up_turns_it_on_by_itself()
+    public void A_steady_upload_floor_plus_a_small_download_does_not_reach_the_download_bar()
+    {
+        // The machine this was reported from: a VPN holding ~50 KB/s up as its floor while nothing much is
+        // being downloaded. The download latch used to be fed down+up, so the two added to 72 KB and then any
+        // burst tipped the SUM past the 1 Mbit bar - the row appeared claiming a megabit nobody downloaded.
+        const double up = 50 * 1024;    // the VPN's floor, under the upload bar
+        const double down = 22 * 1024;  // nowhere near the 125 KB download bar
+
+        var (onSum, _) = NetRate.Latch(false, down + up, 0, 1.0);   // what it used to ask
+        var (onDown, _) = NetRate.Latch(false, down, 0, 1.0);       // what it asks now
+        var (onUp, _) = NetRate.Latch(false, up, 0, 1.0, NetRate.UpOnBytesPerSec);
+
+        Assert.False(onDown);
+        Assert.False(onUp);
+        // and the sum is not over the bar either at this exact pair - the bug was that it CLIMBED there on a
+        // burst that left the download itself far short, so the guard is that download alone is what is asked
+        Assert.False(onSum);
+
+        // one burst: the download climbs to 80 KB - still well under the 125 KB bar, about two thirds of a
+        // megabit - but added to the upload floor it clears 125 and the row used to appear
+        const double burst = 80 * 1024;
+        Assert.True(NetRate.Latch(false, burst + up, 0, 1.0).On);
+        Assert.False(NetRate.Latch(false, burst, 0, 1.0).On);
+    }
+
+    [Fact]
+    public void An_idle_vpn_tunnels_upload_floor_stays_under_the_bar()
+    {
+        // Measured on the machine this was reported from, over two sampling runs: the tunnel idles between 30
+        // and 95 KB/s up with nothing being sent. The whole point of raising the bar is that its CEILING is
+        // under it, so pin the worst case rather than the average.
+        const double idleCeiling = 95 * 1024;
+        Assert.False(NetRate.Latch(false, idleCeiling, 0, 1.0, NetRate.UpOnBytesPerSec).On);
+    }
+
+    [Fact]
+    public void A_megabit_down_turns_it_on_and_so_does_a_megabit_up()
+    {
+        // The rule, stated once: the two questions are independent and each keeps its own bar.
+        Assert.True(NetRate.Latch(false, NetRate.OnBytesPerSec, 0, 1.0).On);
+        Assert.True(NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0, NetRate.UpOnBytesPerSec).On);
+        Assert.False(NetRate.Latch(false, NetRate.OnBytesPerSec - 1, 0, 1.0).On);
+        Assert.False(NetRate.Latch(false, NetRate.UpOnBytesPerSec - 1, 0, 1.0, NetRate.UpOnBytesPerSec).On);
+    }
+
+    [Fact]
+    public void The_upload_bar_turns_it_on_by_itself()
     {
         var (on, _) = NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0,
                                     NetRate.UpOnBytesPerSec);
@@ -197,11 +245,17 @@ public class NetUploadLatchTests
     }
 
     [Fact]
-    public void That_same_rate_coming_down_is_not_enough_on_the_combined_latch()
+    public void A_full_bars_worth_of_upload_leaves_the_download_latch_alone()
     {
-        var (on, _) = NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0);
+        // This used to assert that the same rate coming DOWN was not enough, which only said "the up bar is
+        // lower than the down one" - and stopped being true the moment both became a megabit. What has to
+        // hold whatever the two numbers are is that they are separate questions: an upload at its own bar
+        // turns the row on through the upload latch and contributes NOTHING to the download one. Feeding
+        // down+up to the download latch is exactly the bug that shipped.
+        double idleDown = 0;
 
-        Assert.False(on);   // 64 KB/s is well under the combined 125 KB/s mark
+        Assert.True(NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0, NetRate.UpOnBytesPerSec).On);
+        Assert.False(NetRate.Latch(false, idleDown, 0, 1.0).On);
     }
 
     [Fact]

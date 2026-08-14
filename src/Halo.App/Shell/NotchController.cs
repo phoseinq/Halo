@@ -1278,7 +1278,7 @@ internal sealed partial class NotchController
         _overFullscreen = fullscreen;
 
         for (int i = 0; i < _widgets.Length; i++)
-            if (_widgets[i] is Widgets.NetWidget nw) nw.Pinned = i == _userPicked;
+            if (_widgets[i] is Widgets.NetWidget nw) { nw.Pinned = i == _userPicked; LogNet(nw, i); }
         var active = fullscreen ? [] : ActiveIndices();
 
         if (!fullscreen)
@@ -3242,6 +3242,34 @@ internal sealed partial class NotchController
     private static readonly string GreetedPath = System.IO.Path.Combine(HaloDir, "greeted");
     private static readonly string VisDebugPath = System.IO.Path.Combine(HaloDir, "vis-debug.txt");
     private static readonly string StripOrderPath = System.IO.Path.Combine(HaloDir, "strip-order.txt");
+
+    private static readonly bool NetDebug = Probe(System.IO.Path.Combine(HaloDir, "net-debug"));
+    private static readonly string NetDebugPath = System.IO.Path.Combine(HaloDir, "net-debug.txt");
+    private long _netLogAt;
+
+    private static bool Probe(string path)
+    {
+        try { return System.IO.File.Exists(path); } catch { return false; }
+    }
+
+    private void LogNet(Widgets.NetWidget nw, int index)
+    {
+        if (!NetDebug) return;
+        long now = Environment.TickCount64;
+        if (now - _netLogAt < 1000) return;
+        _netLogAt = now;
+        try
+        {
+
+            string line = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "{0:HH:mm:ss}  down {1,7:F1}  up {2,7:F1} KB/s   busy={3,-5} pinned={4,-5} active={5,-5} " +
+                "primary={6} picked={7} idx={8}",
+                DateTime.Now, _net.DownRate / 1024.0, _net.UpRate / 1024.0,
+                _net.Busy, nw.Pinned, nw.IsActive, _primary, _userPicked, index);
+            System.IO.File.AppendAllText(NetDebugPath, line + Environment.NewLine);
+        }
+        catch { }
+    }
     private static readonly string SessionOrderPath = System.IO.Path.Combine(HaloDir, "session-order.txt");
     private static readonly string PinPath = System.IO.Path.Combine(HaloDir, "pinned");
 

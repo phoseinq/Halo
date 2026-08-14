@@ -152,7 +152,8 @@ internal sealed class NetMeter
             _upRate = NetRate.Smooth(_upRate, NetRate.PerSecond(up, dt));
 
             Record(_downRate + _upRate);
-            var latch = NetRate.Latch(_on, _downRate + _upRate, _quietFor, dt);
+
+            var latch = NetRate.Latch(_on, _downRate, _quietFor, dt);
             _on = latch.On;
             _quietFor = latch.QuietFor;
             var upLatch = NetRate.Latch(_upOn, _upRate, _upQuietFor, dt,

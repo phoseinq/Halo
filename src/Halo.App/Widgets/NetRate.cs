@@ -28,7 +28,7 @@ internal static class NetRate
         return previous + (sample - previous) * alpha;
     }
 
-    internal const long UpOnBytesPerSec = 65_536;
+    internal const long UpOnBytesPerSec = 125_000;
 
         internal static (bool On, double QuietFor) Latch(bool on, double rate, double quietFor, double dt)
         => Latch(on, rate, quietFor, dt, OnBytesPerSec);

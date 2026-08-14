@@ -50,17 +50,31 @@ internal static class AppIcon
         finally { Halo.Interop.Win32.DestroyIcon(h[0]); }
     }
 
+    internal static bool NameMatches(string aumid, string processName)
+    {
+        if (string.IsNullOrEmpty(aumid) || string.IsNullOrEmpty(processName)) return false;
+        string pn = Trim(processName);
+        if (pn.Length < 3) return false;
+        foreach (string part in aumid.Split(['.', '!', '\\', '/'], StringSplitOptions.RemoveEmptyEntries))
+            if (string.Equals(Trim(part), pn, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static string Trim(string s)
+    {
+        s = s.Trim();
+        if (s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) s = s[..^4];
+        return s;
+    }
+
     private static string? ExeFromAumid(string aumid)
     {
         if (aumid.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(aumid)) return aumid;
-        string key = Path.GetFileNameWithoutExtension(aumid);
         foreach (var p in Process.GetProcesses())
         {
             try
             {
-                string pn = p.ProcessName;
-                if (pn.Length > 1 &&
-                    (aumid.Contains(pn, StringComparison.OrdinalIgnoreCase) || pn.Contains(key, StringComparison.OrdinalIgnoreCase)))
+                if (NameMatches(aumid, p.ProcessName))
                 {
                     var f = p.MainModule?.FileName;
                     if (f != null) return f;

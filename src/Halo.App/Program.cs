@@ -254,7 +254,8 @@ internal static class Program
 
         if (args.Length >= 1 && args[0] == "--cancel-download") { CancelDownload(); return; }
 
-        if (args.Length >= 2 && args[0] == "--probe-icon") { ProbeIcon(args[1]); return; }
+        if (args.Length >= 2 && args[0] == "--probe-icon")
+        { ProbeIcon(args[1], args.Length >= 3 ? args[2] : ""); return; }
 
         if (args.Length >= 1 && args[0] == "--probe-package")
         {
@@ -854,15 +855,37 @@ internal static class Program
         catch (Exception ex) { Console.WriteLine("probe failed: " + ex.Message); }
     }
 
-    private static void ProbeIcon(string aumid)
+    private static void ProbeIcon(string aumid, string app)
     {
         var tmp = System.IO.Path.GetTempPath();
-        var s = Halo.Notifications.ShellIcon.ForAumid(aumid);
-        Console.WriteLine($"ShellIcon: {(s == null ? "NULL" : $"{s.Width}x{s.Height} -> probe_shell.png")}");
-        s?.Save(System.IO.Path.Combine(tmp, "probe_shell.png"));
-        var a = Halo.Widgets.AppIcon.ForAumid(aumid);
-        Console.WriteLine($"AppIcon:   {(a == null ? "NULL" : $"{a.Width}x{a.Height} -> probe_app.png")}");
-        a?.Save(System.IO.Path.Combine(tmp, "probe_app.png"));
+
+        static void Show(string label, System.Drawing.Bitmap? b, string file, string tmpDir)
+        {
+            Console.WriteLine($"{label,-22} {(b == null ? "NULL" : $"{b.Width}x{b.Height} -> {file}")}");
+            b?.Save(System.IO.Path.Combine(tmpDir, file));
+        }
+
+        Show("1 ShellIcon.ForAumid", Halo.Notifications.ShellIcon.ForAumid(aumid), "probe_shell.png", tmp);
+
+        string picked = "(no running process matches)";
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                if (Halo.Widgets.AppIcon.NameMatches(aumid, p.ProcessName))
+                { picked = $"{p.ProcessName} -> {p.MainModule?.FileName}"; break; }
+            }
+            catch { }
+            finally { p.Dispose(); }
+        }
+        Console.WriteLine($"  matched process:     {picked}");
+        Show("2 AppIcon.ForAumid", Halo.Widgets.AppIcon.ForAumid(aumid), "probe_app.png", tmp);
+
+        Console.WriteLine("3 toast's own logo     (needs a live toast - not reachable from a probe)");
+        Show("4 ShellIcon.ForAppName", app.Length == 0 ? null : Halo.Notifications.ShellIcon.ForAppName(app),
+             "probe_name.png", tmp);
+        if (app.Length == 0)
+            Console.WriteLine("  (pass the toast's display name as a second argument to test tier 4)");
     }
 
     private static void RenderPill(string outPath)

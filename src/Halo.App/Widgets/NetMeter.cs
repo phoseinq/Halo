@@ -11,8 +11,8 @@ internal sealed class NetMeter
     private readonly Dictionary<string, (long Down, long Up)> _last = new();
     private long _stamp;
     private double _downRate, _upRate;
-    private bool _on, _upOn;
-    private double _quietFor, _upQuietFor;
+    private bool _on;
+    private double _quietFor;
     private DateOnly _day = DateOnly.FromDateTime(DateTime.Now);
 
     private DateTime _minute = NetMinutes.MinuteOf(DateTime.Now);
@@ -24,7 +24,7 @@ internal sealed class NetMeter
         internal double DownRate => _downRate;
     internal double UpRate => _upRate;
 
-    internal bool Busy => _on || _upOn;
+    internal bool Busy => _on;
 
         internal NetLink? Link { get; private set; }
 
@@ -153,13 +153,9 @@ internal sealed class NetMeter
 
             Record(_downRate + _upRate);
 
-            var latch = NetRate.Latch(_on, _downRate, _quietFor, dt);
+            var latch = NetRate.Latch(_on, _downRate + _upRate, _quietFor, dt);
             _on = latch.On;
             _quietFor = latch.QuietFor;
-            var upLatch = NetRate.Latch(_upOn, _upRate, _upQuietFor, dt,
-                                        NetRate.UpOnBytesPerSec);
-            _upOn = upLatch.On;
-            _upQuietFor = upLatch.QuietFor;
             if (busiest is not null) Link = busiest;
 
             if (busiestKey is not null && _meta.TryGetValue(busiestKey, out var m))

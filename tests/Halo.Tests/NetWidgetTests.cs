@@ -183,86 +183,67 @@ public class NetLeadInkTests
         => Assert.True(NetWidget.DownLeads(leading: true, down: 0, up: 0));
 }
 
-// Upload keeps its own latch and its own constant, even though the bar is the same megabit as down today.
-// It was half a megabit, on the reasoning that sending is rarely something the machine does by itself - which
-// is false on a machine with a VPN, whose tunnel idles at 30-95 KB/s up and crossed that bar every few
-// seconds, holding the row on permanently.
-public class NetUploadLatchTests
+// One latch, fed the SUM of the two directions, against a single 1 Mbit mark.
+//
+// The rule the user settled on is "a megabit down, or a megabit up, or a megabit between them", and the third
+// clause swallows the other two: a direction over the mark on its own has already put the sum over it. So the
+// set is the sum's, and testing the sum is testing all three - which is why there is no per-direction latch
+// left to test.
+//
+// This IS the arithmetic an earlier fix moved away from, so the reason it was wrong then has to stay written
+// down or it comes back. The fault was never the sum: it was the separate upload bar underneath it, at half a
+// megabit, which a VPN tunnel idling at 30-95 KB/s up tripped by itself every few seconds. One mark at a
+// megabit, and that floor sums to well under it.
+public class NetSumLatchTests
 {
+    // The measured idle floor of the machine every one of these reports came from, worst case on both
+    // directions at once. It has to sum to under the mark, or the row is permanent again.
+    private const double IdleUpCeiling = 95 * 1024;
+    private const double IdleDownCeiling = 22 * 1024;
+
     [Fact]
-    public void A_steady_upload_floor_plus_a_small_download_does_not_reach_the_download_bar()
+    public void An_idle_vpn_tunnel_in_both_directions_stays_under_the_mark()
     {
-        // The machine this was reported from: a VPN holding ~50 KB/s up as its floor while nothing much is
-        // being downloaded. The download latch used to be fed down+up, so the two added to 72 KB and then any
-        // burst tipped the SUM past the 1 Mbit bar - the row appeared claiming a megabit nobody downloaded.
-        const double up = 50 * 1024;    // the VPN's floor, under the upload bar
-        const double down = 22 * 1024;  // nowhere near the 125 KB download bar
-
-        var (onSum, _) = NetRate.Latch(false, down + up, 0, 1.0);   // what it used to ask
-        var (onDown, _) = NetRate.Latch(false, down, 0, 1.0);       // what it asks now
-        var (onUp, _) = NetRate.Latch(false, up, 0, 1.0, NetRate.UpOnBytesPerSec);
-
-        Assert.False(onDown);
-        Assert.False(onUp);
-        // and the sum is not over the bar either at this exact pair - the bug was that it CLIMBED there on a
-        // burst that left the download itself far short, so the guard is that download alone is what is asked
-        Assert.False(onSum);
-
-        // one burst: the download climbs to 80 KB - still well under the 125 KB bar, about two thirds of a
-        // megabit - but added to the upload floor it clears 125 and the row used to appear
-        const double burst = 80 * 1024;
-        Assert.True(NetRate.Latch(false, burst + up, 0, 1.0).On);
-        Assert.False(NetRate.Latch(false, burst, 0, 1.0).On);
+        Assert.True(IdleUpCeiling + IdleDownCeiling < NetRate.OnBytesPerSec,
+            $"the measured floor sums to {(IdleUpCeiling + IdleDownCeiling) / 1024:F0} KB/s, "
+            + $"and the mark is {NetRate.OnBytesPerSec / 1024:F0} KB/s");
+        Assert.False(NetRate.Latch(false, IdleDownCeiling + IdleUpCeiling, 0, 1.0).On);
     }
 
     [Fact]
-    public void An_idle_vpn_tunnels_upload_floor_stays_under_the_bar()
+    public void Two_directions_that_are_each_short_of_the_mark_can_still_reach_it_together()
     {
-        // Measured on the machine this was reported from, over two sampling runs: the tunnel idles between 30
-        // and 95 KB/s up with nothing being sent. The whole point of raising the bar is that its CEILING is
-        // under it, so pin the worst case rather than the average.
-        const double idleCeiling = 95 * 1024;
-        Assert.False(NetRate.Latch(false, idleCeiling, 0, 1.0, NetRate.UpOnBytesPerSec).On);
+        // The clause that made this change worth making: 80 KB down and 60 KB up is neither a megabit
+        // downloaded nor a megabit uploaded, but the link is carrying more than a megabit and the row is the
+        // thing that says so.
+        const double down = 80 * 1024, up = 60 * 1024;
+
+        Assert.False(down >= NetRate.OnBytesPerSec);
+        Assert.False(up >= NetRate.OnBytesPerSec);
+        Assert.True(NetRate.Latch(false, down + up, 0, 1.0).On);
     }
 
     [Fact]
-    public void A_megabit_down_turns_it_on_and_so_does_a_megabit_up()
+    public void Either_direction_alone_over_the_mark_is_enough()
     {
-        // The rule, stated once: the two questions are independent and each keeps its own bar.
+        // Not a separate rule - a consequence of the sum being what is asked. Pinned because it is the part of
+        // the user's sentence that a sum-only implementation has to keep satisfying.
+        Assert.True(NetRate.Latch(false, NetRate.OnBytesPerSec + 0, 0, 1.0).On);          // all of it down
+        Assert.True(NetRate.Latch(false, 0 + NetRate.OnBytesPerSec, 0, 1.0).On);          // all of it up
+        Assert.True(NetRate.Latch(false, NetRate.OnBytesPerSec * 2, 0, 1.0).On);          // a megabit each way
+    }
+
+    [Fact]
+    public void The_mark_itself_is_on_and_one_byte_under_it_is_off()
+    {
         Assert.True(NetRate.Latch(false, NetRate.OnBytesPerSec, 0, 1.0).On);
-        Assert.True(NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0, NetRate.UpOnBytesPerSec).On);
         Assert.False(NetRate.Latch(false, NetRate.OnBytesPerSec - 1, 0, 1.0).On);
-        Assert.False(NetRate.Latch(false, NetRate.UpOnBytesPerSec - 1, 0, 1.0, NetRate.UpOnBytesPerSec).On);
-    }
-
-    [Fact]
-    public void The_upload_bar_turns_it_on_by_itself()
-    {
-        var (on, _) = NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0,
-                                    NetRate.UpOnBytesPerSec);
-
-        Assert.True(on);
-    }
-
-    [Fact]
-    public void A_full_bars_worth_of_upload_leaves_the_download_latch_alone()
-    {
-        // This used to assert that the same rate coming DOWN was not enough, which only said "the up bar is
-        // lower than the down one" - and stopped being true the moment both became a megabit. What has to
-        // hold whatever the two numbers are is that they are separate questions: an upload at its own bar
-        // turns the row on through the upload latch and contributes NOTHING to the download one. Feeding
-        // down+up to the download latch is exactly the bug that shipped.
-        double idleDown = 0;
-
-        Assert.True(NetRate.Latch(false, NetRate.UpOnBytesPerSec, 0, 1.0, NetRate.UpOnBytesPerSec).On);
-        Assert.False(NetRate.Latch(false, idleDown, 0, 1.0).On);
     }
 
     [Fact]
     public void It_holds_through_a_brief_gap_rather_than_flickering()
     {
-        var (on, quiet) = NetRate.Latch(true, 1_000, 0, 1.0,
-                                        NetRate.UpOnBytesPerSec);
+        var (on, quiet) = NetRate.Latch(true, 1_000, 0, 1.0);
 
         Assert.True(on);
         Assert.Equal(1.0, quiet);
@@ -271,12 +252,27 @@ public class NetUploadLatchTests
     [Fact]
     public void It_goes_off_once_the_hold_has_run_out()
     {
-        var (on, _) = NetRate.Latch(true, 1_000, NetRate.OffHoldSeconds, 1.0,
-                                    NetRate.UpOnBytesPerSec);
+        var (on, _) = NetRate.Latch(true, 1_000, NetRate.OffHoldSeconds, 1.0);
 
         Assert.False(on);
     }
 
+    [Fact]
+    public void One_sample_back_over_the_mark_puts_the_hold_back_to_zero()
+    {
+        // The hold is the whole of the hysteresis now, so the thing that makes it work has to be pinned: a
+        // download that dips for two seconds and resumes must not be two seconds closer to vanishing.
+        var (on, quiet) = NetRate.Latch(true, NetRate.OnBytesPerSec, 2.5, 1.0);
+
+        Assert.True(on);
+        Assert.Equal(0, quiet);
+    }
+}
+
+// When the widget asks the controller for a redraw. These were parked in the latch class because that is where
+// the file happened to end; nothing in them is about a threshold.
+public class NetWidgetFrameTests
+{
     [Fact]
     public void Every_window_and_split_pair_asks_for_its_own_frame()
     {

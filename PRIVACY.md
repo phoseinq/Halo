@@ -1,6 +1,6 @@
 # Privacy
 
-**Halo 3.8.1** · Last updated 5 August 2026
+**Halo 4.0.9** · Last updated 14 August 2026
 
 Halo runs entirely on your machine. There is no Halo account, no analytics and no telemetry. Nothing
 that appears in the pill — no notification, no track title, no file name, no coding-session text — is
@@ -46,6 +46,8 @@ All of it stays on your machine.
 | Coding-session state | the Claude Code / Codex panels | JSON files those tools' own hooks write under `~/.claude/notch`, `~/.codex/notch` and `~/.halo/agents` |
 | Paths of files you drag onto the pill | the file tray | you dragged them there. Only the paths are kept, never the contents |
 | Which window is in front | so the pill can follow the app you're using | Windows' foreground-window API. Only the process id is used |
+| How many bytes each network adapter has carried | the network panel | Windows' own per-adapter counters (`NetworkInterface.GetIPStatistics`). **Totals only** - see the note below |
+| Your adapter's name, link speed and local address | the network panel's foot line | Windows' own adapter properties. The local address is the private one your router handed out (`192.168.x.x`), it is held in memory only, and it is never written to disk or sent anywhere |
 | Your device's location | the weather on the hourly banner | Windows' own location service — **only if location is switched on and Halo is allowed to use it**. If it is off, or Halo is denied, Halo never asks again and falls back to your timezone's city |
 
 ---
@@ -63,6 +65,12 @@ configuration file so its panels can work at all.
 - `banner-orig.tsv` — **each app's original Windows banner setting before Halo changed it** (see below)
 - `limit-fired.txt`, `usage-cache.json`, `codex-limits-cache.json` — which alerts have fired, and the last usage numbers
 - `downloaders.tsv` — download bookkeeping
+- `net-usage.tsv`, `net-hours.tsv` — how much your connection carried, by day for 90 days and by hour for
+  the last 24. One line per period, and the whole of a line is a date, `wifi` or `lan`, and two byte counts:
+  `2026-08-14	wifi	286879938	404889535`. Older lines are deleted as they age out
+- `greeted`, `session-order.txt`, `strip-order.txt`, `compact-tokens`, `panel-request` — small bookkeeping:
+  whether you have been greeted this sign-in, the order you last put things in, and a one-shot marker Halo
+  writes when *you* ask for the settings window, so a window Windows restored by itself can tell it did not
 - `fps`, `shape` — two small files the pill writes so the settings window, which is a separate program,
   can say what the pill measured and which panel was in front. `shape` holds class names and true/false —
   `MediaWidget`, `expanded=0` — never what a panel was showing
@@ -72,9 +80,12 @@ configuration file so its panels can work at all.
   again on every relaunch. It holds hashes and timestamps, never the text it was made from
 - `hooks-connect.txt` — one line per agent recording that Halo connected it, or that you disconnected it.
   The second is what stops Halo ever offering again
-- `*-debug.txt` — local diagnostics, off unless you ask for them. `hooks-debug.txt` only appears while a
-  file named `hooks-debug.on` sits beside it, and records which agent was seen and which check stopped a
-  connection — never anything from your prompts or your code
+- `*-debug.txt` — local diagnostics, off unless you ask for them. Each needs its own marker file beside it
+  before it writes anything: `hooks-debug.txt` needs `hooks-debug.on` and records which agent was seen and
+  which check stopped a connection; `net-debug.txt` needs `net-debug` and records the two speeds and whether
+  the row was showing. Never anything from your prompts, your code, or what you were connecting to
+- `launch-debug.txt` — one line per launch of the pill or the settings window, recording that it happened
+  and whether anybody asked for it. It is what proves the settings window is not opening itself
 
 The diagnostics are worth being specific about, because they concern your notifications:
 `notif-debug.txt` records **which app** sent a notification and **how many characters** its title and
@@ -85,6 +96,23 @@ body had — never the text. A line looks like this, and that is the whole of it
 ```
 
 None of these files are ever transmitted anywhere on their own.
+
+### The network panel sees how much, never what
+
+This is the one place where writing down what Halo *cannot* see matters more than what it can, because
+"an app that watches my connection" is a reasonable thing to be uneasy about.
+
+Halo reads the same cumulative byte counters Task Manager reads, off each adapter, once a second. That is the
+entire mechanism. There is **no packet capture, no proxy, no filter driver, no DNS logging and no WMI or ETW
+tracing** — the API it uses (`NetworkInterface.GetIPStatistics`) can only return totals, so the panel is not
+choosing to ignore the rest, it never has it.
+
+So the panel can tell you 2.3 GB moved over wi-fi today. It cannot tell you — and neither can the files above,
+because the number is all there is — **which sites, which apps, which addresses, or what was in any of it.**
+
+The one thing that is not just a total is the adapter's own description: its name, its negotiated link speed,
+and the private address your own router gave it. Those sit in memory for the panel's foot line and are written
+to no file.
 
 ### The one file Halo changes that is not its own
 

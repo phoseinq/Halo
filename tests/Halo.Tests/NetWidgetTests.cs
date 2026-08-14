@@ -183,17 +183,16 @@ public class NetLeadInkTests
         => Assert.True(NetWidget.DownLeads(leading: true, down: 0, up: 0));
 }
 
-// One latch, fed the SUM of the two directions, against a single 1 Mbit mark.
+// One latch, fed the SUM of the two directions, against a single one-megabyte mark.
 //
-// The rule the user settled on is "a megabit down, or a megabit up, or a megabit between them", and the third
-// clause swallows the other two: a direction over the mark on its own has already put the sum over it. So the
-// set is the sum's, and testing the sum is testing all three - which is why there is no per-direction latch
-// left to test.
+// The rule the user settled on is "a megabyte down, or a megabyte up, or a megabyte between them", and the
+// third clause swallows the other two: a direction over the mark on its own has already put the sum over it.
+// So the set is the sum's, and testing the sum is testing all three - which is why there is no per-direction
+// latch left to test.
 //
-// This IS the arithmetic an earlier fix moved away from, so the reason it was wrong then has to stay written
-// down or it comes back. The fault was never the sum: it was the separate upload bar underneath it, at half a
-// megabit, which a VPN tunnel idling at 30-95 KB/s up tripped by itself every few seconds. One mark at a
-// megabit, and that floor sums to well under it.
+// The mark was a megabit for several rounds and the row kept appearing over traffic the user did not count as
+// traffic. That is the number these tests exist to hold down: a megabit is 122 KB, which this machine's idle
+// VPN floor brushes on its own, and a megabyte is eight times further away than anything incidental gets.
 public class NetSumLatchTests
 {
     // The measured idle floor of the machine every one of these reports came from, worst case on both
@@ -213,10 +212,10 @@ public class NetSumLatchTests
     [Fact]
     public void Two_directions_that_are_each_short_of_the_mark_can_still_reach_it_together()
     {
-        // The clause that made this change worth making: 80 KB down and 60 KB up is neither a megabit
-        // downloaded nor a megabit uploaded, but the link is carrying more than a megabit and the row is the
+        // The clause that made this change worth making: 600 KB down and 500 KB up is neither a megabyte
+        // downloaded nor a megabyte uploaded, but the link is carrying more than a megabyte and the row is the
         // thing that says so.
-        const double down = 80 * 1024, up = 60 * 1024;
+        const double down = 600_000, up = 500_000;
 
         Assert.False(down >= NetRate.OnBytesPerSec);
         Assert.False(up >= NetRate.OnBytesPerSec);

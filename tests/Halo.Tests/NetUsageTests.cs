@@ -50,7 +50,7 @@ public class NetRateTests
 
     // One threshold makes the pill flicker in and out on every sample while a download sits near the line.
     [Fact]
-    public void It_comes_on_at_one_megabit()
+    public void It_comes_on_at_one_megabyte()
     {
         Assert.True(NetRate.Latch(on: false, rate: NetRate.OnBytesPerSec, quietFor: 0, dt: 1).On);
         Assert.False(NetRate.Latch(on: false, rate: NetRate.OnBytesPerSec - 1, quietFor: 0, dt: 1).On);

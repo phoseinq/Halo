@@ -5,7 +5,7 @@ namespace Halo.Widgets;
 internal static class NetRate
 {
 
-    internal const long OnBytesPerSec = 125_000;
+    internal const long OnBytesPerSec = 1_000_000;
 
     internal const double OffHoldSeconds = 3.0;
 

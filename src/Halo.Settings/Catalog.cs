@@ -164,9 +164,11 @@ internal static class Catalog
 
             new(S("connection"), "\uE703", [
 
-                new("hooks.claude", L("hooks.claude"), D("hooks.claude"),
+                new("hooks.claude", L("hooks.claude"),
+                    D("hooks.claude" + (Halo.Interop.AppModel.IsPackaged ? ".packaged" : "")),
                     RowKind.Status, "", [], "Disconnect"),
-                new("hooks.codex", L("hooks.codex"), D("hooks.codex"),
+                new("hooks.codex", L("hooks.codex"),
+                    D("hooks.codex" + (Halo.Interop.AppModel.IsPackaged ? ".packaged" : "")),
                     RowKind.Status, "", [], "Disconnect"),
             ]),
             new(S("questions"), "\uE9CE", [

@@ -55,11 +55,24 @@ internal static class CodexHookInstaller
 
         var settings = Load(settingsPath);
         if (settings["hooks"] is JsonObject hooks)
+        {
             RemoveManagedHandlers(hooks);
+            PruneEmptyManagedEvents(settings, hooks);
+        }
         else if (settings["hooks"] is not null)
             throw new JsonException("The Codex hooks property must be an object.");
 
         Save(settingsPath, settings, createBackup: false);
+    }
+
+    private static void PruneEmptyManagedEvents(JsonObject settings, JsonObject hooks)
+    {
+        foreach (var managed in ManagedHooks)
+            if (hooks[managed.Event] is JsonArray entries && entries.Count == 0)
+                hooks.Remove(managed.Event);
+
+        if (hooks.Count == 0)
+            settings.Remove("hooks");
     }
 
     internal static bool IsInstalled(string settingsPath, string? ownExe = null)

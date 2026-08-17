@@ -1,6 +1,7 @@
 extern alias hooksasm;
 using System;
 using System.IO;
+using System.Text.Json.Nodes;
 using hooksasm::Halo.Hooks;
 using Xunit;
 
@@ -69,5 +70,28 @@ public class CodexHookInstallerTests : IDisposable
         CodexHookInstaller.Uninstall(Settings);
 
         Assert.DoesNotContain("Halo.Hooks.exe", File.ReadAllText(Settings));
+    }
+
+    // The twin of the Claude pruning tests. Both Uninstalls emptied the event arrays and left the keys, and
+    // there is no reason for the two files to disagree about what "put it back" means.
+    [Fact]
+    public void Uninstall_leaves_behind_no_hooks_key_it_created_itself()
+    {
+        CodexHookInstaller.Install(Settings, _exe);
+        CodexHookInstaller.Uninstall(Settings);
+
+        Assert.Null(((JsonObject)JsonNode.Parse(File.ReadAllText(Settings))!)["hooks"]);
+    }
+
+    [Fact]
+    public void Uninstall_keeps_an_event_Halo_never_managed()
+    {
+        File.WriteAllText(Settings, """{ "hooks": { "SessionEnd": [] } }""");
+        CodexHookInstaller.Install(Settings, _exe);
+        CodexHookInstaller.Uninstall(Settings);
+
+        var hooks = Assert.IsType<JsonObject>(((JsonObject)JsonNode.Parse(File.ReadAllText(Settings))!)["hooks"]);
+        Assert.NotNull(hooks["SessionEnd"]);
+        Assert.Null(hooks["Stop"]);
     }
 }

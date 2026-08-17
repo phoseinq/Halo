@@ -130,6 +130,35 @@ public class ClaudeHookInstallerTests : IDisposable
         Assert.Contains("mine.exe", stop[0]);
     }
 
+    // Removing the handlers is not the whole of putting the file back. Install creates the "hooks" object and
+    // nine event arrays; uninstall emptied the arrays and left all ten keys sitting in the user's config
+    // forever, on a machine where Halo no longer exists. Harmless to the agent, still not what was found.
+    [Fact]
+    public void Uninstall_leaves_behind_no_hooks_key_it_created_itself()
+    {
+        File.WriteAllText(Settings, """{ "model": "opus" }""");
+        ClaudeHookInstaller.Install(Settings, _exe);
+        ClaudeHookInstaller.Uninstall(Settings);
+
+        var settings = Read();
+        Assert.Null(settings["hooks"]);
+        Assert.Equal("opus", (string?)settings["model"]);   // and it did not take anything else with it
+    }
+
+    // The pruning has to be able to tell "empty because Halo just emptied it" from "empty, and not Halo's
+    // business". An unmanaged event is the user's, even when it holds nothing.
+    [Fact]
+    public void Uninstall_keeps_an_event_Halo_never_managed()
+    {
+        File.WriteAllText(Settings, """{ "hooks": { "SubagentStop": [] } }""");
+        ClaudeHookInstaller.Install(Settings, _exe);
+        ClaudeHookInstaller.Uninstall(Settings);
+
+        var hooks = Assert.IsType<JsonObject>(Read()["hooks"]);
+        Assert.NotNull(hooks["SubagentStop"]);
+        Assert.Null(hooks["Stop"]);
+    }
+
     [Fact]
     public void A_backup_is_left_where_the_docs_have_always_said()
     {

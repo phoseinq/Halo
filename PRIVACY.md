@@ -1,6 +1,6 @@
 # Privacy
 
-**Halo 4.1.0** · Last updated 15 August 2026
+**Halo 4.1.0** · Last updated 17 August 2026
 
 Halo runs entirely on your machine. There is no Halo account, no analytics and no telemetry. Nothing
 that appears in the pill — no notification, no track title, no file name, no coding-session text — is
@@ -27,7 +27,9 @@ holds.
 - Nothing is transmitted without you pressing something, unless you switch on **Send crashes without
   asking** — which is off until you turn it on, and covers crash reports only.
 - There is no retry queue and no scheduled task that sends anything.
-- Uninstalling removes everything Halo stored, and puts back the one Windows setting it changes.
+- Uninstalling the `.exe` build removes everything Halo stored and puts back the one Windows setting it
+  changes. **The Store build cannot** — Windows runs no code belonging to a packaged app when it removes
+  one — so there, press **Reset everything** in Access first. Spelled out under *Keeping data* below.
 
 ---
 
@@ -214,8 +216,9 @@ identifier that would let two reports be recognised as coming from the same mach
 ### How long reports are kept
 
 The newest ten, up to 2 MB in total — whichever limit is reached first — and then the oldest are deleted.
-You can delete any of them at any time; they are ordinary files in a folder you own. **Uninstalling Halo
-deletes the folder.**
+You can delete any of them at any time; they are ordinary files in a folder you own. **Uninstalling the
+`.exe` build deletes them; the Store build cannot, so use Reset everything first** — see *Keeping data*
+below.
 
 ---
 
@@ -231,8 +234,10 @@ It writes down each app's **original** value first, and the change is fully reve
 Halo.App.exe --restore-notifications
 ```
 
-The uninstaller runs that for you, so removing Halo puts every app's notifications back the way it
-found them.
+You are not expected to run it. Halo puts every app's banner back **when it exits** — quitting, signing
+out or shutting down — and the `.exe` build's uninstaller runs the command above as well. This is the one
+thing on this page that survives the Store having no uninstall step, and it is why quitting Halo before
+removing it is enough for your notifications.
 
 ---
 
@@ -335,7 +340,7 @@ switch.
 | Send no reports | send none. Nothing is sent unless you press send. Leave **Send crashes without asking** off — it ships off — and that stays true of crashes too |
 | Have a crash reported without being asked each time | Settings → Docs & About → Problems → **Send crashes without asking** |
 | Have a report deleted after you sent it | [open an issue](https://github.com/phoseinq/Halo/issues) or ask, quoting roughly when you sent it. There is no account to look you up by, so the time is what finds it |
-| Delete everything Halo knows | delete `%LOCALAPPDATA%\Halo\`, or uninstall |
+| Delete everything Halo knows | Settings → Access → Removal → **Reset everything**; or delete `%LOCALAPPDATA%\Halo\` yourself; or uninstall the `.exe` build, which deletes it for you. Removing the Store build does not |
 
 ## Keeping data, and getting rid of it
 
@@ -343,8 +348,20 @@ Everything Halo stores is a file on your own disk, in one folder, and you can de
 time. Bug reports are capped at ten files or 2 MB; the rest is small bookkeeping that is overwritten as
 it changes.
 
-**Uninstalling** deletes `%LOCALAPPDATA%\Halo\`, including any reports you never sent, and restores the
-Windows notification setting described above for every app Halo changed.
+**Reset everything**, under Settings → Access → Removal, is the one action that does all of it: every
+app's notification banner back, any report you never sent deleted, both agents' hooks taken out of their
+config files, and Halo's stored state removed. It works the same on either build, and it is the thing to
+press before you remove Halo.
+
+**Uninstalling the `.exe` build** does the same four things and then deletes `%LOCALAPPDATA%\Halo\`
+outright, so nothing Halo wrote is left: the notification setting back, unsent reports gone, the logon task
+gone, both agents' hooks out of their config files, and the folder itself removed. Upgrading is not
+uninstalling and never triggers that, so your position and settings survive a new version.
+
+**The Store build cannot do any of it.** Windows runs no code belonging to a packaged app when it removes
+one, so removing it that way leaves the reports, the state folder and the agent hooks where they are — which
+is what **Reset everything** is for. Notifications are the one exception, because Halo puts those back when
+it exits rather than when it is uninstalled.
 
 **A report you actually sent** also exists on the intake, and deleting your local copy does not remove
 that one. It holds no name, account or device identifier, so there is nothing to look you up by — ask

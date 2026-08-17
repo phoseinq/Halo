@@ -322,6 +322,26 @@ public class StringsTests
         Assert.True(missing.Count == 0, "no string for: " + string.Join(", ", missing));
     }
 
+    // The walk above cannot reach any of these. Catalog picks between a plain description and a packaged one
+    // on AppModel.IsPackaged, a test host is never packaged (SharedTypeTests pins that), and the row is
+    // covered as soon as its unpackaged key resolves - so a packaged variant could be missing, or misspelled
+    // at either end, and every test would still pass while a Store user read "settings.hooks.claude.packaged"
+    // off their own settings window. By name is the only way in. A new packaged branch in Catalog means a new
+    // line here, and that cost is the point.
+    [Theory]
+    [InlineData("settings.notifications.silence.packaged.desc")]
+    [InlineData("settings.access.startup.packaged.desc")]
+    [InlineData("settings.access.startup.task.desc")]
+    [InlineData("settings.access.startup.action.packaged")]
+    [InlineData("settings.access.startup.action.task")]
+    [InlineData("settings.hooks.claude.packaged.desc")]
+    [InlineData("settings.hooks.codex.packaged.desc")]
+    public void Every_string_only_one_packaging_shape_asks_for_exists(string key)
+    {
+        settingsasm::Halo.Localization.Strings.Use("English");
+        Assert.NotEqual(key, settingsasm::Halo.Localization.Strings.Get(key));
+    }
+
     // The keys are what settings.json is written with. A locale file that "translated" one would rename a
     // setting, so nothing may ever look one up by a localized name.
     [Fact]

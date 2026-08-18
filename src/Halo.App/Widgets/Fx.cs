@@ -14,6 +14,28 @@ internal static class Fx
     private static bool NeedsFilling(Font font, Brush brush)
         => font.Size < 15f || (brush is SolidBrush sb && sb.Color.A < 235);
 
+    private const string EmojiFace = "Segoe UI Emoji";
+
+    private static bool HasEmoji(string s)
+    {
+        for (int i = 0; i < s.Length; i++)
+            if (char.IsHighSurrogate(s[i]) || s[i] == '\uFE0F') return true;
+        return false;
+    }
+
+    internal static List<(int Start, int Length)> EmojiRuns(string s)
+    {
+        var runs = new List<(int, int)>();
+        if (string.IsNullOrEmpty(s)) return runs;
+        var e = System.Globalization.StringInfo.GetTextElementEnumerator(s);
+        while (e.MoveNext())
+        {
+            string el = (string)e.Current;
+            if (HasEmoji(el)) runs.Add((e.ElementIndex, el.Length));
+        }
+        return runs;
+    }
+
     public static void Text(Graphics g, string s, Font font, Brush brush, float x, float y)
     {
         g.DrawString(s, font, brush, x, y);
@@ -28,8 +50,111 @@ internal static class Fx
 
     public static void Text(Graphics g, string s, Font font, Brush brush, RectangleF layout, StringFormat fmt)
     {
+        if (HasEmoji(s)) { EmojiText(g, s, font, brush, layout, fmt); return; }
+        Plain(g, s, font, brush, layout, fmt);
+    }
+
+    private static void Plain(Graphics g, string s, Font font, Brush brush, RectangleF layout, StringFormat fmt)
+    {
         g.DrawString(s, font, brush, layout, fmt);
         if (NeedsFilling(font, brush)) g.DrawString(s, font, brush, layout, fmt);
+    }
+
+    private static void EmojiText(Graphics g, string s, Font font, Brush brush, RectangleF layout,
+                                  StringFormat fmt)
+    {
+        var runs = EmojiRuns(s);
+        if (runs.Count == 0) { Plain(g, s, font, brush, layout, fmt); return; }
+
+        float spaceW;
+        try
+        {
+            spaceW = g.MeasureString("a a", font, 999, StringFormat.GenericTypographic).Width
+                   - g.MeasureString("aa", font, 999, StringFormat.GenericTypographic).Width;
+        }
+        catch { Plain(g, s, font, brush, layout, fmt); return; }
+        if (spaceW <= 0.05f) { Plain(g, s, font, brush, layout, fmt); return; }
+
+        var ef = EmojiFont(font);
+        if (ef is null) { Plain(g, s, font, brush, layout, fmt); return; }
+
+        try
+        {
+            var sb = new System.Text.StringBuilder(s.Length + runs.Count * 4);
+            var gaps = new List<(int Start, int Length, string Glyph)>(runs.Count);
+            int prev = 0;
+            foreach (var (start, len) in runs)
+            {
+                sb.Append(s, prev, start - prev);
+                string glyph = s.Substring(start, len);
+                float need;
+                try { need = g.MeasureString(glyph, ef, 999, StringFormat.GenericTypographic).Width; }
+                catch { need = spaceW; }
+
+                int n = Math.Max(1, (int)MathF.Round(need / spaceW));
+                gaps.Add((sb.Length, n, glyph));
+                sb.Append(' ', n);
+                prev = start + len;
+            }
+            sb.Append(s, prev, s.Length - prev);
+            string disp = sb.ToString();
+
+            Plain(g, disp, font, brush, layout, fmt);
+
+            if (gaps.Count > 32) return;
+            RectangleF[] cells;
+            using (var mf = new StringFormat(fmt))
+            {
+
+                mf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+                var ranges = new CharacterRange[gaps.Count];
+                for (int i = 0; i < gaps.Count; i++) ranges[i] = new CharacterRange(gaps[i].Start, gaps[i].Length);
+                mf.SetMeasurableCharacterRanges(ranges);
+                var regions = g.MeasureCharacterRanges(disp, font, layout, mf);
+                cells = new RectangleF[regions.Length];
+                for (int i = 0; i < regions.Length; i++)
+                {
+                    cells[i] = regions[i].GetBounds(g);
+                    regions[i].Dispose();
+                }
+            }
+
+            using var cf = new StringFormat(StringFormat.GenericTypographic)
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip,
+            };
+            for (int i = 0; i < cells.Length && i < gaps.Count; i++)
+            {
+
+                if (cells[i].Width <= 0.5f || cells[i].Height <= 0.5f) continue;
+
+                g.DrawString(gaps[i].Glyph, ef, brush, cells[i], cf);
+                if (NeedsFilling(ef, brush)) g.DrawString(gaps[i].Glyph, ef, brush, cells[i], cf);
+            }
+        }
+        catch { }
+    }
+
+    [ThreadStatic] private static Dictionary<(float, FontStyle, GraphicsUnit), Font?>? _emojiFonts;
+
+    private static Font? EmojiFont(Font like)
+    {
+        var key = (like.Size, like.Style, like.Unit);
+        _emojiFonts ??= new Dictionary<(float, FontStyle, GraphicsUnit), Font?>();
+        if (_emojiFonts.TryGetValue(key, out var f)) return f;
+
+        try { f = new Font(EmojiFace, like.Size, like.Style, like.Unit); }
+        catch { f = null; }
+
+        if (f is not null && !string.Equals(f.FontFamily.Name, EmojiFace, StringComparison.OrdinalIgnoreCase))
+        {
+            f.Dispose();
+            f = null;
+        }
+        _emojiFonts[key] = f;
+        return f;
     }
 
     public static void Text(Graphics g, string s, Font font, Brush brush, PointF at, StringFormat fmt)

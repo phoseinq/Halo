@@ -2399,8 +2399,10 @@ internal static class Program
                 App = Halo.Notifications.NotifItem.ScreenshotApp,
                 Title = Halo.Notifications.NotifItem.ScreenshotTitle,
 
-                Body = "Saved to the clipboard. Click the banner to edit it, or press Ctrl+V in any "
-                     + "app to paste it straight in.",
+                Body = "Saved " + char.ConvertFromUtf32(0x1F389) + " to the clipboard "
+                     + char.ConvertFromUtf32(0x2705) + char.ConvertFromUtf32(0x2B50)
+                     + ". Click the banner to edit it, or press Ctrl+V in any "
+                     + "app to paste it straight in " + char.ConvertFromUtf32(0x1F44D) + ".",
                 Code = "482913",
                 Preview = shot,
             };
@@ -2415,7 +2417,10 @@ internal static class Program
                 Icon = icon,
                 App = "Telegram",
                 Title = "\u0633\u0644\u0627\u0645",
-                Body = "\u0628\u0632\u0646 \u0628\u0631\u06cc\u0645",
+
+                Body = "\u0628\u0632\u0646 " + char.ConvertFromUtf32(0x1F525) + " \u0628\u0631\u06cc\u0645 "
+                     + char.ConvertFromUtf32(0x2705) + char.ConvertFromUtf32(0x2B50)
+                     + char.ConvertFromUtf32(0x1F44F),
 
                 Stacked = 5,
             }, 0f, false);

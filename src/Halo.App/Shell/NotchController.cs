@@ -921,7 +921,7 @@ internal sealed partial class NotchController
         if (Alert("context")) CheckContext();
         CheckCompact();
         CheckApiRetry();
-        if (Alert("hourly", on: false)) CheckHourly();
+        if (Alert("hourly")) CheckHourly();
         if (Alert("weather", on: false)) CheckHeat();
         _net.Poll();
         Almanac.Poke();

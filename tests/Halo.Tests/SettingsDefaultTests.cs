@@ -32,4 +32,15 @@ public class SettingsDefaultTests
     [Fact]
     public void The_panel_agrees_with_the_pill_about_mirroring_notifications_at_all()
         => Assert.Equal("on", PanelFallback("feature.notifications"));
+
+    // The chime and the heat banner sit on adjacent lines in the catalog and on adjacent lines in
+    // CheckAlerts - `Alert("hourly")` and `Alert("weather", on: false)` - and they are the only two alerts
+    // whose defaults differ from each other. That is exactly the shape that gets flipped on one side only.
+    [Fact]
+    public void The_panel_agrees_with_the_pill_about_the_hourly_chime()
+        => Assert.Equal("on", PanelFallback("alert.hourly"));
+
+    [Fact]
+    public void The_panel_agrees_with_the_pill_about_the_heat_banner()
+        => Assert.Equal("off", PanelFallback("alert.weather"));
 }

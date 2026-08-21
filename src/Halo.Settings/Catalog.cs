@@ -149,7 +149,8 @@ internal static class Catalog
                 Toggle("alert.internet", L("alert.internet"), D("alert.internet")),
                 Toggle("alert.clipboard", L("alert.clipboard"), D("alert.clipboard")),
                 Toggle("alert.language", L("alert.language"), D("alert.language")),
-                Toggle("alert.hourly", L("alert.hourly"), D("alert.hourly"), false),
+
+                Toggle("alert.hourly", L("alert.hourly"), D("alert.hourly")),
 
                 Toggle("alert.weather", L("alert.weather"), D("alert.weather"), false),
             ]),

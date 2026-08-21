@@ -1341,7 +1341,9 @@ internal sealed class LayeredNotch
 
         if (msg is Win32.WM_QUERYENDSESSION or Win32.WM_ENDSESSION)
         {
-            try { Notifications.BannerGate.RestoreForExit(live: false); } catch { }
+
+            bool servicing = Notifications.BannerGate.SessionSurvives(lParam);
+            try { Notifications.BannerGate.RestoreForExit(live: servicing, why: servicing ? "servicing close" : "session end"); } catch { }
 
         }
         if (msg is Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE)

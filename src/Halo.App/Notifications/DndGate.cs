@@ -254,13 +254,16 @@ internal static class BannerGate
     internal static (bool Restore, bool Restart, bool Forget) ExitPlan(bool on, bool live)
         => on ? (true, live, false) : (false, false, false);
 
-    public static void RestoreForExit(bool live)
+    internal static bool SessionSurvives(nint lParam)
+        => ((uint)lParam & Halo.Interop.Win32.ENDSESSION_CLOSEAPP) != 0;
+
+    public static void RestoreForExit(bool live, string why = "quit")
     {
         var plan = ExitPlan(_on, live);
         if (!plan.Restore) return;
         try
         {
-            Log($"exit: restoring native banners ({(live ? "quit" : "session end")})");
+            Log($"exit: restoring native banners ({why})");
             Restore();
             if (plan.Restart) RestartService();
         }

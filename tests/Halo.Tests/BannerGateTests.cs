@@ -118,4 +118,21 @@ public class BannerGateTests
         Assert.False(BannerGate.ExitPlan(on: true, live: true).Forget);
         Assert.False(BannerGate.ExitPlan(on: true, live: false).Forget);
     }
+
+    // An UNINSTALL comes down WM_QUERYENDSESSION too, and reading it as a session end is wrong in the one way
+    // that matters: the session keeps running, so WpnUserService is still up holding the suppressed values it
+    // read at its own start. Restoring the registry and stopping there leaves the banners quiet until the next
+    // logon on a machine the user is still sitting at. Measured on a real package removal: Windows sets
+    // ENDSESSION_CLOSEAPP, the log says "servicing close", and the service is restarted.
+    [Fact]
+    public void Being_closed_for_servicing_is_not_a_session_ending()
+        => Assert.True(BannerGate.SessionSurvives(unchecked((nint)Halo.Interop.Win32.ENDSESSION_CLOSEAPP)));
+
+    // A real logoff or shutdown. ENDSESSION_LOGOFF is 0x80000000 and lands in the sign bit, which is exactly
+    // where a careless int cast would flip the answer - hence the unsigned mask in SessionSurvives.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(unchecked((int)0x80000000))]
+    public void A_logoff_or_shutdown_still_reads_as_a_session_ending(int lParam)
+        => Assert.False(BannerGate.SessionSurvives(lParam));
 }

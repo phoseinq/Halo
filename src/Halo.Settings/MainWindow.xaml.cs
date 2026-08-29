@@ -643,8 +643,9 @@ public partial class MainWindow : Window
             ToolTip = row.Label,
         };
         Ui.SetRadius(box, new CornerRadius(10));
-        box.TextChanged += (_, _) => _store.Set(row.Key, box.Text.Trim(), row.Fallback);
+
         if (IsChordRow(row.Key)) MakeChordBox(box, row);
+        else box.TextChanged += (_, _) => _store.Set(row.Key, box.Text.Trim(), row.Fallback);
         return box;
     }
 
@@ -657,17 +658,23 @@ public partial class MainWindow : Window
         box.IsReadOnlyCaretVisible = false;
         box.ToolTip = row.Label + " - press a combination, Backspace to clear";
 
+        string committed = box.Text;
+        bool pending = false;
+
+        void Show(string text, bool save)
+        {
+            pending = !save;
+            box.Text = text;
+            if (save) committed = text;
+        }
+
         box.PreviewKeyDown += (_, e) =>
         {
             e.Handled = true;
 
             var key = e.Key == Key.System ? e.SystemKey : e.Key;
 
-            if (key is Key.Back or Key.Delete) { box.Text = ""; return; }
-
-            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
-                    or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
-                    or Key.System or Key.None) return;
+            if (key is Key.Back or Key.Delete) { Show("", save: true); return; }
 
             uint mods = 0;
             var down = Keyboard.Modifiers;
@@ -676,12 +683,36 @@ public partial class MainWindow : Window
             if ((down & ModifierKeys.Shift) != 0) mods |= Halo.Launcher.HotKeyChord.ModShift;
             if ((down & ModifierKeys.Windows) != 0) mods |= Halo.Launcher.HotKeyChord.ModWin;
 
-            if (mods == 0) return;
+            bool modifierOnly = key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                                    or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
+                                    or Key.System or Key.None;
+
+            if (modifierOnly)
+            {
+                if (mods != 0) Show(Halo.Launcher.HotKeyChord.Describe(mods) + "+...", save: false);
+                return;
+            }
 
             uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
             if (vk == 0) return;
-            box.Text = new Halo.Launcher.HotKeyChord(mods, vk).Format();
+
+            if (mods == 0)
+            {
+                Show(Halo.Localization.Strings.Get("settings.quick.needmod"), save: false);
+                return;
+            }
+
+            Show(new Halo.Launcher.HotKeyChord(mods, vk).Format(), save: true);
         };
+
+        box.PreviewKeyUp += (_, _) =>
+        {
+            if (pending && Keyboard.Modifiers == ModifierKeys.None) Show(committed, save: true);
+        };
+        box.LostFocus += (_, _) => { if (pending) Show(committed, save: true); };
+
+        box.TextChanged += (_, _)
+            => { if (!pending) _store.Set(row.Key, box.Text.Trim(), row.Fallback); };
     }
 
     private FrameworkElement BuildAction(Row row)

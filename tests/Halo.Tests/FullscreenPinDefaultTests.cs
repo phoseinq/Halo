@@ -62,4 +62,29 @@ public class FullscreenPinDefaultTests
     [Fact]
     public void AnEmptyHideShortcutMeansNoneRatherThanTheDefault()
         => Assert.False(HotKeyChord.TryParse("", out _));
+
+    // The panel previews a chord while it is being pressed, and half of "Ctrl+Alt+H" has to be spelt the
+    // same way the whole of it will be. Two spellings of the same modifiers is how a preview stops matching
+    // the thing it is previewing - and nobody would notice, because both look reasonable alone.
+    [Theory]
+    [InlineData(HotKeyChord.ModControl, "Ctrl")]
+    [InlineData(HotKeyChord.ModAlt, "Alt")]
+    [InlineData(HotKeyChord.ModControl | HotKeyChord.ModAlt, "Ctrl+Alt")]
+    [InlineData(HotKeyChord.ModControl | HotKeyChord.ModAlt | HotKeyChord.ModShift, "Ctrl+Alt+Shift")]
+    public void TheHalfPressedChordIsSpeltTheSameWayTheFinishedOneIs(uint mods, string expected)
+    {
+        Assert.Equal(expected, HotKeyChord.Describe(mods));
+        // ...and it really is the prefix of the finished chord, which is the property that matters
+        Assert.StartsWith(expected + "+", new HotKeyChord(mods, 0x48).Format());
+    }
+
+    // A modifier-only chord can never be registered - RegisterHotKey has no virtual key to bind - so the
+    // box must refuse it. The bug was never the refusal, it was doing it in silence.
+    [Fact]
+    public void ModifiersAloneAreNotAChord()
+    {
+        Assert.False(HotKeyChord.TryParse("Ctrl+Alt", out _));
+        Assert.False(HotKeyChord.TryParse("Alt", out _));
+        Assert.True(HotKeyChord.TryParse("Ctrl+Alt+H", out _));
+    }
 }

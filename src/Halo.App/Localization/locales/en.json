@@ -379,6 +379,7 @@
   "settings.quick.settings.label": "Halo Settings",
   "settings.quick.settings.desc": "Open this panel from Quick Actions",
   "settings.quick.add": "Add another action",
+  "settings.quick.needmod": "Hold Ctrl, Alt, Shift or Win too",
   "settings.quick.custom1.label": "Your action 1",
   "settings.quick.custom1.desc": "Label | what to open. A folder, a file, a URL or a program",
   "settings.quick.custom2.label": "Your action 2",

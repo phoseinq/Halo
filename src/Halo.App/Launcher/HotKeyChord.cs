@@ -59,6 +59,16 @@ internal readonly record struct HotKeyChord(uint Mods, uint Vk)
         return true;
     }
 
+    internal static string Describe(uint mods)
+    {
+        var parts = new List<string>(4);
+        if ((mods & ModControl) != 0) parts.Add("Ctrl");
+        if ((mods & ModAlt) != 0) parts.Add("Alt");
+        if ((mods & ModShift) != 0) parts.Add("Shift");
+        if ((mods & ModWin) != 0) parts.Add("Win");
+        return string.Join("+", parts);
+    }
+
     internal string Format()
     {
         var parts = new List<string>(5);

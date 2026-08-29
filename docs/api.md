@@ -64,12 +64,32 @@ Raises one of Halo's own banners.
 | `seconds` | no | `6` | clamped to 2–30 |
 | `code` | no | | a short code shown for copying |
 | `launch` | no | | a path or URI opened when the banner is clicked |
+| `image` | no | | a path on this machine, shown as the banner's wide thumbnail |
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
      -d '{"title":"Build finished","body":"14 tests, all green","seconds":8}' \
      http://127.0.0.1:7317/notify
 ```
+
+### Sending a picture
+
+`image` is a **path**, not base64: the caller nearly always has a file already — a rendered page, a
+chart, a capture — and that same path is usually what `launch` should open on a click.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"title":"Preview ready","body":"Click to open the real thing",
+          "image":"C:\\Users\\me\\preview.png","launch":"http://127.0.0.1:5173/"}' \
+     http://127.0.0.1:7317/notify
+```
+
+The banner draws it at 128×72, so a wide 16:9 picture fits it best. Halo decodes through a byte copy
+and **does not hold the file open**, so you are free to delete or rewrite it the moment the call
+returns. Anything missing, unreadable, not an image, or over **8 MB** is dropped and you get the
+ordinary text banner instead — the request still succeeds, because a caller that got a `400` for a
+thumbnail would have lost the message it actually wanted to send. Larger pictures are scaled down to
+fit 512×288; smaller ones are left alone rather than blown up.
 
 ## Questions — `api.ask`
 

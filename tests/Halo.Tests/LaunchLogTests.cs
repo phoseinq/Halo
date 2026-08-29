@@ -14,25 +14,35 @@ public class LaunchLogTests
     [Fact]
     public void A_duplicate_records_the_age_it_decided_on_and_what_it_decided()
     {
-        string line = LaunchLog.LaunchLine(Stamp, 5678, won: false, askedForSettings: false, 39.44, openPanel: false);
+        string line = LaunchLog.LaunchLine(
+            Stamp, 5678, won: false, askedForSettings: false, 39.44, 41.02, openPanel: false);
         Assert.Contains("2026-08-12 14:18:31.402", line);
-        Assert.Contains("pid=5678 lost winnerAge=39.4s asked=no panel=no", line);
+        Assert.Contains("pid=5678 lost winnerAge=39.4s sessionAge=41.0s asked=no panel=no", line);
         Assert.EndsWith("\r\n", line);
     }
+
+    // Both clocks, not just the one that decided: the reported bug was a line saying the pill window had
+    // been passed, on a session that was a minute old - and the second number was not on it to read.
+    [Fact]
+    public void A_duplicate_records_the_session_it_arrived_into()
+        => Assert.Contains("winnerAge=64.0s sessionAge=64.1s",
+            LaunchLog.LaunchLine(Stamp, 59748, won: false, askedForSettings: false, 64.0, 64.1, openPanel: false));
 
     // An age that could not be read is the branch that opens the panel, so it has to be visible as itself
     // rather than as a zero.
     [Fact]
     public void An_unknown_age_is_written_as_a_question_mark()
-        => Assert.Contains("winnerAge=? asked=no panel=yes",
-            LaunchLog.LaunchLine(Stamp, 1, won: false, askedForSettings: false, null, openPanel: true));
+        => Assert.Contains("winnerAge=? sessionAge=? asked=no panel=yes",
+            LaunchLog.LaunchLine(Stamp, 1, won: false, askedForSettings: false, null, null, openPanel: true));
 
     [Fact]
     public void The_launch_that_won_carries_no_age_to_report()
     {
-        string line = LaunchLog.LaunchLine(Stamp, 1234, won: true, askedForSettings: false, null, openPanel: false);
+        string line = LaunchLog.LaunchLine(
+            Stamp, 1234, won: true, askedForSettings: false, null, null, openPanel: false);
         Assert.Contains("pid=1234 won asked=no", line);
         Assert.DoesNotContain("winnerAge", line);
+        Assert.DoesNotContain("sessionAge", line);
     }
 
     [Fact]
@@ -64,8 +74,8 @@ public class LaunchLogTests
         try
         {
             Thread.CurrentThread.CurrentCulture = new CultureInfo("fa-IR");
-            Assert.Contains("winnerAge=39.4s",
-                LaunchLog.LaunchLine(Stamp, 7, won: false, askedForSettings: false, 39.44, openPanel: false));
+            Assert.Contains("winnerAge=39.4s sessionAge=41.0s",
+                LaunchLog.LaunchLine(Stamp, 7, won: false, askedForSettings: false, 39.44, 41.02, openPanel: false));
             Assert.Contains("2026-08-12 14:18:31.402",
                 LaunchLog.PanelLine(Stamp, "argv", started: true, stamped: true));
         }

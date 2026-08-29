@@ -568,7 +568,13 @@ internal static class Program
         if (term != 0) status["consolePid"] = (int)term;
 
         uint host = HostWindowPid(map, start);
-        if (host != 0) status["hostPid"] = (int)host;
+        if (host != 0)
+        {
+            status["hostPid"] = (int)host;
+
+            long hwnd = ForegroundWindowOf(host);
+            if (hwnd != 0) status["hostHwnd"] = hwnd;
+        }
     }
 
     private static uint HostWindowPid(Dictionary<uint, (uint parent, string name)> map, uint start)
@@ -669,6 +675,19 @@ internal static class Program
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")] private static extern int GetWindowTextLengthW(IntPtr hwnd);
     [DllImport("kernel32.dll")] private static extern IntPtr GetConsoleWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+
+    private static long ForegroundWindowOf(uint pid)
+    {
+        try
+        {
+            IntPtr fg = GetForegroundWindow();
+            if (fg == IntPtr.Zero) return 0;
+            GetWindowThreadProcessId(fg, out uint owner);
+            return owner == pid ? fg.ToInt64() : 0;
+        }
+        catch { return 0; }
+    }
 
     private enum CodexSurface { Cli, Desktop }
 

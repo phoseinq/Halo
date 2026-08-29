@@ -12,6 +12,11 @@ internal interface IHaloHost
     JsonObject Settings();
 
     void Notify(NotifyRequest request);
+
+    string? PanelShow(JsonObject spec, double seconds);
+    JsonObject PanelState();
+    bool PanelClose(string? id);
+
     bool MediaControl(string action, int slot);
     bool Pill(string action);
     int TrayAdd(IReadOnlyList<string> paths);
@@ -21,4 +26,6 @@ internal interface IHaloHost
 }
 
 internal sealed record NotifyRequest(
-    string App, string Title, string Body, double Seconds, string Code, string LaunchPath);
+    string App, string Title, string Body, double Seconds, string Code, string LaunchPath,
+
+    string ImagePath);

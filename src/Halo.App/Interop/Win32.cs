@@ -16,6 +16,12 @@ internal static class Win32
     public const uint WM_DESTROY = 0x0002;
     public const uint WM_DISPLAYCHANGE = 0x007E;
     public const uint WM_SETTINGCHANGE = 0x001A;
+    public static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+    public const uint SMTO_ABORTIFHUNG = 2;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wParam, string lParam,
+                                                   uint flags, uint timeoutMs, out IntPtr result);
 
     public const uint WM_QUERYENDSESSION = 0x0011;
     public const uint WM_ENDSESSION = 0x0016;
@@ -95,6 +101,7 @@ internal static class Win32
     public static extern ushort RegisterClassEx(ref WNDCLASSEX lpwcx);
 
     public static readonly IntPtr IDC_ARROW = new(32512);
+    public static readonly IntPtr IDC_SIZEALL = new(32646);
     public static readonly IntPtr IDC_HAND = new(32649);
     public const uint WM_SETCURSOR = 0x0020;
     [DllImport("user32.dll")]
@@ -330,6 +337,7 @@ internal static class Win32
     public const int VK_CONTROL = 0x11;
     public const int VK_BACK = 0x08;
     public const int VK_RETURN = 0x0D;
+    public const int VK_TAB = 0x09;
     public const int VK_V = 0x56;
 
     [DllImport("user32.dll")]
@@ -400,6 +408,10 @@ internal static class Win32
     public const int WH_KEYBOARD_LL = 13;
     public const int VK_SHIFT = 0x10, VK_MENU = 0x12, VK_CAPITAL = 0x14;
     public const int VK_LWIN = 0x5B, VK_RWIN = 0x5C;
+    public const int VK_D = 0x44;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern int SHEmptyRecycleBin(IntPtr hwnd, string? root, uint flags);
     public const uint WM_SYSKEYDOWN = 0x0104, WM_KEYUP = 0x0101, WM_SYSKEYUP = 0x0105;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -452,6 +464,15 @@ internal static class Win32
     }
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buf);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool LockWorkStation();
+
+    [DllImport("powrprof.dll", SetLastError = true)]
+    public static extern bool SetSuspendState(bool hibernate, bool force, bool wakeupEventsDisabled);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32.dll")]
@@ -644,5 +665,63 @@ internal static class Win32
 
         [PreserveSig] int BindToHandler(IntPtr pbc, [MarshalAs(UnmanagedType.LPStruct)] Guid bhid,
             [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppv);
+    }
+
+    public const int LWA_ALPHA = 0x2;
+    public const int SW_SHOW = 5;
+    public const uint WM_KILLFOCUS = 0x0008;
+    public const uint WM_HOTKEY = 0x0312;
+    public const int VK_UP = 0x26;
+    public const int VK_DOWN = 0x28;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateSolidBrush(uint color);
+
+    public static readonly Guid FOLDERID_AppsFolder = new("1e87508d-89c2-42f0-8a7e-645a0f50ca58");
+    public static readonly Guid BHID_EnumItems = new("94f60519-2850-4924-aa5a-d15e84868039");
+    public static readonly Guid IID_IShellItem = new("43826d1e-e718-42ee-bc55-a1e261c37bfe");
+    public static readonly Guid IID_IEnumShellItems = new("70629033-e363-4a28-a567-0db78006e6d7");
+
+    public const uint SHGDN_NORMAL = 0x0000;
+
+    public const uint SIGDN_PARENTRELATIVEFORADDRESSBAR = 0x8007C001;
+
+    [DllImport("shell32.dll")]
+    public static extern int SHGetKnownFolderItem(
+        [MarshalAs(UnmanagedType.LPStruct)] Guid rfid, uint flags, IntPtr hToken,
+        [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IShellItem ppv);
+
+    [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IShellItem
+    {
+        [PreserveSig] int BindToHandler(IntPtr pbc, [MarshalAs(UnmanagedType.LPStruct)] Guid bhid,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IntPtr ppv);
+        [PreserveSig] int GetParent(out IShellItem ppsi);
+        [PreserveSig] int GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+        [PreserveSig] int GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        [PreserveSig] int Compare(IShellItem psi, uint hint, out int piOrder);
+    }
+
+    [ComImport, Guid("70629033-e363-4a28-a567-0db78006e6d7"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IEnumShellItems
+    {
+        [PreserveSig] int Next(uint celt, out IShellItem rgelt, out uint pceltFetched);
+        [PreserveSig] int Skip(uint celt);
+        [PreserveSig] int Reset();
+        [PreserveSig] int Clone(out IEnumShellItems ppenum);
     }
 }

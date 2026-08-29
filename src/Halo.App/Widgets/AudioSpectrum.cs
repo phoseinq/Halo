@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -13,6 +14,8 @@ internal static class AudioSpectrum
 
     private static Thread? _thread;
     private static long _until;
+
+    internal static volatile string Fault = "not started";
 
     public static float[]? Bands()
     {
@@ -29,6 +32,10 @@ internal static class AudioSpectrum
             _thread.Start();
         }
     }
+
+    private const long SilenceGraceMs = 1200;
+
+    private const long DeafMs = 4000;
 
     private const int N = 1024;
     private static readonly float[] _ringL = new float[N * 2], _ringR = new float[N * 2];
@@ -55,45 +62,122 @@ internal static class AudioSpectrum
         while (true)
         {
 
-            if (Environment.TickCount64 > _until) { lock (_bands) Available = false; Thread.Sleep(300); continue; }
+            if (Environment.TickCount64 > _until)
+            { Fault = "parked (nobody asking)"; lock (_bands) Available = false; Thread.Sleep(300); continue; }
 
             try { Capture(); }
-            catch { lock (_bands) Available = false; }
+            catch (Exception ex) { Fault = $"threw {ex.GetType().Name} {Fault}"; lock (_bands) Available = false; }
             Thread.Sleep(500);
         }
     }
 
-        private static string? DefaultRenderId()
+        private static string? DefaultRenderId() => Halo.Interop.CoreAudio.DefaultRenderId();
+
+    internal static (string Status, long Frames, float Loudest) TestLoopback(
+        Halo.Interop.CoreAudio.IMMDevice dev, int ms)
     {
+        var acid = typeof(IAudioClient).GUID;
+        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac)
+            return ("activate failed", 0, 0f);
+        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return ("no mix format", 0, 0f);
         try
         {
-            var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return null;
-            return dev.GetId(out var id) == 0 ? id : null;
+            int channels = Marshal.ReadInt16(fmtPtr, 2);
+            int bits = Marshal.ReadInt16(fmtPtr, 14);
+            if (bits != 32 || channels < 1) return ($"{bits}-bit {channels}ch", 0, 0f);
+            const uint LOOPBACK = 0x00020000;
+            int hr = ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero);
+            if (hr != 0) return ($"Initialize 0x{hr:X8}", 0, 0f);
+            var ccid = typeof(IAudioCaptureClient).GUID;
+            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc)
+                return ("no capture client", 0, 0f);
+            if (ac.Start() != 0) return ("start failed", 0, 0f);
+
+            long frames = 0;
+            float loudest = 0f;
+            long until = Environment.TickCount64 + ms;
+            while (Environment.TickCount64 < until)
+            {
+                while (cc.GetNextPacketSize(out uint pkt) == 0 && pkt > 0)
+                {
+                    if (cc.GetBuffer(out IntPtr data, out uint n, out uint flags, out _, out _) != 0) break;
+                    if ((flags & 2) == 0)
+                        unsafe
+                        {
+                            float* p = (float*)data;
+                            for (uint f = 0; f < n * channels; f++)
+                            {
+                                float m = MathF.Abs(p[f]);
+                                if (m > loudest) loudest = m;
+                            }
+                        }
+                    frames += n;
+                    cc.ReleaseBuffer(n);
+                }
+                Thread.Sleep(5);
+            }
+            try { ac.Stop(); } catch { }
+            return ("ok", frames, loudest);
         }
-        catch { return null; }
+        finally { Marshal.FreeCoTaskMem(fmtPtr); }
+    }
+
+    private static string? _lastGood;
+    private static int _rotate;
+
+        private static List<(Halo.Interop.CoreAudio.IMMDevice Dev, string Name, string Id)> Candidates()
+    {
+        var all = Halo.Interop.CoreAudio.ActiveRenderEndpoints();
+        string? def = Halo.Interop.CoreAudio.DefaultRenderId();
+        var order = new List<(Halo.Interop.CoreAudio.IMMDevice, string, string)>(all.Count);
+        void Take(Func<string, bool> want)
+        {
+            foreach (var e in all)
+                if (want(e.Id) && !order.Exists(o => o.Item3 == e.Id)) order.Add((e.Device, e.Name, e.Id));
+        }
+        Take(id => _lastGood != null && id == _lastGood);
+        Take(id => def != null && id == def);
+        Take(_ => true);
+        return order;
     }
 
     private static void Capture()
     {
-        var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-        if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return;
-        if (dev.GetId(out var boundId) != 0) boundId = null;
+        Fault = "choosing endpoint";
+        var order = Candidates();
+        if (order.Count == 0) { Fault = "no active render endpoint"; return; }
+        var picked = order[_rotate % order.Count];
+        var dev = picked.Dev;
+        string? boundId = picked.Id;
+        string boundName = picked.Name;
+
+        bool onDefault = boundId == Halo.Interop.CoreAudio.DefaultRenderId();
         var acid = typeof(IAudioClient).GUID;
-        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac) return;
-        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) return;
+        if (dev.Activate(ref acid, 23, IntPtr.Zero, out var aco) != 0 || aco is not IAudioClient ac)
+        { Fault = "IAudioClient activate failed"; return; }
+        if (ac.GetMixFormat(out IntPtr fmtPtr) != 0) { Fault = "GetMixFormat failed"; return; }
         try
         {
             int channels = Marshal.ReadInt16(fmtPtr, 2);
             int rate = Marshal.ReadInt32(fmtPtr, 4);
             int bits = Marshal.ReadInt16(fmtPtr, 14);
-            if (bits != 32 || channels < 1 || rate < 8000) return;
+            if (bits != 32 || channels < 1 || rate < 8000)
+            { Fault = $"mix format {bits}-bit {channels}ch {rate}Hz"; return; }
 
             const uint LOOPBACK = 0x00020000;
-            if (ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero) != 0) return;
+            int hr = ac.Initialize(0, LOOPBACK, 2_000_000, 0, fmtPtr, IntPtr.Zero);
+            if (hr != 0)
+            {
+
+                Fault = $"{boundName}: Initialize 0x{hr:X8}";
+                if (order.Count > 1) _rotate++;
+                return;
+            }
             var ccid = typeof(IAudioCaptureClient).GUID;
-            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc) return;
-            if (ac.Start() != 0) return;
+            if (ac.GetService(ref ccid, out var cco) != 0 || cco is not IAudioCaptureClient cc)
+            { Fault = "GetService(IAudioCaptureClient) failed"; return; }
+            if (ac.Start() != 0) { Fault = "Start failed"; return; }
+            Fault = "capturing";
 
             Array.Clear(_ringL);
             Array.Clear(_ringR);
@@ -104,13 +188,20 @@ internal static class AudioSpectrum
             var win = Hann();
             long nextFft = 0;
             long nextDeviceCheck = Environment.TickCount64 + 1000;
+            long nextReport = Environment.TickCount64 + 1000;
+            long frameCount = 0, silentPackets = 0;
+
+            long sawSound = Environment.TickCount64;
             while (Environment.TickCount64 <= _until)
             {
 
                 if (Environment.TickCount64 >= nextDeviceCheck)
                 {
                     nextDeviceCheck = Environment.TickCount64 + 1000;
-                    if (boundId is { } b && DefaultRenderId() is { } cur && cur != b) break;
+                    if (onDefault && boundId is { } b && DefaultRenderId() is { } cur && cur != b)
+                        break;
+
+                    if (order.Count > 1 && Environment.TickCount64 - sawSound > DeafMs) { _rotate++; break; }
                 }
 
                 while (cc.GetNextPacketSize(out uint pkt) == 0 && pkt > 0)
@@ -127,12 +218,20 @@ internal static class AudioSpectrum
                             {
                                 l = p[f * channels];
                                 r = channels > 1 ? p[f * channels + 1] : l;
+
+                                if (MathF.Abs(l) > 1e-5f || MathF.Abs(r) > 1e-5f)
+                                {
+                                    sawSound = Environment.TickCount64;
+                                    _lastGood = boundId;
+                                }
                             }
                             _ringL[_ringPos] = l;
                             _ringR[_ringPos] = r;
                             _ringPos = (_ringPos + 1) % _ringL.Length;
                         }
                     }
+                    frameCount += frames;
+                    if (silent) silentPackets++;
                     cc.ReleaseBuffer(frames);
                 }
 
@@ -140,7 +239,21 @@ internal static class AudioSpectrum
                 if (now >= nextFft)
                 {
                     nextFft = now + 25;
-                    lock (_bands) ComputeBands(win, rate);
+
+                    lock (_bands)
+                    {
+                        ComputeBands(win, rate);
+                        Available = now - sawSound < SilenceGraceMs;
+                    }
+                }
+
+                if (now >= nextReport)
+                {
+                    nextReport = now + 1000;
+                    float loud = 0f;
+                    foreach (float s in _ringL) { float m = Math.Abs(s); if (m > loud) loud = m; }
+                    Fault = $"{boundName} {rate}Hz {channels}ch frames={frameCount} "
+                          + $"loudest={loud:0.0000} sound={(now - sawSound < SilenceGraceMs ? "yes" : "NO")}";
                 }
                 Thread.Sleep(5);
             }
@@ -258,26 +371,6 @@ internal static class AudioSpectrum
                 }
             }
         }
-    }
-
-    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-    private class MMDeviceEnumerator { }
-
-    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceEnumerator
-    {
-        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
-        [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice ppDevice);
-    }
-
-    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDevice
-    {
-        [PreserveSig] int Activate(ref Guid iid, uint clsCtx, IntPtr activationParams,
-            [MarshalAs(UnmanagedType.IUnknown)] out object iface);
-
-        [PreserveSig] int OpenPropertyStore(uint access, out IntPtr store);
-        [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
     }
 
     [ComImport, Guid("1CB9AD4C-DBFA-4C32-B178-C2F568A703B2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

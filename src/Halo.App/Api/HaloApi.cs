@@ -20,7 +20,7 @@ internal sealed class HaloApi : IDisposable
 
     internal sealed record Config(
         bool Enabled, int Port, string Token,
-        bool Notify, bool Ask, bool State, bool Control, bool Settings);
+        bool Notify, bool Ask, bool State, bool Control, bool Settings, bool Panel);
 
     internal HaloApi(Func<Config> config, IHaloHost host)
     {
@@ -82,6 +82,17 @@ internal sealed class HaloApi : IDisposable
         }
     }
 
+    private static readonly string DebugPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "api-debug.txt");
+    private static readonly bool Debug = System.IO.File.Exists(System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "api-debug"));
+
+    internal static void Trace(string line)
+    {
+        if (!Debug) return;
+        try { System.IO.File.AppendAllText(DebugPath, $"{DateTime.Now:HH:mm:ss.fff} {line}\r\n"); } catch { }
+    }
+
     private void Serve(TcpClient client)
     {
         using (client)
@@ -90,13 +101,26 @@ internal sealed class HaloApi : IDisposable
             {
                 client.ReceiveTimeout = 5000;
                 client.SendTimeout = 5000;
+
+                client.LingerState = new LingerOption(true, 3);
                 using var stream = client.GetStream();
                 var request = Request.Read(stream);
-                if (request is null) return;
+                if (request is null) { Trace("read returned null"); return; }
                 var (status, body) = Route(request);
                 Write(stream, status, body);
+
+                try { client.Client.Shutdown(SocketShutdown.Send); } catch { }
+
+                try
+                {
+                    client.ReceiveTimeout = 300;
+                    var sink = new byte[256];
+                    while (stream.Read(sink, 0, sink.Length) > 0) { }
+                }
+                catch { }
+                Trace($"{request.Method} {request.Path} -> {status}");
             }
-            catch { }
+            catch (Exception e) { Trace("threw: " + e.GetType().Name + ": " + e.Message); }
         }
     }
 
@@ -110,19 +134,31 @@ internal sealed class HaloApi : IDisposable
         if (path.Length == 0) path = "/";
 
         if (request.Method == "GET" && path == "/health")
+        {
+
+            var capabilities = new JsonArray();
+            if (config.Notify) capabilities.Add("notify");
+            if (config.Ask) capabilities.Add("ask");
+            if (config.State) capabilities.Add("state");
+            if (config.Panel) capabilities.Add("panel");
+            if (config.Control) capabilities.Add("control");
+            if (config.Settings) capabilities.Add("settings");
             return (200, new JsonObject
             {
                 ["ok"] = true,
                 ["product"] = "Halo",
-                ["capabilities"] = new JsonArray(
-                    config.Notify ? "notify" : null, config.Ask ? "ask" : null,
-                    config.State ? "state" : null, config.Control ? "control" : null,
-                    config.Settings ? "settings" : null),
+                ["capabilities"] = capabilities,
             });
+        }
 
         return (request.Method, path) switch
         {
             ("POST", "/notify") => config.Notify ? Notify(request) : Off(),
+
+            ("POST", "/panel") => config.Panel ? PanelShow(request) : Off(),
+            ("GET", "/panel") => config.Panel ? (200, _host.PanelState()) : Off(),
+            ("POST", "/panel/close") => config.Panel ? PanelClose(request) : Off(),
+
             ("POST", "/ask") => config.Ask ? Ask(request) : Off(),
             ("GET", _) when path.StartsWith("/ask/", StringComparison.Ordinal)
                 => config.Ask ? Answer(path[5..]) : Off(),
@@ -188,6 +224,23 @@ internal sealed class HaloApi : IDisposable
         return (200, new JsonObject { ["written"] = written });
     }
 
+    private (int, JsonObject) PanelShow(Request request)
+    {
+        if (request.Json is not { } json) return (400, Error("a body describing the panel is required"));
+
+        string? id = _host.PanelShow(json, Int(json, "seconds", Halo.Panels.PanelStore.DefaultSeconds));
+        return id is null
+
+            ? (400, Error("no drawable rows - each needs a known type, and slider, toggle and buttons need an id"))
+            : (200, new JsonObject { ["id"] = id });
+    }
+
+    private (int, JsonObject) PanelClose(Request request)
+    {
+        string id = Str(request.Json, "id");
+        return (200, new JsonObject { ["closed"] = _host.PanelClose(id.Length > 0 ? id : null) });
+    }
+
     private (int, JsonObject) Notify(Request request)
     {
         var json = request.Json;
@@ -195,7 +248,8 @@ internal sealed class HaloApi : IDisposable
         if (title.Length == 0) return (400, Error("title is required"));
         _host.Notify(new NotifyRequest(
             Str(json, "app", "Halo"), title, Str(json, "body"),
-            Int(json, "seconds", 6), Str(json, "code"), Str(json, "launch")));
+            Int(json, "seconds", 6), Str(json, "code"), Str(json, "launch"),
+            Str(json, "image")));
         return (200, new JsonObject { ["ok"] = true });
     }
 
@@ -319,9 +373,12 @@ internal sealed class HaloApi : IDisposable
 
             while (!head.ToString().EndsWith("\r\n\r\n", StringComparison.Ordinal))
             {
-                if (stream.Read(one, 0, 1) != 1) return null;
+                int got;
+                try { got = stream.Read(one, 0, 1); }
+                catch (Exception e) { Trace($"header read threw after {head.Length}B: {e.GetType().Name}: {e.Message}"); return null; }
+                if (got != 1) { Trace($"header read gave {got} after {head.Length}B"); return null; }
                 head.Append((char)one[0]);
-                if (head.Length > 8192) return null;
+                if (head.Length > 8192) { Trace("header over 8192B"); return null; }
             }
 
             var lines = head.ToString().Split("\r\n");

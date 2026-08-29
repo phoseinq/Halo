@@ -35,6 +35,16 @@ internal static class NotifBanner
 
     private static float _hoverEase, _copiedEase;
 
+    private static Color Lift(Color c)
+    {
+        int m = Math.Max(c.R, Math.Max(c.G, c.B));
+        if (m >= 200) return c;
+        if (m <= 4) return Color.FromArgb(255, 236, 236, 246);
+        float k = 214f / m;
+        return Color.FromArgb(255, (int)Math.Min(255, c.R * k), (int)Math.Min(255, c.G * k),
+                              (int)Math.Min(255, c.B * k));
+    }
+
     private static void DrawCopyButton(Graphics g, NotifItem n, int w, float a)
     {
         var r = CopyRect(n, w);
@@ -103,16 +113,18 @@ internal static class NotifBanner
         catch { return SummaryH + 70; }
     }
 
-    public static void Draw(Graphics g, int w, int h, float a, NotifItem n, float detail, bool detailOn,
-                            float fold = 1f)
+        public static void Draw(Graphics g, int w, int h, float a, NotifItem n, float detail, bool detailOn,
+                            float fold = 1f, bool onGlass = false)
     {
         if (a <= 0.01f) return;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
         if (n.Kind == "language") { DrawCentered(g, w, h, n.Icon, n.Title, a); return; }
         var accent = Fx.AccentOf(n.Icon);
+
         if (accent != Fx.White)
-            Fx.Glow(g, w, h, a, IconX + IconD / 2f, SummaryH * 0.45f, w * 0.75f, h * 1.8f, 26, accent);
+            Fx.Glow(g, w, h, a, IconX + IconD / 2f, SummaryH * 0.45f, w * 0.75f, h * 1.8f,
+                    onGlass ? 20 : 26, onGlass ? Lift(accent) : accent);
 
         bool hasPreview = n.Preview != null;
         float thumbW = hasPreview ? 128f : IconD, thumbH = hasPreview ? 72f : IconD;

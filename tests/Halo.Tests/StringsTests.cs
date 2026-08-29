@@ -354,6 +354,42 @@ public class StringsTests
                     Assert.Equal(r.Key, settingsasm::Halo.Localization.Strings.Get(r.Key));
     }
 
+    // Reading a locale file the BUILD may still be writing.
+    //
+    // #117 was one failure in the whole history of this suite, and what made it useless was that it carried
+    // a bare InvokeWithNoArgs frame with no assertion text - the signature of a thrown exception, not a
+    // failed assert. The two candidates both throw exactly like that: MSBuild copying these loose files
+    // into the output directory while the test host reads them (the one run that ever failed was also the
+    // only one that built and tested in a single invocation), and this machine's antivirus holding a
+    // freshly written file long enough for one open to fail, which installer/build.ps1 already documents
+    // hitting on the same disk.
+    //
+    // So: a short bounded retry, and - the part that actually matters - a failure that says which file, how
+    // many bytes it had and what it started with. Forty clean runs proved nothing last time because a flake
+    // that reports nothing cannot be learned from. The next one will describe itself.
+    private static System.Text.Json.JsonDocument ReadLocale(string path)
+    {
+        Exception? last = null;
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try { return System.Text.Json.JsonDocument.Parse(File.ReadAllText(path)); }
+            catch (Exception e) when (e is IOException or System.Text.Json.JsonException)
+            {
+                last = e;
+                System.Threading.Thread.Sleep(40 * (attempt + 1));
+            }
+        }
+        string got;
+        try
+        {
+            var raw = File.ReadAllText(path);
+            got = $"{raw.Length} chars, starts {raw[..Math.Min(60, raw.Length)].ReplaceLineEndings(" ")}";
+        }
+        catch (Exception e) { got = "unreadable: " + e.Message; }
+        throw new Xunit.Sdk.XunitException(
+            $"could not read {Path.GetFileName(path)} after 5 tries ({got}) - last: {last?.Message}");
+    }
+
     // Every shipped locale must carry every key the FULLEST one carries, not every key English carries.
     // The six unit-4 files were generated against en.json and came out 79 keys short each, because the mood
     // slots live only in the locale files - English keeps its moods in Moods.cs. Nothing failed, nothing
@@ -370,7 +406,7 @@ public class StringsTests
 
         var loaded = files.ToDictionary(
             f => Path.GetFileNameWithoutExtension(f),
-            f => System.Text.Json.JsonDocument.Parse(File.ReadAllText(f)).RootElement
+            f => ReadLocale(f).RootElement
                      .EnumerateObject().Select(x => x.Name)
                      .Where(n => !n.StartsWith('_')).ToHashSet(StringComparer.Ordinal));
 
@@ -400,7 +436,7 @@ public class StringsTests
         foreach (var f in Directory.GetFiles(dir, "*.json"))
         {
             var code = Path.GetFileNameWithoutExtension(f);
-            foreach (var prop in System.Text.Json.JsonDocument.Parse(File.ReadAllText(f)).RootElement.EnumerateObject())
+            foreach (var prop in ReadLocale(f).RootElement.EnumerateObject())
             {
                 if (prop.Name.StartsWith('_') || prop.Value.ValueKind != System.Text.Json.JsonValueKind.String)
                     continue;

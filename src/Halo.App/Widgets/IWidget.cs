@@ -39,6 +39,8 @@ internal interface IWidget
     bool IsActive { get; }
     int Version { get; }
 
+    FaceProp ArrivingProp => FaceProp.None;
+
     bool Animating => false;
 
     void Tick() { }
@@ -58,6 +60,10 @@ internal interface IWidget
     IEnumerable<int> OwnerPids => Array.Empty<int>();
 
     int RevealPid => 0;
+
+    string? RevealHint => null;
+
+    long RevealHwnd => 0;
 
     string? RevealProcess => null;
 

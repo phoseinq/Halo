@@ -33,6 +33,9 @@ internal sealed class GenericAgentWidget : IWidget
     private CcStatus? Live => _store.SessionLive(_slot);
 
     public string Icon => "";
+
+    public FaceProp ArrivingProp => FaceProp.Think;
+
     public bool IsActive => Live is not null;
     public IEnumerable<int> OwnerPids => Live is { } st
         ? new[] { st.Pid, st.ConsolePid } : Array.Empty<int>();

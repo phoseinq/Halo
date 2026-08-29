@@ -14,22 +14,22 @@ internal static class AskBanner
     internal const int DeskTint = 200;
     private const float Pad = 20f;
     private const float IconD = 19f, IconGap = 8f;
-    private const float EyebrowTop = 18f, EyebrowH = 16f, EyebrowPx = 11.5f;
-    private const float TitleTop = 44f, TitlePx = 19f, TitleLineH = 25f;
-    private const float TargetPx = 13f, TargetH = 19f;
+    private const float EyebrowTop = 18f, EyebrowH = 17f, EyebrowPx = 12.5f;
+    private const float TitleTop = 46f, TitlePx = 22f, TitleLineH = 29f;
+    private const float TargetPx = 14.5f, TargetH = 21f;
     private const float TitleGap = 14f;
 
-    private const float RowGap = 8f, RowRadius = 16f, RowPadX = 14f, RowPadY = 11f;
-    private const float MinRowH = 50f;
+    private const float RowGap = 9f, RowRadius = 17f, RowPadX = 15f, RowPadY = 12f;
+    private const float MinRowH = 57f;
 
-    private const float NumD = 32f, NumGap = 11f, NumPx = 16f;
+    private const float NumD = 36f, NumGap = 12f, NumPx = 18f;
     private const float BottomPad = 20f;
 
     private const float CloseD = 24f;
     internal static RectangleF CloseRect(int w) => new(w - Pad - CloseD, EyebrowTop - 4f, CloseD, CloseD);
-    private const float LabelPx = 15f, DescPx = 12.5f;
+    private const float LabelPx = 17.5f, DescPx = 14f;
 
-    private const float LabelLineH = 20f, DescLineH = 17f, LabelDescGap = 2f;
+    private const float LabelLineH = 23f, DescLineH = 19f, LabelDescGap = 3f;
     private const int TitleMaxLines = 3, LabelMaxLines = 2, DescMaxLines = 3;
 
     private static readonly Color White = Color.FromArgb(255, 255, 255, 255);

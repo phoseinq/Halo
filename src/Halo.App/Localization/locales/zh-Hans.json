@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "让药丸浮在游戏和视频之上",
   "settings.general.greeting.label": "打招呼",
   "settings.general.greeting.desc": "每天第一次回来时挥手",
+  "settings.general.face.label": "待机脸",
+  "settings.general.face.desc": "桌面空闲时显示 Halo 的脸",
   "settings.general.language.label": "语言",
   "settings.general.language.desc": "Halo 显示自身文字所用的语言",
   "settings.general.capture.label": "截图中包含 Halo",
@@ -596,5 +598,9 @@
   "agent.window.days": "{0}天",
   "agent.window.daysHours": "{0}天{1}时",
   "download.paused": "已暂停",
-  "download.downloading": "下载中"
+  "download.downloading": "下载中",
+  "settings.launcher.enabled.label": "启动器",
+  "settings.launcher.enabled.desc": "用快捷键在刃海下方打开搜索框",
+  "settings.launcher.hotkey.label": "启动器快捷键",
+  "settings.launcher.hotkey.desc": "打开它的组合键。其他应用可能已占用"
 }

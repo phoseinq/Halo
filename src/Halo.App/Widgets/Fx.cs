@@ -854,4 +854,54 @@ internal static class Fx
         return Color.FromArgb(255, (int)((r + m) * 255), (int)((g2 + m) * 255), (int)((b + m) * 255));
     }
 
+    public static void Gauge(Graphics g, RectangleF box, float frac, Color colour, float a, float band = 4f)
+        => Gauge(g, box, [frac], [colour], a, band);
+
+    public static void Gauge(Graphics g, RectangleF box, IReadOnlyList<float> fracs, IReadOnlyList<Color> colours,
+                             float a, float band = 4f, float step = 7f)
+    {
+        if (fracs.Count == 0) return;
+        float outer = Math.Min(box.Width, box.Height) / 2f - band / 2f;
+        float cx = box.X + box.Width / 2f, cy = box.Y + box.Height / 2f;
+        var old = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        for (int i = 0; i < fracs.Count; i++)
+        {
+            float r = outer - i * step;
+            if (r < band) break;
+            using (var track = new Pen(Color.FromArgb((int)(46 * a), 255, 255, 255), band))
+                g.DrawArc(track, cx - r, cy - r, r * 2, r * 2, 0, 360);
+
+            float sweep = Math.Clamp(fracs[i], 0f, 1f) * 360f;
+
+            if (sweep <= 1f) continue;
+            var c = colours[Math.Min(i, colours.Count - 1)];
+            using var arc = new Pen(Color.FromArgb((int)(235 * a), c.R, c.G, c.B), band)
+            { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round };
+            g.DrawArc(arc, cx - r, cy - r, r * 2, r * 2, -90f, sweep);
+        }
+        g.SmoothingMode = old;
+    }
+
+    public static readonly Color VitalCpu = Color.FromArgb(122, 134, 255);
+    public static readonly Color VitalGpu = Color.FromArgb(178, 126, 240);
+    public static readonly Color VitalMemory = Color.FromArgb(94, 196, 206);
+    public static readonly Color VitalStorage = Color.FromArgb(226, 176, 104);
+    public static readonly Color VitalBattery = Color.FromArgb(122, 210, 150);
+    public static readonly Color VitalAlarm = Color.FromArgb(232, 116, 110);
+    public static readonly Color VitalOs = Color.FromArgb(96, 168, 236);
+
+    private const float AlarmAt = 0.88f;
+
+    public static Color Vital(Color identity, float frac)
+        => Math.Clamp(frac, 0f, 1f) >= AlarmAt ? VitalAlarm : identity;
+
+    public static Color Load(float frac)
+    {
+        float f = Math.Clamp(frac, 0f, 1f);
+        return f < 0.55f ? VitalBattery
+             : f < 0.80f ? Color.FromArgb(226, 188, 106)
+             : VitalAlarm;
+    }
 }

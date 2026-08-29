@@ -160,6 +160,8 @@ internal sealed partial class NotchController : IHaloHost
     {
         try
         {
+
+            var preview = Halo.Notifications.NotifImage.Load(request.ImagePath);
             _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
             {
                 App = request.App,
@@ -167,11 +169,45 @@ internal sealed partial class NotchController : IHaloHost
                 Body = request.Body,
                 Code = request.Code,
                 LaunchPath = request.LaunchPath,
+                Preview = preview,
+
+                Icon = preview is null ? null : Badges.ApiPreview(),
                 Kind = "api",
                 Duration = Math.Clamp(request.Seconds, 2, 30),
             });
         }
         catch { }
+    }
+
+    public string? PanelShow(JsonObject spec, double seconds)
+    {
+        try
+        {
+            var parsed = Halo.Panels.PanelSpec.Parse(spec);
+            return parsed is null ? null : _panels.Publish(parsed, seconds);
+        }
+        catch { return null; }
+    }
+
+    public JsonObject PanelState()
+    {
+        var state = new JsonObject();
+        try
+        {
+            var snap = _panels.Current;
+            state["open"] = snap is not null;
+            state["id"] = snap?.Id;
+            var values = new JsonObject();
+            foreach (var (key, value) in _panels.Values()) values[key] = Math.Round(value, 4);
+            state["values"] = values;
+        }
+        catch { }
+        return state;
+    }
+
+    public bool PanelClose(string? id)
+    {
+        try { return _panels.Close(id); } catch { return false; }
     }
 
     public bool MediaControl(string action, int slot)

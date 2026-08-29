@@ -13,11 +13,14 @@ internal static class HookConnect
         Install,
     }
 
-    internal static Step Next(bool busy, bool alreadyTried, bool undone, Func<bool> agentSeen, Func<bool?> hooksInstalled)
+    internal static Step Next(bool busy, bool alreadyTried, bool undone, Func<bool> agentSeen,
+                              Func<bool?> hooksInstalled, Func<bool> otherHaloLive)
     {
         if (busy || alreadyTried || undone) return Step.Wait;
         if (!agentSeen()) return Step.Wait;
-        return hooksInstalled() switch { false => Step.Install, _ => Step.Wait };
+        if (hooksInstalled() is not false) return Step.Wait;
+
+        return otherHaloLive() ? Step.Wait : Step.Install;
     }
 
     internal static string? MarkFor(bool installed) => installed ? HookMarks.Done : null;
@@ -196,6 +199,7 @@ internal static class HookConnect
 
                     bool probed = false;
                     bool? answer = null;
+                    bool foreign = false;
                     var step = Next(
                         busy: false,
 
@@ -208,11 +212,14 @@ internal static class HookConnect
                             probed = true;
                             int code = Query(agent);
                             return answer = code switch { 0 => true, 2 => false, _ => (bool?)null };
-                        });
+                        },
+                        otherHaloLive: () => foreign = OtherHaloHooksLive(agent));
 
                     Log(agent, $"{agent}: mark={(mark.Length == 0 ? "-" : mark)} settled={IsSettled(agent)} probed={probed} "
-                        + $"answer={answer?.ToString() ?? "-"} step={step}");
+                        + $"answer={answer?.ToString() ?? "-"} foreign={foreign} step={step}");
                     if (answer == true) NoteSuccess(agent);
+
+                    if (foreign) NoteSuccess(agent);
                     if (step != Step.Install)
                     {
                         if (probed && answer is null)
@@ -258,13 +265,40 @@ internal static class HookConnect
         catch { return CouldNotRun; }
     }
 
+    internal static bool OtherHaloHooksLive(string agent)
+    {
+        try
+        {
+            string path = SettingsPath(agent);
+            if (!File.Exists(path)) return false;
+            string raw = File.ReadAllText(path);
+            string mine = HookExe();
+
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(raw, @"[A-Za-z]:(?:\\|[^""])*?Halo\.Hooks\.exe"))
+            {
+
+                string exe = m.Value.Replace(@"\\", @"\");
+                if (string.Equals(exe, mine, StringComparison.OrdinalIgnoreCase)) continue;
+                if (File.Exists(exe)) return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    internal static string SettingsPath(string agent)
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return agent == "Codex"
+            ? Path.Combine(home, ".codex", "hooks.json")
+            : Path.Combine(home, ".claude", "settings.json");
+    }
+
     private static (bool Ok, string Why, string Path) Install(string agent)
     {
 
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        string settings = agent == "Codex"
-            ? Path.Combine(home, ".codex", "hooks.json")
-            : Path.Combine(home, ".claude", "settings.json");
+        string settings = SettingsPath(agent);
         try
         {
             string exe = HookExe();

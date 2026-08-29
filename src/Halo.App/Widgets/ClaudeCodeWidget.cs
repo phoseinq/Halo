@@ -53,6 +53,8 @@ internal sealed class ClaudeCodeWidget : IWidget
         }
     }
 
+    public FaceProp ArrivingProp => FaceProp.Spark;
+
     public bool IsActive => Live is not null;
     private CcStatus? Live => _store.SessionLive(_slot);
     public Color? Ring => Live is { } st ? RingColor(st) : null;
@@ -79,6 +81,9 @@ internal sealed class ClaudeCodeWidget : IWidget
         }
     }
     public int RevealPid => Live?.HostPid ?? 0;
+
+    public string? RevealHint => Halo.Shell.AppFront.PathLeaf(Live?.Cwd);
+    public long RevealHwnd => Live?.HostHwnd ?? 0;
 
     public string? RevealProcess => Live is { FromDesktopApp: true } ? "claude" : null;
 

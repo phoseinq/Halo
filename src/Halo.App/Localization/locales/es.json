@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "Mantener la píldora sobre juegos y vídeo",
   "settings.general.greeting.label": "Saludar",
   "settings.general.greeting.desc": "Saludar con la mano la primera vez que vuelves cada día",
+  "settings.general.face.label": "Cara en reposo",
+  "settings.general.face.desc": "Mostrar la cara de Halo cuando el escritorio esta vacio",
   "settings.general.language.label": "Idioma",
   "settings.general.language.desc": "El idioma en el que Halo muestra sus textos",
   "settings.general.capture.label": "Incluir Halo en las capturas",
@@ -599,5 +601,9 @@
   "agent.window.days": "{0} d",
   "agent.window.daysHours": "{0}d{1}h",
   "download.paused": "En pausa",
-  "download.downloading": "Descargando"
+  "download.downloading": "Descargando",
+  "settings.launcher.enabled.label": "Lanzador",
+  "settings.launcher.enabled.desc": "Abre un cuadro de búsqueda bajo la muesca con un atajo",
+  "settings.launcher.hotkey.label": "Atajo del lanzador",
+  "settings.launcher.hotkey.desc": "La combinación que lo abre. Puede que otra aplicación ya la use"
 }

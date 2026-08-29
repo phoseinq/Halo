@@ -68,6 +68,8 @@ internal sealed class CodexWidget : IWidget
     public string Id => "codex";
     public string? AgentState => Current?.State;
 
+    public FaceProp ArrivingProp => FaceProp.Brackets;
+
     public bool IsActive => Current is not null;
     public Color? Ring => Current is { } st ? RingColor(st) : null;
 
@@ -87,6 +89,9 @@ internal sealed class CodexWidget : IWidget
 
     public string SessionKey => Current is null ? "" : "codex:" + _surface;
     public int RevealPid => Current?.HostPid ?? 0;
+
+    public string? RevealHint => Halo.Shell.AppFront.PathLeaf(Current?.Cwd);
+    public long RevealHwnd => Current?.HostHwnd ?? 0;
 
     public string? RevealProcess => Current?.Source == CodexSurface.Desktop ? "chatgpt" : null;
 

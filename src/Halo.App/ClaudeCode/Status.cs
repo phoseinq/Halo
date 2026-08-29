@@ -37,6 +37,8 @@ internal sealed class CcStatus
     public int ConsolePid { get; set; }
 
     public int HostPid { get; set; }
+
+    public long HostHwnd { get; set; }
     public string? CurrentTool { get; set; }
     public string? ToolTarget { get; set; }
     public string? LastPrompt { get; set; }

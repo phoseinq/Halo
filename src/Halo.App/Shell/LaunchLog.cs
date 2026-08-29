@@ -12,23 +12,26 @@ internal static class LaunchLog
     private static readonly string LogPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "launch-debug.txt");
 
-    internal static void Launch(bool won, bool askedForSettings, double? winnerAgeSeconds, bool openPanel)
-        => Write(LaunchLine(DateTime.Now, Environment.ProcessId, won, askedForSettings, winnerAgeSeconds, openPanel));
+    internal static void Launch(
+        bool won, bool askedForSettings, double? winnerAgeSeconds, double? sessionAgeSeconds, bool openPanel)
+        => Write(LaunchLine(DateTime.Now, Environment.ProcessId, won, askedForSettings,
+                            winnerAgeSeconds, sessionAgeSeconds, openPanel));
 
     internal static void Panel(string reason, bool started, bool stamped)
         => Write(PanelLine(DateTime.Now, reason, started, stamped));
 
     internal static string LaunchLine(
-        DateTime now, int pid, bool won, bool askedForSettings, double? winnerAgeSeconds, bool openPanel)
-    {
-        string age = winnerAgeSeconds is { } seconds
-            ? seconds.ToString("0.0", CultureInfo.InvariantCulture) + "s"
-            : "?";
-        return won
+        DateTime now, int pid, bool won, bool askedForSettings,
+        double? winnerAgeSeconds, double? sessionAgeSeconds, bool openPanel)
+        => won
             ? $"{Stamp(now)} launch pid={pid} won asked={YesNo(askedForSettings)}\r\n"
-            : $"{Stamp(now)} launch pid={pid} lost winnerAge={age} asked={YesNo(askedForSettings)} "
+            : $"{Stamp(now)} launch pid={pid} lost winnerAge={Age(winnerAgeSeconds)} "
+                + $"sessionAge={Age(sessionAgeSeconds)} asked={YesNo(askedForSettings)} "
                 + $"panel={YesNo(openPanel)}\r\n";
-    }
+
+    private static string Age(double? seconds) => seconds is { } value
+        ? value.ToString("0.0", CultureInfo.InvariantCulture) + "s"
+        : "?";
 
     internal static string PanelLine(DateTime now, string reason, bool started, bool stamped)
         => $"{Stamp(now)} panel reason={reason} started={YesNo(started)} stamp={YesNo(stamped)}\r\n";

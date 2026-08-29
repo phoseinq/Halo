@@ -44,6 +44,10 @@
     <!-- the fourth, and the one that has to be shared rather than twinned: the pill writes the request stamp
          and the panel consumes it, so the path, the format and the freshness window are one definition -->
     <Compile Include="..\Halo.App\Shell\PanelLaunch.cs" Link="PanelLaunch.cs" />
+    <!-- the fifth, for exactly the reason Strings.cs gives: the Quick Actions catalogue IS a key table.
+         The panel writes quick.<id> and the launcher decides what to show from the same ids and the same
+         defaults, so two copies would disagree the first time an action was added to one of them. -->
+    <Compile Include="..\Halo.App\Launcher\QuickActions.cs" Link="QuickActions.cs" />
   </ItemGroup>
 
 </Project>

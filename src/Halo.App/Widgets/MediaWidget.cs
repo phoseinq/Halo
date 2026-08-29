@@ -115,7 +115,16 @@ internal sealed class MediaWidget : IWidget
     public string? ArtistText { get { lock (_lock) return _artist; } }
     public bool Playing { get { lock (_lock) return _playing; } }
 
+    internal bool ShowingVideo => IsActive && Playing && IsVideo();
+
+    internal Color? ArtAccent
+    {
+        get { lock (_lock) return _art != null && _accent != White ? _accent : (Color?)null; }
+    }
+
     public string Icon => "\uE768";
+
+    public FaceProp ArrivingProp => FaceProp.Headphones;
 
     public bool IsActive
     {

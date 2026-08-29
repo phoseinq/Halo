@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "Держать пилюлю над играми и видео",
   "settings.general.greeting.label": "Здороваться",
   "settings.general.greeting.desc": "Махать рукой при первом возвращении за день",
+  "settings.general.face.label": "Лицо в покое",
+  "settings.general.face.desc": "Показывать лицо Halo, когда рабочий стол пуст",
   "settings.general.language.label": "Язык",
   "settings.general.language.desc": "Язык, на котором Halo показывает свои надписи",
   "settings.general.capture.label": "Показывать Halo в записи",
@@ -596,5 +598,9 @@
   "agent.window.days": "{0} д",
   "agent.window.daysHours": "{0}д{1}ч",
   "download.paused": "Пауза",
-  "download.downloading": "Загрузка"
+  "download.downloading": "Загрузка",
+  "settings.launcher.enabled.label": "Запуск",
+  "settings.launcher.enabled.desc": "Открывает поиск под вырезом по горячей клавише",
+  "settings.launcher.hotkey.label": "Горячая клавиша запуска",
+  "settings.launcher.hotkey.desc": "Сочетание, которое его открывает. Другое приложение может уже его занять"
 }

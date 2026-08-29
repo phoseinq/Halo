@@ -110,4 +110,40 @@ public sealed class DownloadSourceTests
         Assert.Empty(SteamInstall.ParseLibraries(""));
         Assert.Empty(SteamInstall.ParseLibraries("{}"));
     }
+
+    // ── when to ask Restart Manager who owns a partial file ───────────────────────────────────────
+    // Measured with --probe-dlcost: RmGetList costs 70-90ms against a file a downloader is HOLDING OPEN,
+    // against 8-13ms on an idle one, because it answers by walking every process's handle table. Asking
+    // once per file per second for the length of a download is what made the whole machine stutter, so
+    // the policy that decides whether to ask again is worth pinning down in both directions.
+    [Fact]
+    public void OwnerLookup_is_needed_the_first_time()
+    {
+        Assert.True(PartialFiles.NeedsOwnerLookup(cached: false, pid: 0, alive: false, ageMs: 0));
+    }
+
+    [Fact]
+    public void OwnerLookup_is_skipped_while_the_named_owner_is_still_running()
+    {
+        Assert.False(PartialFiles.NeedsOwnerLookup(cached: true, pid: 4321, alive: true, ageMs: 600_000));
+    }
+
+    [Fact]
+    public void OwnerLookup_repeats_once_the_named_owner_is_gone()
+    {
+        // a killed downloader whose partial another process picks up must not leave Cancel aimed at a pid
+        // that has since been recycled onto somebody else
+        Assert.True(PartialFiles.NeedsOwnerLookup(cached: true, pid: 4321, alive: false, ageMs: 0));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(14_999, false)]
+    [InlineData(15_000, true)]
+    public void Unnamed_owner_backs_off_instead_of_retrying_every_scan(long ageMs, bool expected)
+    {
+        // RM returning nothing is the worst case: it costs the same 90ms and yields no answer, so a retry
+        // per second would be the stutter with none of the benefit
+        Assert.Equal(expected, PartialFiles.NeedsOwnerLookup(cached: true, pid: 0, alive: false, ageMs));
+    }
 }

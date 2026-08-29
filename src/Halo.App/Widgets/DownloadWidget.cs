@@ -36,6 +36,8 @@ internal sealed class DownloadWidget : IWidget
         try { using var t = new Bitmap(f); return new Bitmap(t); } catch { return null; }
     }
     public Bitmap? IconImage => Ico();
+    public FaceProp ArrivingProp => FaceProp.Download;
+
     public bool IsActive => Downloads.Name != null;
 
     public float RingProgress => Downloads.Name == null || Downloads.Installing || Downloads.Waiting || Downloads.NoPct

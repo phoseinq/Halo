@@ -34,6 +34,8 @@ internal sealed record CodexSnapshot(
     internal CodexSnapshotFields PresentFields { get; init; }
 
     internal int HostPid { get; init; }
+
+    internal long HostHwnd { get; init; }
 }
 
 internal static class CodexRollout
@@ -632,6 +634,7 @@ internal sealed class CodexStatusStore : IDisposable
             Pid = hook.Pid,
             ConsolePid = hook.ConsolePid,
             HostPid = hook.HostPid,
+            HostHwnd = hook.HostHwnd,
             ContextUsed = fields.HasFlag(CodexSnapshotFields.ContextUsed) ? rollout.ContextUsed : hook.ContextUsed,
             ContextMax = fields.HasFlag(CodexSnapshotFields.ContextMax) ? rollout.ContextMax : hook.ContextMax,
             PromptTokens = fields.HasFlag(CodexSnapshotFields.PromptTokens) ? rollout.PromptTokens : hook.PromptTokens,
@@ -661,7 +664,7 @@ internal sealed class CodexStatusStore : IDisposable
                 status.Message, status.Cwd, status.Pid, status.ConsolePid, status.ContextUsed, status.ContextMax,
                 status.PromptTokens, status.PrimaryLimit, status.SecondaryLimit, updatedAt,
                 ProcessAlive(status.Pid))
-            { HostPid = status.HostPid };
+            { HostPid = status.HostPid, HostHwnd = status.HostHwnd };
             return new StatusRead(path, source, StatusReadKind.Success, snapshot);
         }
         catch (IOException)
@@ -813,6 +816,7 @@ internal sealed class CodexStatusStore : IDisposable
         public int Pid { get; set; }
         public int ConsolePid { get; set; }
         public int HostPid { get; set; }
+        public long HostHwnd { get; set; }
         public long ContextUsed { get; set; }
         public long ContextMax { get; set; }
         public long PromptTokens { get; set; }

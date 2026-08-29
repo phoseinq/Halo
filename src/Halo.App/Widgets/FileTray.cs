@@ -38,6 +38,8 @@ internal sealed class FileTray : IWidget
 
     public string Icon => ((char)0xE7B8).ToString();
 
+    public FaceProp ArrivingProp => FaceProp.Tray;
+
     public bool IsActive { get { lock (_lock) return DragActive || _paths.Count > 0; } }
 
     public static bool Holding { get { lock (_lock) return _paths.Count > 0; } }

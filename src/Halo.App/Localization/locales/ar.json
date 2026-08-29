@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "إبقاء الحبّة فوق الألعاب والفيديو",
   "settings.general.greeting.label": "إلقاء التحية",
   "settings.general.greeting.desc": "التلويح أول مرة تعود فيها كل يوم",
+  "settings.general.face.label": "الوجه الخامل",
+  "settings.general.face.desc": "أظهر وجه Halo عندما يكون سطح المكتب فارغًا",
   "settings.general.language.label": "اللغة",
   "settings.general.language.desc": "اللغة التي يعرض بها Halo نصوصه",
   "settings.general.capture.label": "إظهار Halo في التسجيلات",
@@ -595,5 +597,9 @@
   "agent.window.days": "{0} يوم",
   "agent.window.daysHours": "{0}ي{1}س",
   "download.paused": "مُوقَف",
-  "download.downloading": "جارٍ التنزيل"
+  "download.downloading": "جارٍ التنزيل",
+  "settings.launcher.enabled.label": "المشغّل",
+  "settings.launcher.enabled.desc": "افتح مربع بحث أسفل الشق باختصار لوحة المفاتيح",
+  "settings.launcher.hotkey.label": "اختصار المشغّل",
+  "settings.launcher.hotkey.desc": "التركيب الذي يفتحه. قد يكون تطبيق آخر يستخدمه بالفعل"
 }

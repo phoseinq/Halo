@@ -38,6 +38,8 @@ internal sealed class BtWidget : IWidget
         }
     }
 
+    public FaceProp ArrivingProp => FaceProp.Earbud;
+
     public bool IsActive { get { lock (_lock) return Environment.TickCount64 < _until; } }
     public int Version { get { lock (_lock) return _version; } }
     public bool Animating => IsActive;

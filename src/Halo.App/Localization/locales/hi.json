@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "पिल को गेम और वीडियो के ऊपर रखें",
   "settings.general.greeting.label": "नमस्ते कहना",
   "settings.general.greeting.desc": "हर दिन पहली बार लौटने पर हाथ हिलाए",
+  "settings.general.face.label": "निष्क्रिय चेहरा",
+  "settings.general.face.desc": "डेस्कटॉप खाली होने पर Halo का चेहरा दिखाएँ",
   "settings.general.language.label": "भाषा",
   "settings.general.language.desc": "Halo अपना टेक्स्ट जिस भाषा में दिखाता है",
   "settings.general.capture.label": "कैप्चर में Halo शामिल करें",
@@ -595,5 +597,9 @@
   "agent.window.days": "{0} दिन",
   "agent.window.daysHours": "{0}द{1}घ",
   "download.paused": "रुका",
-  "download.downloading": "डाउनलोड हो रहा"
+  "download.downloading": "डाउनलोड हो रहा",
+  "settings.launcher.enabled.label": "लॉन्चर",
+  "settings.launcher.enabled.desc": "हॉटकी से नॉच के नीचे खोज बॉक्स खोलें",
+  "settings.launcher.hotkey.label": "लॉन्चर हॉटकी",
+  "settings.launcher.hotkey.desc": "वह संयोजन जो इसे खोलता है। कोई दूसरा ऐप पहले से इसे ले सकता है"
 }

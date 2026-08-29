@@ -18,7 +18,7 @@ public class HookConnectTests
     // have copied, and copying it is how the eager probing came back.
     private static HookConnect.Step Next(bool? seen = true, bool? installed = false,
         bool tried = false, bool undone = false, bool busy = false)
-        => HookConnect.Next(busy, tried, undone, () => seen == true, () => installed);
+        => HookConnect.Next(busy, tried, undone, () => seen == true, () => installed, () => false);
 
     // The probe could not answer. Installing on this is Halo writing nine handlers into settings.json
     // because it failed to look - unattended, on a repeating scan, which is why this matters more here
@@ -88,7 +88,8 @@ public class HookConnectTests
             int seen = 0, installed = 0;
             var step = HookConnect.Next(busy, tried, undone,
                 agentSeen: () => { seen++; return true; },
-                hooksInstalled: () => { installed++; return false; });
+                hooksInstalled: () => { installed++; return false; },
+                otherHaloLive: () => false);
 
             Assert.Equal(HookConnect.Step.Wait, step);
             Assert.Equal(0, seen);
@@ -104,7 +105,8 @@ public class HookConnectTests
         int installed = 0;
         var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
             agentSeen: () => false,
-            hooksInstalled: () => { installed++; return false; });
+            hooksInstalled: () => { installed++; return false; },
+            otherHaloLive: () => false);
 
         Assert.Equal(HookConnect.Step.Wait, step);
         Assert.Equal(0, installed);
@@ -117,7 +119,8 @@ public class HookConnectTests
         int seen = 0, installed = 0;
         var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
             agentSeen: () => { seen++; return true; },
-            hooksInstalled: () => { installed++; return false; });
+            hooksInstalled: () => { installed++; return false; },
+            otherHaloLive: () => false);
 
         Assert.Equal(HookConnect.Step.Install, step);
         Assert.Equal(1, seen);
@@ -203,12 +206,73 @@ public class HookConnectTests
     public void A_previous_connection_does_not_block_a_missing_one_from_being_restored()
     {
         var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
-            agentSeen: () => true, hooksInstalled: () => false);
+            agentSeen: () => true, hooksInstalled: () => false, otherHaloLive: () => false);
         Assert.Equal(HookConnect.Step.Install, step);
 
         // and the user's no still is
         Assert.Equal(HookConnect.Step.Wait, HookConnect.Next(busy: false, alreadyTried: false, undone: true,
-            agentSeen: () => true, hooksInstalled: () => false));
+            agentSeen: () => true, hooksInstalled: () => false, otherHaloLive: () => false));
+    }
+
+    // Hooks belonging to ANOTHER Halo. "Not installed" is answered by asking OUR helper, so a Store install's
+    // handlers read as absent to a build running from source, and vice versa - and this used to rewrite all
+    // nine of them to whichever Halo started last, once, silently, with the settled mark then hiding it.
+    [Fact]
+    public void Hooks_pointing_at_another_live_Halo_are_left_alone()
+    {
+        var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
+            agentSeen: () => true, hooksInstalled: () => false, otherHaloLive: () => true);
+
+        Assert.Equal(HookConnect.Step.Wait, step);
+    }
+
+    [Fact]
+    public void A_machine_with_no_hooks_at_all_still_gets_connected()
+    {
+        // the case auto-connect exists for - a Store user who has no path to hooks/ - must not regress
+        var step = HookConnect.Next(busy: false, alreadyTried: false, undone: false,
+            agentSeen: () => true, hooksInstalled: () => false, otherHaloLive: () => false);
+
+        Assert.Equal(HookConnect.Step.Install, step);
+    }
+
+    // Declining has to be a settled answer, not a shrug repeated forever: the gate turns "not installed"
+    // into Wait, and Wait was previously only ever reached by paths that also stopped the probing.
+    [Fact]
+    public void Declining_a_takeover_is_a_stable_answer_not_a_loop()
+    {
+        int probes = 0;
+        Func<HookConnect.Step> run = () => HookConnect.Next(
+            busy: false, alreadyTried: false, undone: false,
+            agentSeen: () => true,
+            hooksInstalled: () => { probes++; return false; },
+            otherHaloLive: () => true);
+
+        Assert.Equal(HookConnect.Step.Wait, run());
+        Assert.Equal(1, probes);
+
+        // Next is pure - the caller is what must stop asking - so the contract this pins is that a decline
+        // is distinguishable from "could not tell": it answers False, never null.
+        Assert.Equal(HookConnect.Step.Wait, HookConnect.Next(
+            busy: false, alreadyTried: true, undone: false,
+            agentSeen: () => true,
+            hooksInstalled: () => { probes++; return false; },
+            otherHaloLive: () => true));
+        Assert.Equal(1, probes);   // settled by the caller, so not probed again
+    }
+
+    [Fact]
+    public void The_takeover_gate_is_only_consulted_when_an_install_is_actually_next()
+    {
+        // it reads a file; the gates above it are the cheap ones and must still short-circuit first
+        int asked = 0;
+        HookConnect.Next(busy: false, alreadyTried: false, undone: false,
+            agentSeen: () => true, hooksInstalled: () => true, otherHaloLive: () => { asked++; return true; });
+        Assert.Equal(0, asked);
+
+        HookConnect.Next(busy: true, alreadyTried: false, undone: false,
+            agentSeen: () => true, hooksInstalled: () => false, otherHaloLive: () => { asked++; return true; });
+        Assert.Equal(0, asked);
     }
 
     // The banner went out with no icon at all for as long as it had existed, and the sample sheet hid it by

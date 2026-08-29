@@ -6,7 +6,8 @@ namespace Halo.Widgets;
 internal enum NetWindow { Hour, Today, Week, Month, Quarter }
 
 internal readonly record struct NetColumn(
-    float HeroY, float UpY, float TotalY, float ShareY,
+
+    float RatesY, float TotalY, float ShareY,
     float TraceTop, float TraceH,
 
     float BandRow1, float BandRow2, float BandRow3,
@@ -16,8 +17,11 @@ internal static class NetPanelLayout
 {
 
     internal const float Pad = 28f;
-    internal const float ColRight = 196f;
-    internal const float ChartLeft = 224f;
+
+    internal const float ColRight = 224f;
+    internal const float ChartLeft = 252f;
+
+    internal const float RateSplit = 104f;
     internal const float TrackRight = 532f;
     internal const float ChipRight = 528f;
     internal const float ChipTop = 16f;
@@ -45,10 +49,11 @@ internal static class NetPanelLayout
     }
 
     internal static NetColumn Column(float panelH) => new(
-        HeroY: 20f, UpY: 52f, TotalY: 76f, ShareY: 93f,
-        TraceTop: 100f, TraceH: 36f,
-        BandRow1: 104f, BandRow2: 122f, BandRow3: 140f,
-        MarkCy: Math.Max(120f, panelH - 40f), FootY: Math.Max(140f, panelH - 20f));
+        RatesY: 32f, TotalY: 54f, ShareY: 76f,
+        TraceTop: 88f, TraceH: 34f,
+        BandRow1: 82f, BandRow2: 104f, BandRow3: 126f,
+
+        MarkCy: Math.Max(120f, panelH - 50f), FootY: Math.Max(140f, panelH - 30f));
 
     internal static RectangleF RatesZone(float panelH)
     {
@@ -86,7 +91,7 @@ internal static class NetPanelLayout
         _ => "net.avg",
     };
 
-    private static readonly float[] ChipWidths = [50f, 50f, 56f, 64f, 64f];
+    private static readonly float[] ChipWidths = [46f, 46f, 52f, 60f, 60f];
     private const float ChipGap = 6f;
 
     internal static RectangleF[] Chips(float panelW)

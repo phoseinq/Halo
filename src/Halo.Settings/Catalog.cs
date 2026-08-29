@@ -43,6 +43,18 @@ internal static class Catalog
     private static Row Action(string key, string label, string description, string action)
         => new(key, label, description, RowKind.Action, "", [], action);
 
+    private static Row[] QuickToggles()
+    {
+        var rows = new Row[Halo.Launcher.QuickActions.All.Length];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            var b = Halo.Launcher.QuickActions.All[i];
+            string key = Halo.Launcher.QuickActions.EnabledKey(b.Id);
+            rows[i] = Toggle(key, L(key), D(key), Halo.Launcher.QuickActions.DefaultOn(b.Id));
+        }
+        return rows;
+    }
+
     internal static string LanguageRowFallback => Halo.Localization.Strings.SystemLabel;
 
     private static readonly object Gate = new();
@@ -111,6 +123,8 @@ internal static class Catalog
                 Toggle("general.fullscreen", L("general.fullscreen"), D("general.fullscreen"), true),
 
                 Toggle("general.greeting", L("general.greeting"), D("general.greeting"), true),
+
+                Toggle("general.face", L("general.face"), D("general.face"), true),
             ]),
             new(S("behaviour"), "\uE945", [
 
@@ -118,7 +132,19 @@ internal static class Catalog
                     LanguageRowFallback, [.. Halo.Localization.Strings.Available()]),
                 Toggle("general.capture", L("general.capture"), D("general.capture"), false),
                 Toggle("general.follow", L("general.follow"), D("general.follow")),
+                Toggle("launcher.enabled", L("launcher.enabled"), D("launcher.enabled"), true),
+
+                new("launcher.hotkey", L("launcher.hotkey"), D("launcher.hotkey"),
+                    RowKind.Text, "Alt+Space", []),
                 Action("general.reset", L("general.reset"), D("general.reset"), "Reset position"),
+            ]),
+
+            new(S("quickactions"), "", [
+                .. QuickToggles(),
+
+                new("quick.custom1", L("quick.custom1"), D("quick.custom1"), RowKind.Text, "", []),
+                new("quick.custom2", L("quick.custom2"), D("quick.custom2"), RowKind.Text, "", []),
+                new("quick.custom3", L("quick.custom3"), D("quick.custom3"), RowKind.Text, "", []),
             ]),
         ]),
         new(PageId.Features, P("Features"), PD("Features"),

@@ -85,8 +85,9 @@ public class NetPanelLayoutTests
         Assert.True(chips[^1].Right <= 560f - NetPanelLayout.Pad);
         for (int i = 1; i < chips.Length; i++)
             Assert.True(chips[i - 1].Right <= chips[i].Left);
-        // Five chips need 308px and the track is 308px, so the first one sits a few pixels left of the chart's
-        // own edge - into the gutter, which is empty. What must hold is that it never reaches the info column.
+        // The chips may sit a little left of the chart's own edge - the gutter between the two is empty. What
+        // must hold is that they never reach the info column, and this caught it happening for real: widening
+        // the column to fit both rates on one line pushed ColRight past the leftmost chip.
         Assert.True(chips[0].Left > NetPanelLayout.ColRight);
     }
 
@@ -179,15 +180,14 @@ public class NetPanelLayoutTests
     {
         var small = NetPanelLayout.Column(220f);
         var tall = NetPanelLayout.Column(420f);
-        Assert.Equal(small.HeroY, tall.HeroY);
+        Assert.Equal(small.RatesY, tall.RatesY);
         Assert.Equal(small.TotalY, tall.TotalY);
         Assert.True(tall.MarkCy > small.MarkCy);
         Assert.True(tall.FootY > small.FootY);
         Assert.True(small.MarkCy < small.FootY);
-        // every row inside a 220px panel, in order: the two rates and the window total at rest, then the pair
-        // that a pointer on the rates reveals, then the link mark and its foot line at the bottom edge
-        Assert.True(small.HeroY < small.UpY);
-        Assert.True(small.UpY < small.TotalY);
+        // every row inside a 220px panel, in order: the rates PAIR on one line and the window total at rest,
+        // then what a pointer on the rates reveals, then the link mark and its foot line at the bottom edge
+        Assert.True(small.RatesY < small.TotalY);
         Assert.True(small.TotalY < small.ShareY);
         Assert.True(small.ShareY < small.BandRow1);
         Assert.True(small.BandRow1 < small.BandRow2);
@@ -273,7 +273,7 @@ public class NetPanelLayoutTests
         // and the live speed's zone covers everything that reveal draws, or the pointer moving onto the trace
         // would leave the zone and collapse it at the frame rate
         var zone = NetPanelLayout.RatesZone(220f);
-        Assert.True(zone.Top <= col.HeroY - 8f);
+        Assert.True(zone.Top <= col.RatesY - 8f);
         Assert.True(zone.Bottom >= col.BandRow3 + 16f);
         Assert.True(zone.Bottom < col.MarkCy - 14f, "but stops short of the link mark's own zone");
     }

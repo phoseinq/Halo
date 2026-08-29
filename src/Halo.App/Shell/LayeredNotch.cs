@@ -56,10 +56,12 @@ internal sealed class LayeredNotch
     public static int PrivacyPad => Widgets.Privacy.Active ? PrivacyGap : 0;
 
     private Win32.WndProc _wndProc = null!;
-    private int _workLeft, _workTop, _workWidth;
+    private int _workLeft, _workTop, _workWidth, _workHeight;
 
     public float Scale = 1f;
     public float OffsetX;
+
+    public float OffsetY;
     public float HandleAlpha;
     private static readonly string ScalePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "scale");
@@ -121,7 +123,11 @@ internal sealed class LayeredNotch
     public int WorkTop => _workTop;
     public int WorkWidth => _workWidth;
 
+    public int WorkHeight => _workHeight;
+
     public event Action<Bitmap, bool>? ClipboardImage;
+
+    public event Action<int>? HotKeyPressed;
     private uint _lastClipSeq;
     private long _lastClipTick;
 
@@ -150,6 +156,7 @@ internal sealed class LayeredNotch
         _workLeft = work.left;
         _workTop = work.top;
         _workWidth = work.right - work.left;
+        _workHeight = work.bottom - work.top;
         LoadScale();
 
         int exStyle = Win32.WS_EX_LAYERED | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE;
@@ -515,7 +522,8 @@ internal sealed class LayeredNotch
         {
             g.Clear(Color.Transparent);
             g.ScaleTransform(S, S);
-            DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
+
+            if (!SkipShape) DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
@@ -540,7 +548,8 @@ internal sealed class LayeredNotch
 
         var size = new Win32.SIZE { cx = pw, cy = ph };
         var src = new Win32.POINT { X = 0, Y = 0 };
-        var dst = new Win32.POINT { X = _workLeft + (_workWidth - (int)(w * S)) / 2 + (int)OffsetX, Y = _workTop };
+        var dst = new Win32.POINT { X = _workLeft + (_workWidth - (int)(w * S)) / 2 + (int)OffsetX,
+                                    Y = _workTop + (int)MathF.Round(OffsetY * S) };
         var blend = new Win32.BLENDFUNCTION
         {
             BlendOp = Win32.AC_SRC_OVER,
@@ -557,6 +566,35 @@ internal sealed class LayeredNotch
     }
 
     private long _rgnKey = long.MinValue;
+
+        internal bool SkipShape;
+
+    internal void FrostInto(Graphics g, GraphicsPath clip, int w, int h, float strength, float clarity = 0f)
+    {
+        if (strength <= 0.004f) return;
+        lock (_bgLock)
+        {
+            if (_bg is null) return;
+            int sx = (CaptureW - w) / 2;
+
+            int sy = (int)MathF.Round(OffsetY);
+            int srcW = Math.Min(w, _bg.Width - Math.Max(0, sx));
+            int srcH = Math.Min(h, _bg.Height - Math.Max(0, sy));
+            if (srcW <= 0 || srcH <= 0) return;
+            var saved = g.Save();
+            try
+            {
+                g.SetClip(clip, CombineMode.Intersect);
+                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                using var ia = new ImageAttributes();
+                ia.SetColorMatrix(Frost(Math.Clamp(strength, 0f, 1f), clarity));
+                g.DrawImage(_bg, new Rectangle(0, 0, w, h),
+                            Math.Max(0, sx), Math.Max(0, sy), srcW, srcH, GraphicsUnit.Pixel, ia);
+            }
+            finally { g.Restore(saved); }
+        }
+    }
 
     private void CutPillCorners(int pw, int ph, int wS, int hS, int r)
     {
@@ -724,10 +762,13 @@ internal sealed class LayeredNotch
 
     internal static int Supersample = 2;
 
+    internal static int MaxSupersampledPixels = 140_000;
+
     internal static void ShapeInto(Graphics g, int w, int h, int radius, int tintAlpha,
                                    Bitmap? backdrop, float glassFade, float clarity = 0f)
     {
         int ss = Math.Clamp(Supersample, 1, 2);
+        if (w * h > MaxSupersampledPixels) ss = 1;
 
         var content = ScratchA(w * ss, h * ss);
         using (var cg = Graphics.FromImage(content))
@@ -1323,6 +1364,12 @@ internal sealed class LayeredNotch
             catch { }
         }
 
+        if (msg == Win32.WM_HOTKEY)
+        {
+            try { HotKeyPressed?.Invoke(wParam.ToInt32()); } catch { }
+            return IntPtr.Zero;
+        }
+
         if (msg == Win32.WM_TIMECHANGE)
         {
             try { Almanac.TimeZoneChanged(); } catch { }
@@ -1354,6 +1401,7 @@ internal sealed class LayeredNotch
             _workLeft = work.left;
             _workTop = work.top;
             _workWidth = work.right - work.left;
+            _workHeight = work.bottom - work.top;
 
             lock (_bgLock) { _bg?.Dispose(); _bg = null; }
             System.Threading.Interlocked.Increment(ref _captureVersion);

@@ -126,6 +126,9 @@ internal sealed class VlcWidget : IWidget
 
     public string Icon => "";
     public Bitmap? IconImage => AppIcon.ForAumid(VlcMonitor.ExePath);
+
+    public FaceProp ArrivingProp => FaceProp.Goggles;
+
     public bool IsActive => VlcMonitor.Name != null && !SmtcHasVlc();
 
     public int Version => VlcMonitor.Version + (VlcHttp.Online

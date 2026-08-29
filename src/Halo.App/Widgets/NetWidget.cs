@@ -17,7 +17,8 @@ internal sealed class NetWidget : IWidget
         internal void Settle()
     {
 
-        float target = RingFrac(_meter.DownRate);
+        _downLeads = DownLeads(_downLeads, _meter.DownRate, _meter.UpRate);
+        float target = RingFrac(Louder(_meter.DownRate, _meter.UpRate, _downLeads));
         _edge.Seed(target, Environment.TickCount64);
         for (int i = 0; i < 240; i++) _wash.Step(target);
     }
@@ -79,6 +80,8 @@ internal sealed class NetWidget : IWidget
     };
 
     internal bool Pinned;
+
+    public FaceProp ArrivingProp => FaceProp.Antenna;
 
     public bool IsActive => AlwaysOn || Pinned || _meter.Busy;
 
@@ -145,7 +148,8 @@ internal sealed class NetWidget : IWidget
         double down = _meter.DownRate, up = _meter.UpRate;
         long nowMs = Environment.TickCount64;
 
-        float frac = _wash.Step(RingFrac(down));
+        _downLeads = DownLeads(_downLeads, down, up);
+        float frac = _wash.Step(RingFrac(Louder(down, up, _downLeads)));
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
@@ -155,10 +159,11 @@ internal sealed class NetWidget : IWidget
 
         DrawMark(g, cx, cy, Lan, fade);
 
-        _downLeads = DownLeads(_downLeads, down, up);
         using var rateF = new Font("Segoe UI Semibold", 13f, GraphicsUnit.Pixel);
-        DrawRate(g, NetRate.Format(down), rateF, cx - 23f, cy, fade, rising: false, alignRight: true, lead: _downLeads);
-        DrawRate(g, NetRate.Format(up), rateF, cx + 23f, cy, fade, rising: true, alignRight: false, lead: !_downLeads);
+        DrawRate(g, NetRate.Format(down), rateF, cx - 23f, cy, fade, rising: false, alignRight: true,
+                 lead: _downLeads, ink: FigureInk(down, _downLeads, rising: false));
+        DrawRate(g, NetRate.Format(up), rateF, cx + 23f, cy, fade, rising: true, alignRight: false,
+                 lead: !_downLeads, ink: FigureInk(up, !_downLeads, rising: true));
     }
 
     private static void DrawRate(Graphics g, string text, Font f, float edgeX, float cy, float fade,
@@ -170,7 +175,7 @@ internal sealed class NetWidget : IWidget
         var size = g.MeasureString(text, f, int.MaxValue, StringFormat.GenericTypographic);
         var markSz = g.MeasureString(glyph, markF, int.MaxValue, StringFormat.GenericTypographic);
 
-        var tone = Mul(ink ?? White, fade * (lead ? 1f : 0.62f));
+        var tone = Mul(ink ?? White, fade * (lead ? 1f : 0.82f));
         float x = alignRight ? edgeX - (markSz.Width + gap + size.Width) : edgeX;
         using var b = new SolidBrush(tone);
 
@@ -192,11 +197,8 @@ internal sealed class NetWidget : IWidget
     private static void DrawEdge(Graphics g, int w, int h, float frac, float pulse, float fade)
     {
 
-        var lit = Color.FromArgb(
-            (int)(236 + 19 * frac),
-            (int)(38 + (24 - 38) * frac),
-            (int)(50 + (116 - 50) * frac),
-            (int)(58 + (112 - 58) * frac));
+        var hue = EdgeInk(frac);
+        var lit = Color.FromArgb((int)(236 + 19 * frac), hue.R, hue.G, hue.B);
         Fx.PillRim(g, w, h, lit, EdgeWeight, fade * (0.9f + 0.1f * pulse));
     }
 
@@ -418,14 +420,36 @@ internal sealed class NetWidget : IWidget
 
     private const float ChartTopFolded = 46f;
 
-    internal static Color RateInk(double bytesPerSec)
-    {
-        float t = WashFrac(bytesPerSec);
+    internal static Color RateInk(double bytesPerSec) => RateInkAt(WashFrac(bytesPerSec));
 
-        return t < 0.5f
-            ? Lerp(CalmInk, DownInk, t * 2f)
-            : Lerp(DownInk, PeakInk, (t - 0.5f) * 2f);
+    internal static Color RateInkAt(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+
+        var hue = t < 0.5f
+            ? Lerp(Ramp.Calm, Ramp.Mid, t * 2f)
+            : Lerp(Ramp.Mid, Ramp.Peak, (t - 0.5f) * 2f);
+
+        float lit = LevelLit(t);
+        return Color.FromArgb(255, (int)(hue.R * lit), (int)(hue.G * lit), (int)(hue.B * lit));
     }
+
+        internal static float LevelLit(float t) => 0.58f + 0.42f * Math.Min(1f, Math.Clamp(t, 0f, 1f) / 0.45f);
+
+    internal static Color EdgeInk(float frac)
+    {
+        frac = Math.Clamp(frac, 0f, 1f);
+        var hue = RateInkAt(frac);
+        var deep = Color.FromArgb(255, (int)(hue.R * 0.50f), (int)(hue.G * 0.50f), (int)(hue.B * 0.50f));
+        return Lerp(EdgeSlate, deep, frac);
+    }
+
+    private static readonly Color EdgeSlate = Color.FromArgb(255, 38, 50, 58);
+
+        internal static double Louder(double down, double up, bool downLeads) => downLeads ? down : up;
+
+    internal static Color FigureInk(double rate, bool leads, bool rising)
+        => leads ? RateInk(rate) : White;
 
     private static Color Lerp(Color a, Color b, float t)
     {
@@ -436,11 +460,38 @@ internal sealed class NetWidget : IWidget
             (int)MathF.Round(a.B + (b.B - a.B) * t));
     }
 
-    private static readonly Color CalmInk = Color.FromArgb(255, 116, 208, 214);
+    internal readonly record struct RampStyle(string Name, Color Calm, Color Mid, Color Peak);
 
-    private static readonly Color DownInk = Color.FromArgb(255, 132, 231, 196);
-    private static readonly Color UpInk = Color.FromArgb(255, 168, 178, 255);
-    private static readonly Color PeakInk = Color.FromArgb(255, 240, 198, 132);
+    internal static readonly RampStyle[] Ramps =
+    [
+        new("1 now - cyan, green, orange",   Color.FromArgb(255,  52, 200, 232),
+                                             Color.FromArgb(255,  96, 230, 128),
+                                             Color.FromArgb(255, 255, 168,  52)),
+        new("2 aurora - teal, violet, pink", Color.FromArgb(255,  46, 214, 208),
+                                             Color.FromArgb(255, 150, 120, 255),
+                                             Color.FromArgb(255, 255,  92, 176)),
+        new("3 ember - steel, coral, red",   Color.FromArgb(255,  96, 148, 220),
+                                             Color.FromArgb(255, 255, 150, 108),
+                                             Color.FromArgb(255, 255,  70,  62)),
+        new("4 neon - cyan, lime, hot pink", Color.FromArgb(255,   0, 224, 255),
+                                             Color.FromArgb(255, 176, 255,  48),
+                                             Color.FromArgb(255, 255,  40, 150)),
+        new("5 sunset - sky, gold, deep",    Color.FromArgb(255,  92, 186, 255),
+                                             Color.FromArgb(255, 255, 208,  74),
+                                             Color.FromArgb(255, 255, 106,  40)),
+        new("6 lagoon - ice, jade, amber",   Color.FromArgb(255, 148, 226, 255),
+                                             Color.FromArgb(255,  40, 210, 168),
+                                             Color.FromArgb(255, 255, 186,  64)),
+    ];
+
+    internal static RampStyle Ramp = Ramps[0];
+
+    private static readonly Color CalmInk = Color.FromArgb(255, 52, 200, 232);
+
+    private static readonly Color DownInk = Color.FromArgb(255, 96, 230, 128);
+
+    private static readonly Color UpInk = Color.FromArgb(255, 172, 146, 255);
+    private static readonly Color PeakInk = Color.FromArgb(255, 255, 168, 52);
 
     private NetWindow _window = NetWindow.Today;
     private bool _split;
@@ -525,13 +576,14 @@ internal sealed class NetWidget : IWidget
             ? _meter.Minutes.Total(DateTime.Now, NetPanelLayout.Span(NetWindow.Hour), link)
             : led.Total(today.AddDays(-(NetPanelLayout.WindowDays(_window) - 1)), today, link);
 
-        using var heroF = new Font("Segoe UI Semibold", 22f, GraphicsUnit.Pixel);
-        using var valF = new Font("Segoe UI Semibold", 15f, GraphicsUnit.Pixel);
+        using var rateF = new Font("Segoe UI Semibold", 17f, GraphicsUnit.Pixel);
         using var subF = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
 
         using var tinyF = new Font("Segoe UI", 11f, GraphicsUnit.Pixel);
 
-        DrawEdge(g, w, h, StepEdge(RingFrac(_meter.DownRate), nowMs),
+        using var colF = new Font("Segoe UI", 12.5f, GraphicsUnit.Pixel);
+
+        DrawEdge(g, w, h, StepEdge(RingFrac(Louder(_meter.DownRate, _meter.UpRate, _downLeads)), nowMs),
                  Breath(RingFrac(_meter.DownRate), nowMs), fade);
 
         DrawChips(g, w, tinyF, fade, dt);
@@ -540,10 +592,12 @@ internal sealed class NetWidget : IWidget
         _downLeads = DownLeads(_downLeads, _meter.DownRate, _meter.UpRate);
         string downText = NetRate.Format(_meter.DownRate), upText = NetRate.Format(_meter.UpRate);
 
-        DrawRate(g, downText, heroF, NetPanelLayout.Pad, col.HeroY + 11f, fade,
-                 rising: false, alignRight: false, lead: _downLeads, mark: 12f, gap: 6f, ink: RateInk(_meter.DownRate));
-        DrawRate(g, upText, valF, NetPanelLayout.Pad, col.UpY + 8f, fade,
-                 rising: true, alignRight: false, lead: !_downLeads, mark: 11f, gap: 5f, ink: UpInk);
+        DrawRate(g, downText, rateF, NetPanelLayout.Pad, col.RatesY, fade,
+                 rising: false, alignRight: false, lead: _downLeads, mark: 12f, gap: 5f,
+                 ink: FigureInk(_meter.DownRate, _downLeads, rising: false));
+        DrawRate(g, upText, rateF, NetPanelLayout.Pad + NetPanelLayout.RateSplit, col.RatesY, fade,
+                 rising: true, alignRight: false, lead: !_downLeads, mark: 12f, gap: 5f,
+                 ink: FigureInk(_meter.UpRate, !_downLeads, rising: true));
 
         long peak = 0, sum = 0;
         var totals = new long[points.Length];
@@ -559,15 +613,15 @@ internal sealed class NetWidget : IWidget
                              ? Halo.Localization.Strings.Get("net.quiet")
                              : Halo.Localization.Strings.Format("net.window", NetRate.Size(win.Down + win.Up),
                                                                Halo.Localization.Strings.Get(ChipKeys[(int)_window])),
-                         tinyF, quiet, NetPanelLayout.Pad, col.TotalY);
+                         colF, quiet, NetPanelLayout.Pad, col.TotalY);
 
         float linkBand = Math.Max(_linkT, _splitT);
-        if (_ratesT > 0.01f) DrawLiveBand(g, col, win, subF, tinyF, fade * _ratesT);
+        if (_ratesT > 0.01f) DrawLiveBand(g, col, win, subF, colF, fade * _ratesT);
         else if (linkBand > 0.01f) DrawSplit(g, Window, col, subF, fade * linkBand);
         else if (_chartT > 0.01f)
-            DrawHistoryBand(g, col, points, totals, sum, today, win, tinyF, fade * _chartT);
+            DrawHistoryBand(g, col, points, totals, sum, today, win, colF, fade * _chartT);
 
-        DrawUsual(g, col, today, tinyF, fade * (1f - Math.Clamp(Math.Max(_ratesT, linkBand), 0f, 1f)));
+        DrawUsual(g, col, today, colF, fade * (1f - Math.Clamp(Math.Max(_ratesT, linkBand), 0f, 1f)));
 
         var band = NetPanelLayout.ChartBand(h, _chartT);
         float top = band.Top, baseY = band.BaseY;
@@ -594,7 +648,7 @@ internal sealed class NetWidget : IWidget
             }
         }
 
-        DrawLinkRow(g, col, tinyF, fade);
+        DrawLinkRow(g, col, colF, fade);
         DrawDayCard(g, w, h, bars, top, baseY, points, tinyF, fade * _chartT);
     }
 
@@ -641,10 +695,12 @@ internal sealed class NetWidget : IWidget
     {
 
         using var dim = new SolidBrush(Mul(Dim, fade));
+
         if (Busiest(points) is { } busiest)
-            Fx.Text(g, Halo.Localization.Strings.Format("net.busiest", busiest.Label,
-                                                          NetRate.Size(busiest.Total)),
-                         tinyF, dim, NetPanelLayout.Pad, col.BandRow1);
+            using (var peakInk = new SolidBrush(Mul(PeakInk, fade * 0.92f)))
+                Fx.Text(g, Halo.Localization.Strings.Format("net.busiest", busiest.Label,
+                                                              NetRate.Size(busiest.Total)),
+                             tinyF, peakInk, NetPanelLayout.Pad, col.BandRow1);
 
         if (!UsualRowShown())
 

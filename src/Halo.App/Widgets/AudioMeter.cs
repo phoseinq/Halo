@@ -21,6 +21,23 @@ internal sealed class AudioMeter
         catch { _meterI = null; return 0f; }
     }
 
+    public (float L, float R) StereoPeak()
+    {
+        DropIfDeviceChanged();
+        if (_meterI == null) { TryAcquire(); if (_meterI == null) return (0f, 0f); }
+        try
+        {
+
+            if (_meterI!.GetMeteringChannelCount(out uint n) != 0 || n == 0 || n > 32) return (0f, 0f);
+            var buf = _peaks is { } p && p.Length == n ? p : _peaks = new float[n];
+            if (_meterI.GetChannelsPeakValues(n, buf) != 0) return (0f, 0f);
+            return n == 1 ? (buf[0], buf[0]) : (buf[0], buf[1]);
+        }
+        catch { _meterI = null; return (0f, 0f); }
+    }
+
+    private float[]? _peaks;
+
     public float Volume()
     {
         DropIfDeviceChanged();
@@ -68,9 +85,7 @@ internal sealed class AudioMeter
             if (Environment.TickCount64 < _nextDeviceCheck) return;
             _nextDeviceCheck = Environment.TickCount64 + 1000;
             if (_boundId is null) return;
-            var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return;
-            if (dev.GetId(out var id) != 0 || id == _boundId) return;
+            if (Halo.Interop.CoreAudio.DefaultRenderId() is not { } id || id == _boundId) return;
             _meterI = null;
             _vol = null;
             _boundId = null;
@@ -82,8 +97,8 @@ internal sealed class AudioMeter
     {
         try
         {
-            var en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            if (en.GetDefaultAudioEndpoint(0, 1, out var dev) != 0 || dev == null) return;
+            var dev = Halo.Interop.CoreAudio.DefaultRender();
+            if (dev == null) return;
             if (dev.GetId(out var id) == 0) _boundId = id;
             var mid = typeof(IAudioMeterInformation).GUID;
             if (dev.Activate(ref mid, 23, IntPtr.Zero, out var mo) == 0) _meterI = mo as IAudioMeterInformation;
@@ -93,30 +108,15 @@ internal sealed class AudioMeter
         catch { _meterI = null; _vol = null; }
     }
 
-    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-    private class MMDeviceEnumerator { }
-
-    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceEnumerator
-    {
-        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
-        [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice ppDevice);
-    }
-
-    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDevice
-    {
-        [PreserveSig] int Activate(ref Guid iid, uint clsCtx, IntPtr activationParams,
-            [MarshalAs(UnmanagedType.IUnknown)] out object iface);
-
-        [PreserveSig] int OpenPropertyStore(uint access, out IntPtr store);
-        [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
-    }
-
     [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IAudioMeterInformation
     {
         [PreserveSig] int GetPeakValue(out float peak);
+        [PreserveSig] int GetMeteringChannelCount(out uint count);
+
+        [PreserveSig] int GetChannelsPeakValues(uint count, [MarshalAs(UnmanagedType.LPArray)] float[] peaks);
+
+        [PreserveSig] int QueryHardwareSupport(out uint mask);
     }
 
     [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

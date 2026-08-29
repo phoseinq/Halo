@@ -104,12 +104,16 @@ internal static class SettingsKeys
     internal const string InCaptures = "general.capture";
     internal const string FollowFocus = "general.follow";
     internal const string Greeting = "general.greeting";
+    internal const string Face = "general.face";
     internal const string Scale = "appearance.scale";
     internal const string Glass = "appearance.glass";
     internal const string Motion = "appearance.motion";
     internal const string FrameRate = "appearance.fps";
 
     internal const string AutoCrashReport = "report.autoCrash";
+
+    internal const string LauncherEnabled = "launcher.enabled";
+    internal const string LauncherHotkey = "launcher.hotkey";
 
     internal const bool AutoCrashDefault = false;
 

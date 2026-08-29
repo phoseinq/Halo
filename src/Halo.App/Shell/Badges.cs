@@ -99,6 +99,8 @@ internal static class Badges
     internal static Bitmap Shot() => Local(0xE722, 200, 28f);
     internal static Bitmap Clip() => Local(0xE8C8, 155, 28f);
 
+    internal static Bitmap ApiPreview() => Local(0xE99A, 265, 33f);
+
     internal static Bitmap Hot() => Local(0xE706, 12, 32f);
 
     internal static Bitmap Hourly()

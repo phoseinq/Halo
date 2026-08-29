@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "Manter a pílula acima de jogos e vídeo",
   "settings.general.greeting.label": "Dizer olá",
   "settings.general.greeting.desc": "Acenar na primeira vez que voltas em cada dia",
+  "settings.general.face.label": "Rosto em repouso",
+  "settings.general.face.desc": "Mostrar o rosto do Halo quando o ambiente de trabalho esta vazio",
   "settings.general.language.label": "Idioma",
   "settings.general.language.desc": "O idioma em que o Halo mostra os seus textos",
   "settings.general.capture.label": "Incluir o Halo nas capturas",
@@ -596,5 +598,9 @@
   "agent.window.days": "{0} d",
   "agent.window.daysHours": "{0}d{1}h",
   "download.paused": "Em pausa",
-  "download.downloading": "A transferir"
+  "download.downloading": "A transferir",
+  "settings.launcher.enabled.label": "Lançador",
+  "settings.launcher.enabled.desc": "Abre uma caixa de pesquisa sob o entalhe com um atalho",
+  "settings.launcher.hotkey.label": "Atalho do lançador",
+  "settings.launcher.hotkey.desc": "A combinação que o abre. Outro aplicativo pode já estar a usar"
 }

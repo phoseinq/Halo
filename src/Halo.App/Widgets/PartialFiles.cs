@@ -95,7 +95,7 @@ internal static class PartialFiles
                     }
                     else _seen[path] = (len, now, 0);
 
-                    int pid = OwnerPid(path);
+                    int pid = CachedOwnerPid(path);
                     if (pid != 0) Downloaders.Learn(pid, Path.GetDirectoryName(path));
                     found.Add(new Sample(path, clean, len, rate, pid, flat >= StallSamples));
                 }
@@ -104,6 +104,9 @@ internal static class PartialFiles
             if (_seen.Count > 64)
                 foreach (var k in new List<string>(_seen.Keys))
                     if (!live.Contains(k)) _seen.Remove(k);
+
+            foreach (var k in new List<string>(_owner.Keys))
+                if (!live.Contains(k)) _owner.Remove(k);
         }
         catch { }
 
@@ -115,6 +118,47 @@ internal static class PartialFiles
     {
         try { return Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly); }
         catch { return Array.Empty<string>(); }
+    }
+
+    private static readonly Dictionary<string, (int Pid, long StartTicks, long AskedAt)> _owner =
+        new(StringComparer.OrdinalIgnoreCase);
+    private const int OwnerRetryMs = 15_000;
+
+        internal static bool NeedsOwnerLookup(bool cached, int pid, bool alive, long ageMs, int retryMs = OwnerRetryMs)
+    {
+        if (!cached) return true;
+
+        if (pid == 0) return ageMs >= retryMs;
+        return !alive;
+    }
+
+    private static int CachedOwnerPid(string path)
+    {
+        bool cached = _owner.TryGetValue(path, out var e);
+
+        bool alive = cached && e.Pid != 0 && IsRunning(e.Pid, e.StartTicks);
+        if (!NeedsOwnerLookup(cached, e.Pid, alive, Environment.TickCount64 - e.AskedAt)) return e.Pid;
+
+        int pid = OwnerPid(path);
+        _owner[path] = (pid, pid != 0 ? StartedAt(pid) : 0, Environment.TickCount64);
+        return pid;
+    }
+
+    private static long StartedAt(int pid)
+    {
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); return p.StartTime.Ticks; }
+        catch { return 0; }
+    }
+
+    private static bool IsRunning(int pid, long startedAt)
+    {
+        if (startedAt == 0) return false;
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            return !p.HasExited && p.StartTime.Ticks == startedAt;
+        }
+        catch { return false; }
     }
 
     public static int OwnerPid(string path)

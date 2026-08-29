@@ -45,6 +45,8 @@
   "settings.general.fullscreen.desc": "پیل بالای بازی‌ها و ویدیو بماند",
   "settings.general.greeting.label": "سلام کردن",
   "settings.general.greeting.desc": "اولین بار که هر روز برمی‌گردی دست تکان بدهد",
+  "settings.general.face.label": "چهرهٔ بیکار",
+  "settings.general.face.desc": "وقتی دسکتاپ خالی است چهرهٔ هالو را نشان بده",
   "settings.general.language.label": "زبان",
   "settings.general.language.desc": "زبانی که Halo متن‌های خودش را با آن نشان می‌دهد",
   "settings.general.capture.label": "نمایش Halo در تصویربرداری",
@@ -641,5 +643,9 @@
   "agent.window.days": "{0} روزه",
   "agent.window.daysHours": "{0}ر{1}س",
   "download.paused": "متوقف",
-  "download.downloading": "در حال دانلود"
+  "download.downloading": "در حال دانلود",
+  "settings.launcher.enabled.label": "لانچر",
+  "settings.launcher.enabled.desc": "باز کردن کادر جستجو زیر ناچ با یک کلید میانبر",
+  "settings.launcher.hotkey.label": "کلید میانبر لانچر",
+  "settings.launcher.hotkey.desc": "ترکیبی که آن را باز می‌کند. ممکن است برنامه‌ای دیگر آن را گرفته باشد"
 }

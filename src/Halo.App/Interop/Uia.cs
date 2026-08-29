@@ -7,7 +7,7 @@ internal static class Uia
 {
     public const int NameProp = 30005, ControlTypeProp = 30003, BoundingRectProp = 30001, ClassNameProp = 30012;
     public const int ValuePattern = 10002;
-    public const int SliderType = 50015, TextType = 50020;
+    public const int SliderType = 50015, TextType = 50020, TabItemType = 50019, TabType = 50018;
     public const int TreeScopeDescendants = 4;
 
     private static readonly Guid ClsidCUIAutomation = new("FF48DBA4-60EF-4201-AA87-54103EEF594E");

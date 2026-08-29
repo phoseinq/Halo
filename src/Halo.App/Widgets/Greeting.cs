@@ -29,7 +29,9 @@ internal static class Greeting
         124.149f, 5.199f, 131.179f, 5.086f, 138.27f, -2.922f, 138.27f, -2.922f,
     ];
 
-    internal static readonly string[] Lines = ["i'm halo", "welcome"];
+    internal static readonly string[] Lines = ["i'm Halo", "welcome", "Halo", "updated"];
+
+    internal const int InstallName = 0, InstallWelcome = 1, UpdateName = 2, UpdateNews = 3;
 
     private static readonly string[] Hands = ["Ink Free", "Segoe Script", "Segoe Print", "Gabriola"];
 

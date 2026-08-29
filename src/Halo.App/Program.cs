@@ -144,6 +144,7 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-bt-reveal") { RenderBtReveal(args[1]); return; }
         if (args.Length >= 2 && args[0] == "--render-greeting") { RenderGreeting(args[1]); return; }
+        if (args.Length >= 2 && args[0] == "--render-alphabet") { RenderAlphabet(args[1]); return; }
 
         if (args.Length >= 2 && args[0] == "--render-local") { RenderLocal(args[1]); return; }
 
@@ -2007,6 +2008,37 @@ internal static class Program
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
         Console.WriteLine($"wrote {outPath}");
+    }
+
+    private static void RenderAlphabet(string outPath)
+    {
+
+        var lines = new System.Collections.Generic.List<string>(Halo.Widgets.Greeting.Lines) { "opdau" }
+                        .ToArray();
+        const int pad = 26, rowH = 190, w = 1100;
+        using var bmp = new System.Drawing.Bitmap(w, pad + lines.Length * rowH + pad,
+            System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            using (var bg = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 22, 24, 34)))
+                g.FillRectangle(bg, 0, 0, w, bmp.Height);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                int y = pad + i * rowH;
+
+                using (var rule = new System.Drawing.Pen(
+                    System.Drawing.Color.FromArgb(40, 255, 255, 255), 1f))
+                    g.DrawLine(rule, pad, y + rowH - 56, w - pad, y + rowH - 56);
+                var box = new System.Drawing.RectangleF(pad, y, w - pad * 2, rowH - 20);
+                Halo.Widgets.Greeting.DrawLine(g, lines[i], box, 1f, 1f,
+                                               System.Drawing.Color.White, 4.0f);
+            }
+        }
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"wrote {outPath}");
+        foreach (var line in lines)
+            Console.WriteLine($"  \"{line}\"  drawable={Halo.Widgets.Script.Can(line)}");
     }
 
     private static void RenderGreeting(string outPath)

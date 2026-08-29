@@ -8,6 +8,7 @@ internal enum GreetingKind
 {
     None,
     Install,
+    Update,
     Signin,
     Login,
 }
@@ -34,7 +35,9 @@ internal static class GreetingGate
                                         bool enabled)
     {
         if (!enabled) return GreetingKind.None;
-        if (!string.Equals(mark.Version, version, StringComparison.Ordinal)) return GreetingKind.Install;
+
+        if (!string.Equals(mark.Version, version, StringComparison.Ordinal))
+            return string.IsNullOrEmpty(mark.Version) ? GreetingKind.Install : GreetingKind.Update;
         if (arriving) return GreetingKind.Signin;
         return mark.Last == today ? GreetingKind.None : GreetingKind.Login;
     }

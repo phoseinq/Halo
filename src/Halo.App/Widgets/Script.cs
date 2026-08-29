@@ -8,7 +8,8 @@ namespace Halo.Widgets;
 internal static class Script
 {
 
-    internal readonly record struct Glyph(GraphicsPath[] Strokes, float[] Lengths, float Advance, float Length);
+    internal readonly record struct Glyph(GraphicsPath[] Strokes, float[] Lengths, float Advance,
+                                          float Length, float Depth);
 
     private const float Space = 17f, Track = 9f;
 
@@ -38,6 +39,30 @@ internal static class Script
                         22, -19, 25, -3, 29, 1, 33, -3, 39, -16, 42, -33]]),
         ['e'] = (29f, [[2, -13, 10, -15, 19, -18, 27, -21, 29, -31, 22, -36, 14, -35,
                         4, -34, -1, -22, 3, -11, 7, -1, 19, 2, 27, -6]]),
+
+        ['u'] = (32f, [
+            [2, -34, 1, -26, 0, -20, 1, -14, 2, -6, 7, -2, 14, -2, 20, -2, 25, -12, 26, -24],
+            [26, -34, 26, -22, 26, -10, 29, 1],
+        ]),
+        ['d'] = (32f, [
+            [26, -19, 27, -31, 16, -37, 9, -31, 1, -24, 2, -6, 11, -2, 20, 2, 27, -8, 26, -19],
+            [26, -78, 26, -55, 26, -30, 26, -12, 26, -5, 28, 1, 31, -2],
+        ]),
+
+        ['p'] = (32f, [
+            [4, -34, 3, -18, 3, -2, 3, 12, 3, 18, 6, 21, 10, 19],
+            [4, -33, 10, -38, 20, -39, 27, -34, 30, -26, 27, -17, 18, -12, 10, -13, 6, -16, 4, -19],
+        ]),
+        ['t'] = (21f, [
+            [10, -56, 8, -40, 6, -24, 5, -11, 5, -4, 9, 1, 15, -3],
+            [-2, -35, 4, -36, 11, -37, 18, -38],
+        ]),
+
+        ['H'] = (40f, [
+            [1, -78, 0, -52, 0, -26, 1, 0],
+            [33, -78, 33, -52, 33, -26, 35, 1],
+            [1, -42, 12, -43, 23, -43, 33, -44],
+        ]),
         ['c'] = (28f, [[26, -26, 22, -34, 9, -36, 4, -23, -1, -10, 6, 1, 15, 1, 20, 1, 24, -3, 27, -7]]),
     };
 
@@ -51,10 +76,12 @@ internal static class Script
         {
             var paths = new GraphicsPath[strokes.Length];
             var lens = new float[strokes.Length];
-            float total = 0f;
+            float total = 0f, depth = 0f;
             for (int k = 0; k < strokes.Length; k++)
             {
                 var s = strokes[k];
+
+                for (int i = 1; i < s.Length; i += 2) depth = MathF.Max(depth, s[i]);
                 var path = new GraphicsPath();
                 var cur = new PointF(s[0], s[1]);
                 for (int i = 2; i + 5 < s.Length; i += 6)
@@ -67,7 +94,7 @@ internal static class Script
                 lens[k] = Measure(path);
                 total += lens[k];
             }
-            map[c] = new Glyph(paths, lens, advance, total);
+            map[c] = new Glyph(paths, lens, advance, total, depth);
         }
         _built = map;
         return map;
@@ -99,7 +126,7 @@ internal static class Script
     {
         var map = Built();
         foreach (char c in text)
-            if (c != ' ' && !map.ContainsKey(char.ToLowerInvariant(c))) return false;
+            if (c != ' ' && !map.ContainsKey(c)) return false;
         return true;
     }
 
@@ -108,7 +135,7 @@ internal static class Script
         var map = Built();
         float w = 0f;
         foreach (char c in text)
-            w += c == ' ' ? Space : (map.TryGetValue(char.ToLowerInvariant(c), out var gl) ? gl.Advance : 0f) + Track;
+            w += c == ' ' ? Space : (map.TryGetValue(c, out var gl) ? gl.Advance : 0f) + Track;
         return MathF.Max(w, 1f);
     }
 
@@ -120,19 +147,23 @@ internal static class Script
 
         float total = 0f;
         foreach (char c in text)
-            if (c != ' ' && map.TryGetValue(char.ToLowerInvariant(c), out var gl)) total += gl.Length;
+            if (c != ' ' && map.TryGetValue(c, out var gl)) total += gl.Length;
         if (total <= 0f) return;
 
         float unitsW = Width(text);
-        const float Top = -80f, Bottom = 6f;
-        float scale = MathF.Min(box.Width / (unitsW + weight), box.Height / (Bottom - Top + weight));
+
+        const float Top = -80f, Rest = 6f;
+        float bottom = Rest;
+        foreach (char c in text)
+            if (map.TryGetValue(c, out var g2)) bottom = MathF.Max(bottom, g2.Depth + 3f);
+        float scale = MathF.Min(box.Width / (unitsW + weight), box.Height / (bottom - Top + weight));
 
         var save = g.Save();
         try
         {
             g.TranslateTransform(box.X + box.Width / 2f, box.Y + box.Height / 2f);
             g.ScaleTransform(scale, scale);
-            g.TranslateTransform(-unitsW / 2f, -(Top + Bottom) / 2f);
+            g.TranslateTransform(-unitsW / 2f, -(Top + bottom) / 2f);
 
             using var pen = new Pen(Color.FromArgb((int)(Math.Clamp(alpha, 0f, 1f) * ink.A), ink), weight)
             {
@@ -146,7 +177,7 @@ internal static class Script
             foreach (char c in text)
             {
                 if (c == ' ') { x += Space; continue; }
-                if (!map.TryGetValue(char.ToLowerInvariant(c), out var gl)) continue;
+                if (!map.TryGetValue(c, out var gl)) continue;
                 if (done >= want) break;
 
                 var st = g.Save();

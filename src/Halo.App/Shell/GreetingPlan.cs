@@ -24,6 +24,12 @@ internal static class GreetingPlan
     internal const float SigninSeconds = 4.6f;
 
     internal static GreetingFrame Install(float t)
+        => Written(t, Halo.Widgets.Greeting.InstallName, Halo.Widgets.Greeting.InstallWelcome);
+
+    internal static GreetingFrame Update(float t)
+        => Written(t, Halo.Widgets.Greeting.UpdateName, Halo.Widgets.Greeting.UpdateNews);
+
+    private static GreetingFrame Written(float t, int firstLine, int secondLine)
     {
         t = Math.Clamp(t, 0f, 1f);
 
@@ -45,7 +51,7 @@ internal static class GreetingPlan
             (1f - helloOut) * Math.Min(1f, open * 3f),
             second ? write2 : write1,
             second ? 1f - out2 : (write1 <= 0f ? 0f : 1f - out1),
-            second ? 1 : 0);
+            second ? secondLine : firstLine);
     }
 
     internal static GreetingFrame Signin(float t)
@@ -68,6 +74,7 @@ internal static class GreetingPlan
         internal static GreetingFrame Of(GreetingKind kind, float t) => kind switch
     {
         GreetingKind.Install => Install(t),
+        GreetingKind.Update => Update(t),
         GreetingKind.Signin => Signin(t),
         _ => Login(t),
     };
@@ -75,6 +82,7 @@ internal static class GreetingPlan
     internal static float SecondsOf(GreetingKind kind) => kind switch
     {
         GreetingKind.Install => InstallSeconds,
+        GreetingKind.Update => InstallSeconds,
         GreetingKind.Signin => SigninSeconds,
         _ => LoginSeconds,
     };

@@ -19,14 +19,19 @@ public class GreetingGateTests
     public void No_marker_means_this_build_has_never_run_here()
         => Assert.Equal(GreetingKind.Install, Decide(null));
 
-    // the marker used to hold a boot timestamp; an upgrade reads that and must treat it as "not this build"
+    // the marker used to hold a boot timestamp; an upgrade reads that and must treat it as "not this
+    // build" - and since it holds SOMETHING, Halo has run here before, so it is an update rather than a
+    // first meeting
     [Fact]
-    public void A_marker_it_cannot_recognise_is_a_new_build()
-        => Assert.Equal(GreetingKind.Install, Decide("2026-07-31T17:11:05.4669755Z"));
+    public void A_marker_it_cannot_recognise_is_an_update()
+        => Assert.Equal(GreetingKind.Update, Decide("2026-07-31T17:11:05.4669755Z"));
 
+    // Install and Update are the same performance with different words, and the whole difference is this:
+    // being introduced to something you have been using for a month is the wrong note. An empty marker is
+    // the only first meeting; anything else is news.
     [Fact]
-    public void An_upgrade_introduces_itself()
-        => Assert.Equal(GreetingKind.Install, Decide("3.1.6.0"));
+    public void An_upgrade_says_what_happened_rather_than_who_it_is()
+        => Assert.Equal(GreetingKind.Update, Decide("3.1.6.0"));
 
     // Every marker written before the ration existed is one line and no day, so an installed build that
     // upgrades into this one must read as "same build, has not said hello today" - one hand, not the
@@ -301,11 +306,20 @@ public class SigninGreetingTests
         Assert.Equal(GreetingKind.Signin, GreetingGate.Decide(spent, Version, Today, true, true));
     }
 
-    // A build that has never run here has something to say that is not "hello", and it outranks the arrival.
+    // A build that has not run here has something to say that is not "hello", and it outranks the arrival.
+    // Which of the two it says depends on whether anything ran here before - this marker holds a version,
+    // so it is an update.
     [Fact]
-    public void A_new_version_still_introduces_itself_rather_than_only_waving()
-        => Assert.Equal(GreetingKind.Install,
+    public void A_new_version_still_outranks_a_plain_arrival()
+        => Assert.Equal(GreetingKind.Update,
                         GreetingGate.Decide(new GreetingMark("0.0.0.1", Today), Version, Today, true, true));
+
+    // ...and with nothing remembered at all it is the introduction, which is the half of the split that
+    // has no marker to read.
+    [Fact]
+    public void A_machine_that_has_never_run_halo_gets_the_introduction()
+        => Assert.Equal(GreetingKind.Install,
+                        GreetingGate.Decide(new GreetingMark("", Today), Version, Today, true, true));
 
     [Fact]
     public void The_switch_still_silences_an_arrival()

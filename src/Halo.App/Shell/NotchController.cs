@@ -1289,16 +1289,52 @@ internal sealed partial class NotchController
 
     private bool _fgFullscreen;
 
-    private bool FaceOverFullscreen
+    private float _gazeX, _gazeY, _near;
+
+    private void GazeFrame()
     {
-        get
+        float wantX = 0f, wantY = 0f, wantNear = 0f;
+        if (_faceT > 0.01f)
         {
-            if (!_fgFullscreen || !Pinned(_pinned)) return false;
-            foreach (var w in _widgets)
-                if (w is MediaWidget m && m.ShowingVideo) return false;
-            return true;
+            try
+            {
+                if (Win32.GetCursorPos(out var c))
+                {
+
+                    float cx = _cl + Sc(_curW) / 2f, cy = _ct + Sc(_curH) / 2f;
+                    float dx = c.X - cx, dy = c.Y - cy;
+
+                    wantX = Math.Clamp(dx / 420f, -1f, 1f);
+                    wantY = Math.Clamp(dy / 300f, -1f, 1f);
+
+                    float d = MathF.Sqrt(dx * dx + dy * dy);
+                    wantNear = 1f - Math.Clamp(d / 340f, 0f, 1f);
+                }
+            }
+            catch { }
         }
+
+        float rate = Math.Min(1f, _dt / 0.16f);
+        _gazeX += (wantX - _gazeX) * rate;
+        _gazeY += (wantY - _gazeY) * rate;
+        _near += (wantNear - _near) * Math.Min(1f, _dt / 0.22f);
     }
+
+    private Halo.Widgets.Face.Look FaceLook()
+    {
+        var look = Halo.Widgets.FaceDirector.At(_faceAge);
+        float own = _handT >= 0f ? 0f : 1f;
+        if (own <= 0f) return look;
+        return look with
+        {
+            GazeX = look.GazeX * (1f - own) + _gazeX * own,
+            GazeY = look.GazeY * (1f - own) + _gazeY * own,
+            Open = look.Open * (1f + 0.22f * _near * own),
+            Glow = look.Glow * (1f + 0.30f * _near * own),
+        };
+    }
+
+    private bool FaceOverFullscreen => _fgFullscreen && Pinned(_pinned) && _handT >= 0f;
 
     private bool FaceWakes =>
         (FacePinned || (_empty && (_lastDesktop || FaceOverFullscreen)))
@@ -2416,6 +2452,8 @@ internal sealed partial class NotchController
 
         int wv = WidgetVersion();
 
+        float prevGaze = _gazeX + _gazeY + _near;
+        GazeFrame();
         float prevGrip = _catGrip, prevDuck = _catDuck;
         if (CatDrop > 0f)
             CatFrame(new System.Drawing.RectangleF(0.5f, 0.5f, _curW - 1f, _curH - 1f));
@@ -2426,6 +2464,8 @@ internal sealed partial class NotchController
             || _rowOpen != prevRowOpen || forceAnim || mouseMoved || rescaled || _handle != prevHandle
             || _shrink != prevShrink || _faceT != prevFaceT || _handT != prevHandT
             || _catGrip != prevGrip || _catDuck != prevDuck
+
+            || _gazeX + _gazeY + _near != prevGaze
 
             || _catGrip > 0.01f
             || _stripT != prevStrip || _notifT != prevNotifT || _notifDetail != prevNotifDetail
@@ -3566,8 +3606,7 @@ internal sealed partial class NotchController
     private void DrawFace(Graphics g, int w, int h)
     {
         float alpha = Halo.Widgets.FaceDirector.Alpha(_faceT);
-        var beat = new Halo.Widgets.FaceDirector.Beat(
-            Halo.Widgets.FaceDirector.At(_faceAge), 0f, 1f, 0f);
+        var beat = new Halo.Widgets.FaceDirector.Beat(FaceLook(), 0f, 1f, 0f);
         if (_handT >= 0f)
         {
             beat = Halo.Widgets.FaceDirector.Hand(_handT, _handProp, _faceAge, FaceLevel());
@@ -3641,11 +3680,11 @@ internal sealed partial class NotchController
         var f = GreetingPlan.Of(_greet, _greetT);
         var box = Greeting.InkBox(w, h);
 
-        Greeting.DrawHello(g, box, f.Written, f.HelloAlpha, Color.White,
-            _greet == GreetingKind.Install ? 9f : 11f);
+        float pen = f.PillW > GreetingPlan.CollapsedW + 1f ? 9f : 11f;
+        Greeting.DrawHello(g, box, f.Written, f.HelloAlpha, Color.White, pen);
         if (f.LineAlpha > 0.004f)
-            Greeting.DrawLine(g, Greeting.Lines[f.LineIndex], box, f.LineWritten, f.LineAlpha, Color.White,
-                _greet == GreetingKind.Install ? 9f : 11f);
+            Greeting.DrawLine(g, Greeting.Lines[f.LineIndex], box, f.LineWritten, f.LineAlpha,
+                              Color.White, pen);
     }
 
     private void DismissAsk(PendingAsk ask)

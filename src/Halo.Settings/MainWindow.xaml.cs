@@ -281,8 +281,14 @@ public partial class MainWindow : Window
     private Border BuildSection(Section section)
     {
         var rows = new StackPanel();
+        var built = new List<Border>(section.Rows.Count);
         for (int i = 0; i < section.Rows.Count; i++)
-            rows.Children.Add(BuildRow(section.Rows[i], i == section.Rows.Count - 1));
+        {
+            var built_row = BuildRow(section.Rows[i], i == section.Rows.Count - 1);
+            built.Add(built_row);
+            rows.Children.Add(built_row);
+        }
+        AddCustomActionButton(section, rows, built);
 
         return new Border
         {
@@ -293,6 +299,45 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 0, 2, 2),
             Child = rows,
         };
+    }
+
+    private void AddCustomActionButton(Section section, StackPanel rows, List<Border> built)
+    {
+        var slots = new List<int>();
+        for (int i = 0; i < section.Rows.Count; i++)
+            if (section.Rows[i].Key.StartsWith("quick.custom", StringComparison.Ordinal)) slots.Add(i);
+        if (slots.Count < 2) return;
+
+        int shown = 1;
+        for (int i = 0; i < slots.Count; i++)
+            if (_store.Text(section.Rows[slots[i]].Key, "").Trim().Length > 0) shown = i + 2;
+        shown = Math.Min(shown, slots.Count);
+
+        var more = new Button
+        {
+            Style = (Style)FindResource("Glass"),
+            Content = Halo.Localization.Strings.Get("settings.quick.add"),
+            Height = 34,
+            Margin = new Thickness(16, 2, 14, 12),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(14, 0, 14, 0),
+        };
+
+        void Sync()
+        {
+            for (int i = 0; i < slots.Count; i++)
+                built[slots[i]].Visibility = i < shown ? Visibility.Visible : Visibility.Collapsed;
+
+            more.Visibility = shown < slots.Count ? Visibility.Visible : Visibility.Collapsed;
+
+            for (int i = 0; i < slots.Count; i++)
+                built[slots[i]].BorderThickness =
+                    i == shown - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1);
+        }
+
+        more.Click += (_, _) => { if (shown < slots.Count) { shown++; Sync(); } };
+        Sync();
+        rows.Children.Add(more);
     }
 
     private Border BuildRow(Row row, bool last)
@@ -599,7 +644,44 @@ public partial class MainWindow : Window
         };
         Ui.SetRadius(box, new CornerRadius(10));
         box.TextChanged += (_, _) => _store.Set(row.Key, box.Text.Trim(), row.Fallback);
+        if (IsChordRow(row.Key)) MakeChordBox(box, row);
         return box;
+    }
+
+    private static bool IsChordRow(string key)
+        => key == "launcher.hotkey" || key == "general.hidekey";
+
+    private void MakeChordBox(TextBox box, Row row)
+    {
+        box.IsReadOnly = true;
+        box.IsReadOnlyCaretVisible = false;
+        box.ToolTip = row.Label + " - press a combination, Backspace to clear";
+
+        box.PreviewKeyDown += (_, e) =>
+        {
+            e.Handled = true;
+
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+            if (key is Key.Back or Key.Delete) { box.Text = ""; return; }
+
+            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                    or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
+                    or Key.System or Key.None) return;
+
+            uint mods = 0;
+            var down = Keyboard.Modifiers;
+            if ((down & ModifierKeys.Control) != 0) mods |= Halo.Launcher.HotKeyChord.ModControl;
+            if ((down & ModifierKeys.Alt) != 0) mods |= Halo.Launcher.HotKeyChord.ModAlt;
+            if ((down & ModifierKeys.Shift) != 0) mods |= Halo.Launcher.HotKeyChord.ModShift;
+            if ((down & ModifierKeys.Windows) != 0) mods |= Halo.Launcher.HotKeyChord.ModWin;
+
+            if (mods == 0) return;
+
+            uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+            if (vk == 0) return;
+            box.Text = new Halo.Launcher.HotKeyChord(mods, vk).Format();
+        };
     }
 
     private FrameworkElement BuildAction(Row row)

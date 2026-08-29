@@ -234,6 +234,8 @@ internal sealed partial class NotchController
     private int _moveGrabDX;
     private bool _pinned;
 
+    private bool _userHidden;
+
     private static bool Pinned(bool userPin) => userPin || FileTray.Holding;
 
     private bool TrayFront => FileTray.DragActive || (!_empty && _widgets[_primary] is FileTray);
@@ -863,6 +865,8 @@ internal sealed partial class NotchController
             Autostart(startup);
         }
 
+        ReconcileHotkeys(current);
+
         bool pin = current.Bool(Halo.Settings.SettingsKeys.OverFullscreen, _pinned);
         if (pin != _pinned)
         {
@@ -1294,6 +1298,7 @@ internal sealed partial class NotchController
     private Halo.Launcher.AppIndex? _appIndex;
     private Halo.Launcher.LaunchStats? _launchStats;
     private Halo.Launcher.HotKey? _hotKey;
+    private Halo.Launcher.HotKey? _hideKey;
     private Halo.Launcher.LauncherDim? _dim;
     private Halo.Launcher.LauncherBox? _box;
     private float _dimT;
@@ -1346,14 +1351,64 @@ internal sealed partial class NotchController
 
             _hotKey = new Halo.Launcher.HotKey(_notch.Hwnd, Halo.Launcher.HotKey.Id);
             bool held = _hotKey.Register(chord);
+
+            _chordApplied = stored;
+            string hideText = _settings.Current.Text(Halo.Settings.SettingsKeys.HideHotkey, "Ctrl+Alt+H");
+            _hideChordApplied = hideText;
+            bool hideHeld = false;
+            if (Halo.Launcher.HotKeyChord.TryParse(hideText, out var hideChord))
+            {
+                _hideKey = new Halo.Launcher.HotKey(_notch.Hwnd, Halo.Launcher.HotKey.HideId);
+                hideHeld = _hideKey.Register(hideChord);
+            }
+
             _notch.HotKeyPressed += id =>
             {
                 LaunchDebug($"WM_HOTKEY id={id} mine={Halo.Launcher.HotKey.Id}");
                 if (id == Halo.Launcher.HotKey.Id) OpenLauncher();
+                else if (id == Halo.Launcher.HotKey.HideId) ToggleHidden();
             };
-            LaunchDebug($"started hwnd=0x{_notch.Hwnd.ToInt64():X} chord={chord.Format()} held={held}");
+            LaunchDebug($"started hwnd=0x{_notch.Hwnd.ToInt64():X} chord={chord.Format()} held={held} "
+                        + $"hide={hideText} hideHeld={hideHeld}");
         }
         catch (Exception ex) { LaunchDebug("start FAILED " + ex); }
+    }
+
+    private string? _chordApplied, _hideChordApplied;
+
+    private void ReconcileHotkeys(Halo.Settings.SettingsFile current)
+    {
+        string want = current.Text(Halo.Settings.SettingsKeys.LauncherHotkey,
+                                   Halo.Launcher.HotKeyChord.Default.Format());
+        if (want != _chordApplied)
+        {
+            _chordApplied = want;
+            if (_hotKey is { } key)
+            {
+                if (Halo.Launcher.HotKeyChord.TryParse(want, out var chord)) key.Register(chord);
+                else key.Unregister();
+            }
+        }
+
+        string hide = current.Text(Halo.Settings.SettingsKeys.HideHotkey, "Ctrl+Alt+H");
+        if (hide == _hideChordApplied) return;
+        _hideChordApplied = hide;
+
+        bool parsed = Halo.Launcher.HotKeyChord.TryParse(hide, out var hideChord);
+        if (parsed)
+        {
+            _hideKey ??= new Halo.Launcher.HotKey(_notch.Hwnd, Halo.Launcher.HotKey.HideId);
+            parsed = _hideKey.Register(hideChord);
+        }
+        else _hideKey?.Unregister();
+
+        if (!parsed) _userHidden = false;
+    }
+
+    private void ToggleHidden()
+    {
+        _userHidden = !_userHidden;
+        if (_userHidden && _box is { IsOpen: true }) CloseLauncher();
     }
 
     private void OpenLauncher()
@@ -1831,7 +1886,9 @@ internal sealed partial class NotchController
         }
 
         bool notifLive = _notif != null || _notifSrc.HasPending;
-        var visibility = NotchVisibility.Decide(fullscreen && !notifLive, _hiddenForFullscreen);
+
+        var visibility = NotchVisibility.Decide(_userHidden || (fullscreen && !notifLive),
+                                                _hiddenForFullscreen);
         _hiddenForFullscreen = visibility.HiddenForFullscreen;
 
         bool justShown = visibility.Action == NotchVisibilityAction.ShowAndRender;
@@ -4367,9 +4424,8 @@ internal sealed partial class NotchController
         try
         {
 
-            bool fresh = !System.IO.File.Exists(PinPath);
-            bool legacyOn = !fresh && System.IO.File.ReadAllText(PinPath).Trim() == "1";
-            _pinned = _settings.Current.Bool(Halo.Settings.SettingsKeys.OverFullscreen, fresh || legacyOn);
+            _pinned = _settings.Current.Bool(Halo.Settings.SettingsKeys.OverFullscreen,
+                                             Halo.Settings.SettingsKeys.OverFullscreenDefault);
         }
         catch { }
     }

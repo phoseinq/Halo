@@ -136,6 +136,9 @@ internal static class Catalog
 
                 new("launcher.hotkey", L("launcher.hotkey"), D("launcher.hotkey"),
                     RowKind.Text, "Alt+Space", []),
+
+                new("general.hidekey", L("general.hidekey"), D("general.hidekey"),
+                    RowKind.Text, "Ctrl+Alt+H", []),
                 Action("general.reset", L("general.reset"), D("general.reset"), "Reset position"),
             ]),
 

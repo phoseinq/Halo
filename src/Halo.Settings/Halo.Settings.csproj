@@ -48,6 +48,10 @@
          The panel writes quick.<id> and the launcher decides what to show from the same ids and the same
          defaults, so two copies would disagree the first time an action was added to one of them. -->
     <Compile Include="..\Halo.App\Launcher\QuickActions.cs" Link="QuickActions.cs" />
+    <!-- Its own file precisely so both sides can have it: the panel needs to turn a keypress into
+         "Ctrl+Alt+H" and the pill needs to turn that back into RegisterHotKey arguments, and neither
+         should own a second copy of the spelling. -->
+    <Compile Include="..\Halo.App\Launcher\HotKeyChord.cs" Link="HotKeyChord.cs" />
   </ItemGroup>
 
 </Project>

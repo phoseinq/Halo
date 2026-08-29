@@ -101,6 +101,10 @@ internal static class SettingsKeys
 {
     internal const string StartWithWindows = "general.startup";
     internal const string OverFullscreen = "general.fullscreen";
+
+    internal const bool OverFullscreenDefault = true;
+
+    internal const string HideHotkey = "general.hidekey";
     internal const string InCaptures = "general.capture";
     internal const string FollowFocus = "general.follow";
     internal const string Greeting = "general.greeting";

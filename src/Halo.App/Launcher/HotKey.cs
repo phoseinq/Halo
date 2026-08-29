@@ -9,6 +9,8 @@ internal sealed class HotKey : IDisposable
 
     internal const int Id = 0x4841;
 
+    internal const int HideId = 0x4842;
+
     private readonly IntPtr _hwnd;
     private readonly int _id;
     private bool _held;

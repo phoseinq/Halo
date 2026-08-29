@@ -1287,8 +1287,22 @@ internal sealed partial class NotchController
     private bool FaceWanted =>
         _settings.Current.Bool(Halo.Settings.SettingsKeys.Face, true);
 
+    private bool _fgFullscreen;
+
+    private bool FaceOverFullscreen
+    {
+        get
+        {
+            if (!_fgFullscreen || !Pinned(_pinned)) return false;
+            foreach (var w in _widgets)
+                if (w is MediaWidget m && m.ShowingVideo) return false;
+            return true;
+        }
+    }
+
     private bool FaceWakes =>
-        (FacePinned || (_empty && _lastDesktop)) && !_handDone && FaceWanted && !Privacy.Active && !_moving
+        (FacePinned || (_empty && (_lastDesktop || FaceOverFullscreen)))
+        && !_handDone && FaceWanted && !Privacy.Active && !_moving
         && _notif == null && _ask == null && _askGhost == null && _panelGhost == null
         && _greet == GreetingKind.None;
 
@@ -1868,7 +1882,8 @@ internal sealed partial class NotchController
         DetectAgentCancel(fg);
         DetectLanguageChange(fg);
 
-        bool fullscreen = !Pinned(_pinned) && _notch.IsFullscreen(fg);
+        _fgFullscreen = _notch.IsFullscreen(fg);
+        bool fullscreen = !Pinned(_pinned) && _fgFullscreen;
 
         _overFullscreen = fullscreen;
 

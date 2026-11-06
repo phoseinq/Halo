@@ -39,7 +39,9 @@
             <!-- The product's real icon, which is what the taskbar and alt-tab show; a hand-drawn ring
                  here was a second, slightly different Halo mark in the one place users compare against
                  the taskbar. The drawn ring stays on Home, where 84px is past what the .ico holds. -->
-            <Image Source="halo.ico" Width="20" Height="20" VerticalAlignment="Center"
+            <!-- the .ico's 32px ring as a PNG: given the .ico itself, WPF takes its FIRST frame - the 16px
+                 one - and scaled it up to 20 (30 device pixels at 150%), which was the blurry header icon -->
+            <Image Source="halo-ring-32.png" Width="20" Height="20" VerticalAlignment="Center"
                    RenderOptions.BitmapScalingMode="HighQuality" />
             <TextBlock x:Name="TitleText" Grid.Column="1" Text="Halo settings" Foreground="{StaticResource Ink}"
                        FontFamily="Segoe UI Variable Display, Segoe UI" FontWeight="SemiBold"

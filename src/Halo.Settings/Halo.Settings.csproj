@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <Resource Include="..\Halo.App\Assets\halo.ico" Link="halo.ico" />
+    <Resource Include="..\Halo.App\Assets\halo-ring-32.png" Link="halo-ring-32.png" />
     <!-- the same file on disk as Halo.App embeds, under the same logical name, because Strings reads it
          out of ITS OWN assembly - a linked class in a second exe finds a second copy or finds nothing -->
     <EmbeddedResource Include="..\Halo.App\Localization\locales\en.json"

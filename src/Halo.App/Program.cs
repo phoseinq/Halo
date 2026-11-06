@@ -2598,6 +2598,9 @@ internal static class Program
 
             float m = MathF.Max(1f, MathF.Round(s * 0.04f)), side = s - m * 2f, rad = side * 0.24f;
             var tile = new System.Drawing.RectangleF(m + 0.5f, m + 0.5f, side - 1f, side - 1f);
+
+            bool small = s <= 32;
+            if (!small)
             using (var path = Halo.Widgets.Fx.Rounded(tile, rad))
             {
                 using (var glass = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(22, 255, 255, 255)))
@@ -2616,10 +2619,10 @@ internal static class Program
             float cx = tile.X + tile.Width / 2f, cy = tile.Y + tile.Height / 2f;
             float ringR = side * 0.28f, stroke = MathF.Max(2f, side * 0.085f);
 
-            if (s <= 32)
+            if (small)
             {
-                float strokePx = s <= 24 ? 2f : 3f;
-                float outer = MathF.Round(s * 0.34f);
+                float strokePx = s <= 20 ? 2f : 3f;
+                float outer = MathF.Round(s * 0.44f);
                 cx = cy = s / 2f;
                 stroke = strokePx;
                 ringR = outer - strokePx / 2f;
@@ -2628,6 +2631,12 @@ internal static class Program
             var lightBox = System.Drawing.RectangleF.Inflate(ringBox, stroke, stroke);
             System.Drawing.Color left = System.Drawing.Color.FromArgb(255, 0x7C, 0xB4, 0xFF);
             System.Drawing.Color right = System.Drawing.Color.FromArgb(255, 0x78, 0xDD, 0xB2);
+
+            if (small)
+            {
+                left = System.Drawing.Color.FromArgb(255, 0x3E, 0x8E, 0xFF);
+                right = System.Drawing.Color.FromArgb(255, 0x2C, 0xC2, 0x8C);
+            }
             using (var lg = new System.Drawing.Drawing2D.LinearGradientBrush(lightBox, left, right, 0f)
                        { WrapMode = System.Drawing.Drawing2D.WrapMode.TileFlipXY })
             using (var pen = new System.Drawing.Pen(lg, stroke))

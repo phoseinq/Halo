@@ -385,6 +385,10 @@ internal sealed class LayeredNotch
         Environment.GetEnvironmentVariable("HALO_DUMP_GLASS") == "1";
     private static long _lastDump;
 
+    private static readonly bool FrameDump =
+        Environment.GetEnvironmentVariable("HALO_DUMP_FRAME") == "1";
+    private static long _lastFrameDump;
+
     private void GlassTrace(string how, double ms, double waited)
     {
         if (!GlassDebug) return;
@@ -523,12 +527,34 @@ internal sealed class LayeredNotch
             g.Clear(Color.Transparent);
             g.ScaleTransform(S, S);
 
-            if (!SkipShape) DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
+            if (PressScale < 0.9999f)
+            {
+                g.TranslateTransform(w / 2f, h / 2f);
+                g.ScaleTransform(PressScale, PressScale);
+                g.TranslateTransform(-w / 2f, -h / 2f);
+            }
+
+            GraphicsPath? dropShape = menu.Dropping ? DropBody(menu, w, h) : null;
+            try
+            {
+                if (dropShape is not null)
+                {
+                    ShapeExtra = dropShape;
+
+                    ShapeExtraW = CircleGap + PrivacyPad + CircleD + CircleD / 2;
+                }
+                long tShape = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (!SkipShape) DrawShape(g, w, h, radius, tintAlpha, glass, glassFade, clarity);
+                MsShape = Ms(tShape);
+            }
+            finally { ShapeExtra = null; ShapeExtraW = 0; dropShape?.Dispose(); }
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
 
+            long tContent = System.Diagnostics.Stopwatch.GetTimestamp();
             if (collapsedFade > 0.01f) drawCollapsed(g, w, h, collapsedFade);
             drawContent(g, w, h, contentFade);
+            MsContent = Ms(tContent);
             if (HandleAlpha > 0.01f && contentFade > 0.5f)
             {
 
@@ -539,25 +565,48 @@ internal sealed class LayeredNotch
             }
             float ca = menu.Swallow;
             if (menu.Show && ca > 0.01f && !menu.Dropping) DrawMenu(g, menuX, w, tintAlpha, glass, menu, ca);
-            if (menu.Dropping) DrawDrop(g, menu, tintAlpha, w, h);
+
+            if (menu.Dropping) DrawDrop(g, menu, w, h);
             if (privacy) DrawPrivacyDots(g, w);
+            if (FrameDump && Environment.TickCount64 - _lastFrameDump > 1000)
+            {
+                _lastFrameDump = Environment.TickCount64;
+                try
+                {
+                    bmp.Save(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Halo", "frame-dump.png"), ImageFormat.Png);
+                }
+                catch { }
+            }
         }
 
-        CutPillCorners(pw, ph, (int)MathF.Ceiling(w * S), (int)MathF.Ceiling(h * S),
-                       (int)MathF.Round(radius * S));
+        if (menu.Dropping)
+        {
+            if (_rgnKey != long.MinValue)
+            {
+                try { Win32.SetWindowRgn(Hwnd, IntPtr.Zero, false); } catch { }
+                _rgnKey = long.MinValue;
+            }
+        }
+        else
+            CutPillCorners(pw, ph, (int)MathF.Ceiling(w * S), (int)MathF.Ceiling(h * S),
+                           (int)MathF.Round(radius * S));
 
         var size = new Win32.SIZE { cx = pw, cy = ph };
         var src = new Win32.POINT { X = 0, Y = 0 };
         var dst = new Win32.POINT { X = _workLeft + (_workWidth - (int)(w * S)) / 2 + (int)OffsetX,
                                     Y = _workTop + (int)MathF.Round(OffsetY * S) };
+
         var blend = new Win32.BLENDFUNCTION
         {
             BlendOp = Win32.AC_SRC_OVER,
             BlendFlags = 0,
-            SourceConstantAlpha = 255,
+            SourceConstantAlpha = SurfaceAlpha,
             AlphaFormat = Win32.AC_SRC_ALPHA,
         };
+        long tBlit = System.Diagnostics.Stopwatch.GetTimestamp();
         Win32.UpdateLayeredWindow(Hwnd, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, Win32.ULW_ALPHA);
+        MsBlit = Ms(tBlit);
 
         Win32.SelectObject(memDc, oldObj);
         Win32.DeleteObject(dib);
@@ -568,6 +617,21 @@ internal sealed class LayeredNotch
     private long _rgnKey = long.MinValue;
 
         internal bool SkipShape;
+
+    private bool _clickThrough;
+
+    internal void SetClickThrough(bool on)
+    {
+        if (on == _clickThrough) return;
+        try
+        {
+            long ex = Win32.GetWindowLongPtr(Hwnd, Win32.GWL_EXSTYLE).ToInt64();
+            Win32.SetWindowLongPtr(Hwnd, Win32.GWL_EXSTYLE,
+                (IntPtr)(on ? ex | Win32.WS_EX_TRANSPARENT : ex & ~Win32.WS_EX_TRANSPARENT));
+            _clickThrough = on;
+        }
+        catch { }
+    }
 
     internal void FrostInto(Graphics g, GraphicsPath clip, int w, int h, float strength, float clarity = 0f)
     {
@@ -581,18 +645,23 @@ internal sealed class LayeredNotch
             int srcW = Math.Min(w, _bg.Width - Math.Max(0, sx));
             int srcH = Math.Min(h, _bg.Height - Math.Max(0, sy));
             if (srcW <= 0 || srcH <= 0) return;
-            var saved = g.Save();
-            try
+
+            var frost = FrostScratch(w, h);
+            using (var fg = Graphics.FromImage(frost))
             {
-                g.SetClip(clip, CombineMode.Intersect);
-                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                fg.CompositingMode = CompositingMode.SourceCopy;
+                fg.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                fg.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 using var ia = new ImageAttributes();
                 ia.SetColorMatrix(Frost(Math.Clamp(strength, 0f, 1f), clarity));
-                g.DrawImage(_bg, new Rectangle(0, 0, w, h),
-                            Math.Max(0, sx), Math.Max(0, sy), srcW, srcH, GraphicsUnit.Pixel, ia);
+                fg.DrawImage(_bg, new Rectangle(0, 0, w, h),
+                             Math.Max(0, sx), Math.Max(0, sy), srcW, srcH, GraphicsUnit.Pixel, ia);
             }
-            finally { g.Restore(saved); }
+            var keepSmoothing = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var mask = new TextureBrush(frost, new RectangleF(0, 0, w, h)) { WrapMode = WrapMode.Clamp })
+                g.FillPath(mask, clip);
+            g.SmoothingMode = keepSmoothing;
         }
     }
 
@@ -668,8 +737,9 @@ internal sealed class LayeredNotch
         lock (_bgLock)
         {
 
-            if (!CacheOn)
+            if (!CacheOn || ShapeExtra is not null || PressScale < 0.9999f)
             {
+                ShapeBypass++;
                 ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
                 return;
             }
@@ -680,12 +750,23 @@ internal sealed class LayeredNotch
             _lastW = w; _lastH = h; _lastZoom = Zoom;
             if (moving && (_shapeCache is null || !_shapeKey.Equals(key)))
             {
+                ShapeMiss++;
+                ShapeWhy = w != _shapeKey.W ? "w" : h != _shapeKey.H ? "h" : "zoom";
                 if (_shapeCache is not null) { _shapeCache.Dispose(); _shapeCache = null; }
                 ShapeInto(g, w, h, radius, tintAlpha, glass ? _bg : null, glassFade, clarity);
                 return;
             }
             if (_shapeCache is null || !_shapeKey.Equals(key))
             {
+                ShapeMiss++;
+                ShapeWhy = _shapeCache is null ? "none"
+                    : key.TintAlpha != _shapeKey.TintAlpha ? "tint"
+                    : key.CaptureVersion != _shapeKey.CaptureVersion ? "capture"
+                    : key.GlassFade != _shapeKey.GlassFade ? "glassfade"
+                    : key.Clarity != _shapeKey.Clarity ? "clarity"
+                    : key.Radius != _shapeKey.Radius ? "radius"
+                    : key.Sheen != _shapeKey.Sheen || key.Grain != _shapeKey.Grain
+                      || key.RimLight != _shapeKey.RimLight ? "material" : "other";
 
                 float sc = Zoom;
                 int dw = Math.Max(1, (int)MathF.Ceiling(w * sc)), dh = Math.Max(1, (int)MathF.Ceiling(h * sc));
@@ -709,6 +790,7 @@ internal sealed class LayeredNotch
             var saved = g.Save();
             g.ResetTransform();
             g.TranslateTransform(caller.OffsetX, caller.OffsetY);
+            ShapeHit++;
             g.DrawImageUnscaled(_shapeCache, 0, 0);
             g.Restore(saved);
 
@@ -717,7 +799,7 @@ internal sealed class LayeredNotch
         }
     }
 
-        private readonly record struct ShapeKey(
+    private readonly record struct ShapeKey(
         int W, int H, int Radius, int TintAlpha, bool Glass, float GlassFade, float Clarity,
         int Ss, int CaptureVersion, float Zoom, float Sheen, float Grain, float RimLight);
 
@@ -743,6 +825,9 @@ internal sealed class LayeredNotch
     private static Bitmap ScratchA(int w, int h) { lock (_scratchLock) return Scratch(ref _scratchA, w, h); }
     private static Bitmap ScratchB(int w, int h) { lock (_scratchLock) return Scratch(ref _scratchB, w, h); }
 
+    private static Bitmap? _scratchF;
+    private static Bitmap FrostScratch(int w, int h) { lock (_scratchLock) return Scratch(ref _scratchF, w, h); }
+
     private const float FrostDesat = 0.40f, FrostContrast = 0.34f, FrostFloor = 0.05f;
 
     private static ColorMatrix Frost(float alpha, float clarity)
@@ -764,13 +849,52 @@ internal sealed class LayeredNotch
 
     internal static int MaxSupersampledPixels = 140_000;
 
+    private static ImageAttributes GlassAttrs()
+    {
+        var ia = new ImageAttributes();
+        ia.SetColorMatrix(new ColorMatrix { Matrix33 = Math.Clamp(GlassAlpha, 0f, 1f) });
+        return ia;
+    }
+
+    private static GraphicsPath MaskPath(int w, int h, int radius, int scale)
+    {
+        var p = PillPath(w, h, radius, roundTop: true);
+        if (ShapeExtra is null) return p;
+        p.FillMode = FillMode.Winding;
+        try
+        {
+            using var extra = (GraphicsPath)ShapeExtra.Clone();
+            if (scale != 1)
+            {
+                using var m = new Matrix();
+                m.Scale(scale, scale);
+                extra.Transform(m);
+            }
+            p.AddPath(extra, false);
+        }
+        catch { }
+        return p;
+    }
+
+    internal static double MsShape, MsContent, MsBlit;
+    internal static int ShapeHit, ShapeMiss, ShapeBypass;
+    internal static string ShapeWhy = "";
+
+    private static double Ms(long from) =>
+        (System.Diagnostics.Stopwatch.GetTimestamp() - from) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+
+    internal static GraphicsPath? ShapeExtra;
+    internal static int ShapeExtraW;
+
     internal static void ShapeInto(Graphics g, int w, int h, int radius, int tintAlpha,
                                    Bitmap? backdrop, float glassFade, float clarity = 0f)
     {
         int ss = Math.Clamp(Supersample, 1, 2);
         if (w * h > MaxSupersampledPixels) ss = 1;
 
-        var content = ScratchA(w * ss, h * ss);
+        int cw = w + (ShapeExtra is null ? 0 : Math.Max(0, ShapeExtraW));
+
+        var content = ScratchA(cw * ss, h * ss);
         using (var cg = Graphics.FromImage(content))
         {
             cg.CompositingMode = CompositingMode.SourceCopy;
@@ -780,32 +904,33 @@ internal sealed class LayeredNotch
             {
                 int sx = (CaptureW - w) / 2;
 
-                int srcW = Math.Min(w, backdrop.Width - Math.Max(0, sx));
+                int srcW = Math.Min(cw, backdrop.Width - Math.Max(0, sx));
                 int srcH = Math.Min(h, backdrop.Height);
                 cg.InterpolationMode = InterpolationMode.HighQualityBilinear;
                 cg.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 using var ia = new ImageAttributes();
                 ia.SetColorMatrix(Frost(Math.Clamp(glassFade, 0f, 1f), clarity));
                 if (srcW > 0 && srcH > 0)
-                    cg.DrawImage(backdrop, new Rectangle(0, 0, w * ss, h * ss),
+                    cg.DrawImage(backdrop, new Rectangle(0, 0, cw * ss, h * ss),
                         Math.Max(0, sx), 0, srcW, srcH, GraphicsUnit.Pixel, ia);
             }
+
             using var tint = new SolidBrush(Color.FromArgb(tintAlpha, 8, 8, 8));
-            cg.FillRectangle(tint, 0, 0, w * ss, h * ss);
+            cg.FillRectangle(tint, 0, 0, cw * ss, h * ss);
 
             if (Sheen > 0.004f)
             {
-                using var lg = new LinearGradientBrush(new Rectangle(0, -1, w * ss, h * ss + 2),
+                using var lg = new LinearGradientBrush(new Rectangle(0, -1, cw * ss, h * ss + 2),
                     Color.FromArgb((int)(255 * Sheen), 255, 255, 255), Color.FromArgb(0, 255, 255, 255),
                     LinearGradientMode.Vertical)
                 { Blend = new Blend { Factors = new[] { 0f, 0.55f, 1f }, Positions = new[] { 0f, 0.30f, 1f } } };
-                cg.FillRectangle(lg, 0, 0, w * ss, h * ss);
+                cg.FillRectangle(lg, 0, 0, cw * ss, h * ss);
             }
 
             if (Grain > 0.004f)
             {
                 using var noise = new TextureBrush(GrainTile(), WrapMode.Tile);
-                cg.FillRectangle(noise, 0, 0, w * ss, h * ss);
+                cg.FillRectangle(noise, 0, 0, cw * ss, h * ss);
             }
         }
 
@@ -816,8 +941,10 @@ internal sealed class LayeredNotch
 
             g.InterpolationMode = InterpolationMode.HighQualityBilinear;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            using (var path1 = PillPath(w, h, radius))
-            using (var mask1 = new TextureBrush(content) { WrapMode = WrapMode.Clamp })
+            using (var path1 = MaskPath(w, h, radius, 1))
+            using (var glass1 = GlassAttrs())
+            using (var mask1 = new TextureBrush(content, new RectangleF(0, 0, content.Width, content.Height), glass1)
+                   { WrapMode = WrapMode.Clamp })
             {
                 g.FillPath(mask1, path1);
                 if (RimLight > 0.004f)
@@ -831,7 +958,7 @@ internal sealed class LayeredNotch
             return;
         }
 
-        var big = ScratchB(w * ss, h * ss);
+        var big = ScratchB(cw * ss, h * ss);
         using (var bg = Graphics.FromImage(big))
         {
             bg.SmoothingMode = SmoothingMode.AntiAlias;
@@ -839,8 +966,10 @@ internal sealed class LayeredNotch
             bg.CompositingMode = CompositingMode.SourceCopy;
             bg.Clear(Color.Transparent);
             bg.CompositingMode = CompositingMode.SourceOver;
-            using var path = PillPath(w * ss, h * ss, radius * ss);
-            using var mask = new TextureBrush(content) { WrapMode = WrapMode.Clamp };
+            using var path = MaskPath(w * ss, h * ss, radius * ss, ss);
+            using var glass = GlassAttrs();
+            using var mask = new TextureBrush(content, new RectangleF(0, 0, content.Width, content.Height), glass)
+                { WrapMode = WrapMode.Clamp };
             bg.FillPath(mask, path);
 
             if (RimLight > 0.004f)
@@ -853,7 +982,7 @@ internal sealed class LayeredNotch
 
         g.InterpolationMode = InterpolationMode.HighQualityBilinear;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.DrawImage(big, new Rectangle(0, 0, w, h), new Rectangle(0, 0, w * ss, h * ss), GraphicsUnit.Pixel);
+        g.DrawImage(big, new Rectangle(0, 0, cw, h), new Rectangle(0, 0, cw * ss, h * ss), GraphicsUnit.Pixel);
     }
 
     private void DrawMenu(Graphics g, int x, int pillW, int tintAlpha, bool glass, MenuFrame menu, float alpha)
@@ -882,10 +1011,10 @@ internal sealed class LayeredNotch
             cg.Clear(Color.Transparent);
 
             using var path = new GraphicsPath(FillMode.Winding);
-            using (var v = PillPath(D, mh * ss, D / 2))
+            using (var v = PillPath(D, mh * ss, D / 2, roundTop: true))
                 path.AddPath(v, false);
             if (extf > 0.5f)
-                using (var hp = PillPath((int)((CircleD + extf) * ss), D, D / 2))
+                using (var hp = PillPath((int)((CircleD + extf) * ss), D, D / 2, roundTop: true))
                 {
                     using var m = new Matrix(1, 0, 0, 1, 0, or_ * D);
                     hp.Transform(m);
@@ -893,19 +1022,31 @@ internal sealed class LayeredNotch
                 }
 
             int srcX = (CaptureW - pillW) / 2 + x;
-            lock (_bgLock)
+
+            using (var sheet = new Bitmap(Math.Max(1, mw * ss), Math.Max(1, mh * ss), PixelFormat.Format32bppPArgb))
             {
-                if (glass && _bg != null && srcX >= 0 && srcX + mw <= _bg.Width && CircleY + mh <= _bg.Height)
+                using (var sg = Graphics.FromImage(sheet))
                 {
-                    var clip = cg.Clip;
-                    cg.SetClip(path);
-                    cg.DrawImage(_bg, new Rectangle(0, 0, mw * ss, mh * ss),
-                        new Rectangle(srcX, CircleY, mw, mh), GraphicsUnit.Pixel);
-                    cg.Clip = clip;
+                    sg.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    lock (_bgLock)
+                    {
+                        if (glass && _bg != null && srcX >= 0 && srcX + mw <= _bg.Width && CircleY + mh <= _bg.Height)
+                        {
+                            using var fa = new ImageAttributes();
+                            fa.SetColorMatrix(Frost(1f, 0f));
+                            sg.DrawImage(_bg, new Rectangle(0, 0, mw * ss, mh * ss),
+                                srcX, CircleY, mw, mh, GraphicsUnit.Pixel, fa);
+                        }
+                    }
+                    using var b = new SolidBrush(Color.FromArgb(tintAlpha, 8, 8, 8));
+                    sg.FillRectangle(b, 0, 0, sheet.Width, sheet.Height);
                 }
+                using var ga = GlassAttrs();
+                using var sheetBrush = new TextureBrush(sheet, new RectangleF(0, 0, sheet.Width, sheet.Height), ga)
+                    { WrapMode = WrapMode.Clamp };
+                cg.FillPath(sheetBrush, path);
             }
-            using (var b = new SolidBrush(Color.FromArgb(tintAlpha, 8, 8, 8)))
-                cg.FillPath(b, path);
 
             void Cell(string icon, Bitmap? img, float cx, float cy, float ia, Color? ring,
                 float progress = -1f, float imageOffsetX = 0f)
@@ -917,8 +1058,9 @@ internal sealed class LayeredNotch
                     var accent = Widgets.Fx.AccentOf(img);
                     if (accent != Widgets.Fx.White)
                     {
+
                         using var wash = new System.Drawing.Drawing2D.GraphicsPath();
-                        wash.AddEllipse(cx - D * 0.1f, cy - D * 0.1f, D * 1.2f, D * 1.2f);
+                        wash.AddEllipse(cx + D * 0.06f, cy + D * 0.06f, D * 0.88f, D * 0.88f);
                         using var pgb = new System.Drawing.Drawing2D.PathGradientBrush(wash)
                         {
                             CenterColor = Color.FromArgb((int)(34 * ia), accent),
@@ -1003,50 +1145,146 @@ internal sealed class LayeredNotch
         g.Restore(stt);
     }
 
-    private void DrawDrop(Graphics g, MenuFrame menu, int tintAlpha, int w, int h)
+        internal readonly record struct DropPose(
+        float BlobX, float BlobY, float R2,
+        float Neck,
+        float Stretch,
+        float IconAlpha);
+
+    private const float LeanOut = 10f, LeanPeak = 0.55f;
+
+    private const float StretchEnd = 0.26f;
+
+    private const float HeadDepth = 8f;
+
+    private static float Smooth(float x) { x = Math.Clamp(x, 0f, 1f); return x * x * (3f - 2f * x); }
+
+    private static float Drain(float t) => Smooth(Math.Clamp((t - StretchEnd) / (1f - StretchEnd), 0f, 1f));
+
+    internal static float DropStretch(float t)
     {
-
-        float p = menu.Drop - 1f;
-        const float k1 = 1.9f, k3 = k1 + 1f;
-        float e = 1f + k3 * p * p * p + k1 * p * p;
-        float bx = menu.FromX + (menu.ToX - menu.FromX) * e;
-        float by = menu.FromY + (menu.ToY - menu.FromY) * e;
-
-        float r2 = CircleD / 2f * (menu.Outward ? 0.8f + 0.2f * e : 1f - 0.2f * e);
-        var blob = new PointF(bx, by);
-        var c1 = new PointF(w - h / 2f, h / 2f);
-        float r1 = h / 2f;
-
-        var fill = Color.FromArgb(Math.Min(tintAlpha + 50, 255), 8, 8, 8);
-        using (var b = new SolidBrush(fill))
-        {
-            Metaball(g, b, c1, r1, blob, r2);
-            g.FillEllipse(b, blob.X - r2, blob.Y - r2, r2 * 2, r2 * 2);
-        }
-
-        float a = menu.Outward
-            ? Math.Clamp(menu.Drop / 0.25f, 0f, 1f)
-            : menu.Drop < 0.8f ? 1f : 1f - (menu.Drop - 0.8f) / 0.2f;
-        if (menu.DropImage != null)
-        {
-            DrawCircleImage(g, menu.DropImage, blob.X - r2, blob.Y - r2, r2 * 2, a);
-            return;
-        }
-
-        DrawGlyphCentered(g, menu.DropIcon, blob.X - r2, blob.Y - r2, r2 * 2, r2 * 1.8f, (int)(235 * a));
+        float drain = Drain(Math.Clamp(t, 0f, 1f));
+        return LeanOut * (drain < LeanPeak
+            ? Smooth(drain / LeanPeak)
+            : 1f - Smooth((drain - LeanPeak) / (1f - LeanPeak)));
     }
 
-    private static void Metaball(Graphics g, Brush brush, PointF c1, float r1, PointF c2, float r2)
+    internal static DropPose PoseOf(float t, bool outward, float fromX, float fromY, float toX, float toY)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        float dirX = toX - fromX, dirY = toY - fromY;
+        float r0 = CircleD / 2f;
+        if (outward)
+        {
+
+            float e = 1f - MathF.Pow(1f - t, 3f);
+            return new DropPose(fromX + dirX * e, fromY + dirY * e,
+                                r0 * (0.25f + 0.75f * e), 0f, 0f, Math.Clamp(t / 0.25f, 0f, 1f));
+        }
+
+        float neck = Smooth(Math.Clamp(t / StretchEnd, 0f, 1f));
+
+        float drain = Smooth(Math.Clamp((t - StretchEnd) / (1f - StretchEnd), 0f, 1f));
+
+        float len = MathF.Max(0.001f, MathF.Sqrt(dirX * dirX + dirY * dirY));
+        float ux = dirX / len, uy = dirY / len;
+
+        float rThin = r0 * 0.58f;
+        float rB = (r0 - (r0 - rThin) * neck) * (1f - drain);
+
+        float anchor = len - (r0 - HeadDepth);
+        float tail = -r0 + (anchor + r0) * drain;
+        float s = tail + rB;
+
+        float icon = Math.Clamp((rB - 5f) / 7f, 0f, 1f);
+        return new DropPose(fromX + ux * s, fromY + uy * s, rB, neck, DropStretch(t), icon);
+    }
+
+        internal static GraphicsPath? DropBody(MenuFrame menu, int w, int h)
+    {
+        var pose = PoseOf(menu.Drop, menu.Outward, menu.FromX, menu.FromY, menu.ToX, menu.ToY);
+        var blob = new PointF(pose.BlobX, pose.BlobY);
+        float r2 = pose.R2, r1 = h / 2f;
+        var c1 = new PointF(w - r1, r1);
+        var body = new GraphicsPath(FillMode.Winding);
+        if (menu.Outward)
+        {
+            Metaball(body, c1, r1, blob, r2);
+            if (r2 > 0.2f) body.AddEllipse(blob.X - r2, blob.Y - r2, r2 * 2f, r2 * 2f);
+            return body;
+        }
+        if (r2 <= 0.2f) { body.Dispose(); return null; }
+
+        float dx = blob.X - c1.X, dy = blob.Y - c1.Y;
+        float len = MathF.Max(0.001f, MathF.Sqrt(dx * dx + dy * dy));
+        float ux = dx / len, uy = dy / len;
+
+        float headDist = (len - r2) + ((r1 - HeadDepth) - (len - r2)) * pose.Neck;
+        AddHull(body, blob, r2, new PointF(c1.X + ux * headDist, c1.Y + uy * headDist),
+                2.5f + 4.5f * pose.Neck);
+        return body;
+    }
+
+    internal static void DrawDrop(Graphics g, MenuFrame menu, int w, int h)
+    {
+        var pose = PoseOf(menu.Drop, menu.Outward, menu.FromX, menu.FromY, menu.ToX, menu.ToY);
+        float a = pose.IconAlpha, r2 = pose.R2;
+        if (a <= 0.01f || r2 <= 1f) return;
+        using var body = DropBody(menu, w, h);
+        if (body is null) return;
+
+        var keep = g.Save();
+        g.SetClip(body, CombineMode.Intersect);
+        if (menu.DropImage != null)
+            DrawCircleImage(g, menu.DropImage, pose.BlobX - r2, pose.BlobY - r2, r2 * 2, a);
+        else
+
+            DrawGlyphCentered(g, menu.DropIcon, pose.BlobX - r2, pose.BlobY - r2, r2 * 2, r2 * 1.8f,
+                              (int)(235 * a));
+        g.Restore(keep);
+    }
+
+    private static void AddHull(GraphicsPath p, PointF a, float ra, PointF b, float rb)
+    {
+        float dx = b.X - a.X, dy = b.Y - a.Y;
+        float d = MathF.Sqrt(dx * dx + dy * dy);
+
+        if (d < 0.01f || d <= MathF.Abs(ra - rb))
+        {
+            float r = MathF.Max(ra, rb);
+            var c = ra >= rb ? a : b;
+            p.AddEllipse(c.X - r, c.Y - r, r * 2f, r * 2f);
+            return;
+        }
+        const float Deg = 180f / MathF.PI;
+        float alpha = MathF.Atan2(dy, dx) * Deg;
+
+        float beta = MathF.Acos(Math.Clamp((ra - rb) / d, -1f, 1f)) * Deg;
+        p.StartFigure();
+        p.AddArc(a.X - ra, a.Y - ra, ra * 2f, ra * 2f, alpha + beta, 360f - 2f * beta);
+        p.AddArc(b.X - rb, b.Y - rb, rb * 2f, rb * 2f, alpha - beta, 2f * beta);
+        p.CloseFigure();
+    }
+
+        private const float Reach = 2.6f;
+
+    private static void Metaball(GraphicsPath outp, PointF c1, float r1, PointF c2, float r2)
     {
         float dx = c2.X - c1.X, dy = c2.Y - c1.Y;
         float d = MathF.Sqrt(dx * dx + dy * dy);
-        if (d <= 0.001f || d >= r1 + r2 || d <= MathF.Abs(r1 - r2)) return;
 
-        const float handle = 2.4f, v = 0.5f;
-        float u1 = MathF.Acos((r1 * r1 + d * d - r2 * r2) / (2 * r1 * d));
-        float u2 = MathF.Acos((r2 * r2 + d * d - r1 * r1) / (2 * r2 * d));
+        float span = r1 + r2;
+        if (d <= 0.001f || d >= span * Reach || d <= MathF.Abs(r1 - r2)) return;
+        float stretch = Math.Clamp((d - span) / (span * (Reach - 1f)), 0f, 1f);
+        float v = 0.5f * (1f - stretch);
+        if (v <= 0.004f) return;
+
+        const float handle = 2.4f;
+
+        float u1 = MathF.Acos(Math.Clamp((r1 * r1 + d * d - r2 * r2) / (2 * r1 * d), -1f, 1f));
+        float u2 = MathF.Acos(Math.Clamp((r2 * r2 + d * d - r1 * r1) / (2 * r2 * d), -1f, 1f));
         float ab = MathF.Atan2(dy, dx);
-        float maxSpread = MathF.Acos((r1 - r2) / d);
+        float maxSpread = MathF.Acos(Math.Clamp((r1 - r2) / d, -1f, 1f));
 
         float a1 = ab + u1 + (maxSpread - u1) * v;
         float a2 = ab - u1 - (maxSpread - u1) * v;
@@ -1060,12 +1298,11 @@ internal sealed class LayeredNotch
         float d2 = Math.Min(v * handle, Dist(p1, p3) / total) * Math.Min(1f, d * 2f / total);
         float h1 = r1 * d2, h2 = r2 * d2;
 
-        using var path = new GraphicsPath();
-        path.AddBezier(p1, Pt(p1, h1, a1 - MathF.PI / 2), Pt(p3, h2, a3 + MathF.PI / 2), p3);
-        path.AddLine(p3, p4);
-        path.AddBezier(p4, Pt(p4, h2, a4 - MathF.PI / 2), Pt(p2, h1, a2 + MathF.PI / 2), p2);
-        path.CloseFigure();
-        g.FillPath(brush, path);
+        outp.StartFigure();
+        outp.AddBezier(p1, Pt(p1, h1, a1 - MathF.PI / 2), Pt(p3, h2, a3 + MathF.PI / 2), p3);
+        outp.AddLine(p3, p4);
+        outp.AddBezier(p4, Pt(p4, h2, a4 - MathF.PI / 2), Pt(p2, h1, a2 + MathF.PI / 2), p2);
+        outp.CloseFigure();
     }
 
     private static PointF Pt(PointF c, float r, float a) => new(c.X + r * MathF.Cos(a), c.Y + r * MathF.Sin(a));
@@ -1091,12 +1328,47 @@ internal sealed class LayeredNotch
         g.SmoothingMode = old;
     }
 
-    private static void DrawCircleImage(Graphics g, Bitmap img, float x, float y, float box, float alpha)
+    private static readonly System.Collections.Generic.Dictionary<(Bitmap, int), Bitmap> _mips = new();
+
+    internal static Bitmap Mip(Bitmap src, int target)
+    {
+        try
+        {
+            int side = Math.Min(src.Width, src.Height);
+            int b = 8; while (b < target) b <<= 1;
+            if (b >= side) return src;
+            var key = (src, b);
+            lock (_mips) if (_mips.TryGetValue(key, out var hit)) return hit;
+
+            Bitmap cur = src; bool own = false;
+            int w = src.Width, h = src.Height;
+            while (Math.Min(w, h) / 2 >= b)
+            {
+                w = Math.Max(1, w / 2); h = Math.Max(1, h / 2);
+                var next = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+                using (var ng = Graphics.FromImage(next))
+                {
+                    ng.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    ng.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    ng.CompositingMode = CompositingMode.SourceCopy;
+                    ng.DrawImage(cur, new Rectangle(0, 0, w, h), 0, 0, cur.Width, cur.Height, GraphicsUnit.Pixel);
+                }
+                if (own) cur.Dispose();
+                cur = next; own = true;
+            }
+            lock (_mips) _mips[key] = cur;
+            return cur;
+        }
+        catch { return src; }
+    }
+
+    internal static void DrawCircleImage(Graphics g, Bitmap img, float x, float y, float box, float alpha)
     {
         img = CenteredSquare(img);
         float inset = box * 0.19f, d = box - inset * 2;
         var circle = new RectangleF(x + inset, y + inset, d, d);
         int s = Math.Max(1, (int)Math.Ceiling(d));
+        img = Mip(img, s);
 
         using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
         using (var sg = Graphics.FromImage(scaled))
@@ -1209,7 +1481,13 @@ internal sealed class LayeredNotch
         return big;
     }
 
-    internal static float FrostMix = 0.55f;
+    internal static float FrostMix = 0.42f;
+
+    internal static float GlassAlpha = 0.45f;
+
+    internal static byte SurfaceAlpha = 255;
+
+    internal static float PressScale = 1f;
 
     internal static float Sheen = 0f, Grain = 0f, RimLight = 0f;
 
@@ -1290,13 +1568,15 @@ internal sealed class LayeredNotch
         return big;
     }
 
-    private static GraphicsPath PillPath(int w, int h, int r)
+    private static GraphicsPath PillPath(int w, int h, int r, bool roundTop = false)
     {
         int d = r * 2;
         var p = new GraphicsPath();
-        p.AddLine(0, 0, w, 0);
+        if (roundTop) p.AddArc(w - d, 0, d, d, 270, 90);
+        else p.AddLine(0, 0, w, 0);
         p.AddArc(w - d, h - d, d, d, 0, 90);
         p.AddArc(0, h - d, d, d, 90, 90);
+        if (roundTop) p.AddArc(0, 0, d, d, 180, 90);
         p.CloseFigure();
         return p;
     }

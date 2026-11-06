@@ -82,7 +82,7 @@ to copy.
 <h2 align="center">📁 File tray</h2>
 
 <div align="center">
-<img src="ReadmeFiles/tray.gif" alt="A file dragged onto the pill and back out again" width="880">
+<img src="ReadmeFiles/tray.gif" alt="A file dragged onto the pill and held in its tray" width="880">
 </div>
 
 Drop files onto the pill and it holds them. Drag them back out into any window later — a different

@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "Память заканчивается.",
   "notice.context.title": "Контекст заполнен на {0}%",
   "notice.context.body": "Дальше ответы будут расплывчатее — сделайте /compact, когда сможете.",
+  "notice.question.title": "У Claude есть вопрос",
+  "notice.question.more": "{0} (+{1} ещё)",
   "notice.battery.low": "низкий",
   "notice.battery.critical": "критический",
   "notice.battery.title": "Батарея {0} — {1}%",
@@ -602,5 +604,12 @@
   "settings.launcher.enabled.label": "Запуск",
   "settings.launcher.enabled.desc": "Открывает поиск под вырезом по горячей клавише",
   "settings.launcher.hotkey.label": "Горячая клавиша запуска",
-  "settings.launcher.hotkey.desc": "Сочетание, которое его открывает. Другое приложение может уже его занять"
+  "settings.launcher.hotkey.desc": "Сочетание, которое его открывает. Другое приложение может уже его занять",
+  "history.title": "Недавние",
+  "history.empty": "Пусто",
+  "history.clear": "Очистить",
+  "history.now": "сейчас",
+  "history.readit": "читать",
+  "history.less": "меньше",
+  "history.more": "ещё {0}"
 }

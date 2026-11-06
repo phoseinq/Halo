@@ -42,6 +42,8 @@
   "notice.load.ramFallback": "Memory is running low.",
   "notice.context.title": "Context {0}% full",
   "notice.context.body": "Answers get vaguer from here — /compact when you can.",
+  "notice.question.title": "Claude has a question",
+  "notice.question.more": "{0} (+{1} more)",
   "notice.battery.low": "low",
   "notice.battery.critical": "critical",
   "notice.battery.title": "Battery {0} — {1}%",
@@ -386,5 +388,12 @@
   "settings.quick.custom2.desc": "Label | what to open. A folder, a file, a URL or a program",
   "settings.quick.custom3.label": "Your action 3",
   "settings.quick.custom3.desc": "Label | what to open. A folder, a file, a URL or a program",
-  "section.quickactions": "QUICK ACTIONS"
+  "section.quickactions": "QUICK ACTIONS",
+  "history.title": "Recent",
+  "history.empty": "Nothing recent",
+  "history.clear": "Clear all",
+  "history.now": "now",
+  "history.readit": "read it",
+  "history.less": "less",
+  "history.more": "{0} more"
 }

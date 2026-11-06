@@ -198,25 +198,40 @@ internal static class NotifBanner
         }
     }
 
-    private static void DrawAppIcon(Graphics g, Bitmap img, float x, float y, float d, float a)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Bitmap,
+        System.Collections.Generic.Dictionary<int, Bitmap>> IconScaled = new();
+
+    private static Bitmap ScaledIcon(Bitmap img, int s)
+    {
+        var bySize = IconScaled.GetOrCreateValue(img);
+        lock (bySize)
+        {
+            if (bySize.TryGetValue(s, out var hit)) return hit;
+            var made = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
+            using (var sg = Graphics.FromImage(made))
+            {
+                sg.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                sg.SmoothingMode = SmoothingMode.AntiAlias;
+                using var clip = Fx.Rounded(new RectangleF(0, 0, s, s), s * 0.26f);
+                sg.SetClip(clip);
+                int side = Math.Min(img.Width, img.Height);
+                sg.DrawImage(img, new Rectangle(0, 0, s, s),
+                    (img.Width - side) / 2, (img.Height - side) / 2, side, side, GraphicsUnit.Pixel);
+            }
+            bySize[s] = made;
+            return made;
+        }
+    }
+
+    internal static void DrawAppIcon(Graphics g, Bitmap img, float x, float y, float d, float a)
     {
         int s = Math.Max(1, (int)Math.Ceiling(d));
-        using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
-        using (var sg = Graphics.FromImage(scaled))
-        {
-            sg.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            using var ia = new ImageAttributes();
-            ia.SetWrapMode(WrapMode.TileFlipXY);
-            ia.SetColorMatrix(new ColorMatrix { Matrix33 = a });
-            int side = Math.Min(img.Width, img.Height);
-            sg.DrawImage(img, new Rectangle(0, 0, s, s),
-                (img.Width - side) / 2, (img.Height - side) / 2, side, side, GraphicsUnit.Pixel, ia);
-        }
-        using var tb = new TextureBrush(scaled) { WrapMode = WrapMode.Clamp };
-        tb.TranslateTransform(x, y);
-        using var path = Fx.Rounded(new RectangleF(x, y, d, d), d * 0.26f);
-        g.FillPath(tb, path);
+        var scaled = ScaledIcon(img, s);
+        using var ia = new ImageAttributes();
+        ia.SetColorMatrix(new ColorMatrix { Matrix33 = a });
+        g.DrawImage(scaled, new Rectangle((int)MathF.Round(x), (int)MathF.Round(y), s, s),
+                    0, 0, s, s, GraphicsUnit.Pixel, ia);
     }
 
     private static void DrawThumb(Graphics g, Bitmap img, float x, float y, float w, float h, float a)
@@ -272,7 +287,7 @@ internal static class NotifBanner
         Fx.Text(g, text, f, b, new RectangleF(x0 + bd + gap, cy - sz.Height / 2f, sz.Width + 6, sz.Height), sf);
     }
 
-    private static string RelTime(DateTime t)
+    internal static string RelTime(DateTime t)
         => (DateTime.Now - t) < TimeSpan.FromMinutes(1)
             ? Halo.Localization.Strings.Get("time.now")
 
@@ -290,7 +305,7 @@ internal static class NotifBanner
         return false;
     }
 
-    private static StringFormat LineFmt(string s)
+    internal static StringFormat LineFmt(string s)
     {
         var sf = new StringFormat(StringFormat.GenericTypographic)
         { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
@@ -383,7 +398,45 @@ internal static class NotifBanner
         }
     }
 
+    private static readonly System.Collections.Generic.Dictionary<(string, float, int), string[]> _wrapCache = new();
+
     private static System.Collections.Generic.IEnumerable<string> WrapLines(
+        Graphics g, string para, Font f, float width)
+    {
+
+        para = para.Replace(" \u2014 ", "\u00A0\u2014 ").Replace(" \u2013 ", "\u00A0\u2013 ");
+        var key = (para, f.Size, (int)width);
+        lock (_wrapCache)
+            if (_wrapCache.TryGetValue(key, out var hit)) return hit;
+        var lines = Balance(w => GreedyLines(g, para, f, w), width);
+        lock (_wrapCache)
+        {
+            if (_wrapCache.Count > 256) _wrapCache.Clear();
+            _wrapCache[key] = lines;
+        }
+        return lines;
+    }
+
+        internal static string[] Balance(Func<float, string[]> wrapAt, float width)
+    {
+        var full = wrapAt(width);
+        if (full.Length < 2 || full.Length > 4) return full;
+        float lo = width * 0.5f, hi = width;
+        string[] best = full;
+        for (int i = 0; i < 10 && hi - lo > 1f; i++)
+        {
+            float mid = (lo + hi) / 2f;
+            var at = wrapAt(mid);
+            if (at.Length == full.Length) { hi = mid; best = at; }
+            else lo = mid;
+        }
+        return best;
+    }
+
+    private static string[] GreedyLines(Graphics g, string para, Font f, float width)
+        => [.. Greedy(g, para, f, width)];
+
+    private static System.Collections.Generic.IEnumerable<string> Greedy(
         Graphics g, string para, Font f, float width)
     {
         if (para.Length == 0) { yield return ""; yield break; }

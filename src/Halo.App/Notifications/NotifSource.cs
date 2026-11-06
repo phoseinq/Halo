@@ -91,6 +91,39 @@ internal sealed class NotifSource
 {
     private readonly object _lock = new();
     private readonly Queue<NotifItem> _pending = new();
+
+    private readonly List<NotifItem> _history = HistoryStore.Load();
+    private const int HistoryMax = HistoryStore.Max;
+
+    private System.Threading.Timer? _saveTimer;
+    private void ScheduleSave()
+    {
+        try
+        {
+            _saveTimer ??= new System.Threading.Timer(_ =>
+            {
+                NotifItem[] snap;
+                lock (_lock) snap = _history.ToArray();
+                HistoryStore.Save(snap);
+            });
+            _saveTimer.Change(1000, System.Threading.Timeout.Infinite);
+        }
+        catch { }
+    }
+
+        internal NotifItem[] History()
+    {
+        lock (_lock)
+        {
+            var a = _history.ToArray();
+            Array.Reverse(a);
+            return a;
+        }
+    }
+
+        internal void Forget(uint id) { lock (_lock) _history.RemoveAll(h => h.Id == id); ScheduleSave(); }
+
+    internal void ForgetAll() { lock (_lock) _history.Clear(); ScheduleSave(); }
     private UserNotificationListener? _listener;
     private System.Threading.Timer? _poll;
     private uint _seenMaxId;
@@ -147,7 +180,14 @@ internal sealed class NotifSource
 
     public void EnqueueLocal(NotifItem item)
     {
-        lock (_lock) { _pending.Enqueue(item); _version++; }
+        lock (_lock) { _pending.Enqueue(item); Remember(item); _version++; }
+    }
+
+    private void Remember(NotifItem item)
+    {
+        _history.Add(item);
+        if (_history.Count > HistoryMax) _history.RemoveRange(0, _history.Count - HistoryMax);
+        ScheduleSave();
     }
 
     public void DropPending(string kind)
@@ -233,8 +273,9 @@ internal sealed class NotifSource
                     if (item != null)
                     {
                         BannerGate.SuppressApp(item.Aumid);
-                        if (Stack(item)) continue;
+                        if (Stack(item)) { ScheduleSave(); continue; }
                         _pending.Enqueue(item);
+                        Remember(item);
 
                         try { _listener.RemoveNotification(n.Id); } catch { }
                     }

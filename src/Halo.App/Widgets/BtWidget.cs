@@ -38,10 +38,14 @@ internal sealed class BtWidget : IWidget
         }
     }
 
+    internal void Age(int ms) { lock (_lock) _until -= ms; }
+
     public FaceProp ArrivingProp => FaceProp.Earbud;
 
     public bool IsActive { get { lock (_lock) return Environment.TickCount64 < _until; } }
     public int Version { get { lock (_lock) return _version; } }
+
+    public bool QuietArrival => IsActive;
     public bool Animating => IsActive;
 
     public string Icon => ((char)0xE702).ToString();
@@ -146,10 +150,12 @@ internal sealed class BtWidget : IWidget
         float x0 = inset, y0 = inset, x1 = w - inset, y1 = h - inset;
         float d = Math.Min(r, Math.Min(x1 - x0, y1 - y0) / 2f) * 2f;
         var p = new GraphicsPath();
-        p.AddLine(x1, y0, x1, y1 - d / 2f);
+
+        p.AddArc(x0, y0, d, d, 180, 90);
+        p.AddArc(x1 - d, y0, d, d, 270, 90);
         p.AddArc(x1 - d, y1 - d, d, d, 0, 90);
         p.AddArc(x0, y1 - d, d, d, 90, 90);
-        p.AddLine(x0, y1 - d / 2f, x0, y0);
+        p.CloseFigure();
         return p;
     }
 

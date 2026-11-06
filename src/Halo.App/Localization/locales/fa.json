@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "حافظه رو به اتمام است.",
   "notice.context.title": "کانتکست {0}٪ پر شده",
   "notice.context.body": "از این‌جا جواب‌ها مبهم‌تر می‌شوند — هر وقت شد /compact بزن.",
+  "notice.question.title": "Claude یه سوال داره",
+  "notice.question.more": "{0} (+{1} سوال دیگه)",
   "notice.battery.low": "کم",
   "notice.battery.critical": "بحرانی",
   "notice.battery.title": "باتری {0} — {1}٪",
@@ -647,5 +649,12 @@
   "settings.launcher.enabled.label": "لانچر",
   "settings.launcher.enabled.desc": "باز کردن کادر جستجو زیر ناچ با یک کلید میانبر",
   "settings.launcher.hotkey.label": "کلید میانبر لانچر",
-  "settings.launcher.hotkey.desc": "ترکیبی که آن را باز می‌کند. ممکن است برنامه‌ای دیگر آن را گرفته باشد"
+  "settings.launcher.hotkey.desc": "ترکیبی که آن را باز می‌کند. ممکن است برنامه‌ای دیگر آن را گرفته باشد",
+  "history.title": "اخیر",
+  "history.empty": "چیزی نیست",
+  "history.clear": "پاک کردن همه",
+  "history.now": "الان",
+  "history.readit": "خواندن",
+  "history.less": "کمتر",
+  "history.more": "{0} مورد دیگر"
 }

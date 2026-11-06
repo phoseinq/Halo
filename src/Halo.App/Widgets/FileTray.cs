@@ -200,6 +200,9 @@ internal sealed class FileTray : IWidget
 
     public void DrawCollapsed(Graphics g, int w, int h, float fade)
     {
+
+        h = Math.Min(h, Halo.Shell.NotchController.CollapsedH);
+        w = Math.Min(w, Halo.Shell.NotchController.CollapsedW);
         var items = Snapshot();
         g.SmoothingMode = SmoothingMode.AntiAlias;
         float sz = h - 14f, ix = 9, iy = (h - sz) / 2f;
@@ -459,27 +462,48 @@ internal sealed class FileTray : IWidget
         try { Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); } catch { }
     }
 
-    private static void DrawTile(Graphics g, float x, float y, float sz, float fade, Bitmap? icon)
+    private static readonly System.Collections.Generic.Dictionary<(Bitmap, int), Bitmap> _tiles = new();
+
+        private static Bitmap? TileAt(Bitmap icon, int size)
     {
-        var box = new RectangleF(x, y, sz, sz);
-        using var path = Fx.Rounded(box, sz * 0.26f);
-        if (icon != null)
+        try
         {
-            int s = Math.Max(1, (int)Math.Ceiling(sz));
-            using var scaled = new Bitmap(s, s, PixelFormat.Format32bppPArgb);
-            using (var sg = Graphics.FromImage(scaled))
+            var key = (icon, size);
+            lock (_tiles) if (_tiles.TryGetValue(key, out var hit)) return hit;
+            var made = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
+            using (var sg = Graphics.FromImage(made))
             {
                 sg.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 sg.PixelOffsetMode = PixelOffsetMode.HighQuality;
                 using var ia = new ImageAttributes();
                 ia.SetWrapMode(WrapMode.TileFlipXY);
-                ia.SetColorMatrix(new ColorMatrix { Matrix33 = fade });
                 int side = Math.Min(icon.Width, icon.Height);
-                sg.DrawImage(icon, new Rectangle(0, 0, s, s), (icon.Width - side) / 2, (icon.Height - side) / 2,
-                    side, side, GraphicsUnit.Pixel, ia);
+                sg.DrawImage(icon, new Rectangle(0, 0, size, size),
+                    (icon.Width - side) / 2, (icon.Height - side) / 2, side, side, GraphicsUnit.Pixel, ia);
             }
-            using var tb = new TextureBrush(scaled) { WrapMode = WrapMode.Clamp };
+            lock (_tiles) _tiles[key] = made;
+            return made;
+        }
+        catch { return null; }
+    }
+
+    internal static void DrawTile(Graphics g, float x, float y, float sz, float fade, Bitmap? icon)
+    {
+        var box = new RectangleF(x, y, sz, sz);
+        using var path = Fx.Rounded(box, sz * 0.26f);
+        if (icon != null)
+        {
+
+            int s = Math.Max(1, (int)Math.Ceiling(sz));
+            var tile = TileAt(icon, Math.Max(8, (s + 7) / 8 * 8));
+            if (tile is null) return;
+            using var ia = new ImageAttributes();
+            ia.SetWrapMode(WrapMode.TileFlipXY);
+            ia.SetColorMatrix(new ColorMatrix { Matrix33 = fade });
+            using var tb = new TextureBrush(tile, new RectangleF(0, 0, tile.Width, tile.Height), ia)
+                { WrapMode = WrapMode.Clamp };
             tb.TranslateTransform(box.X, box.Y);
+            tb.ScaleTransform(sz / tile.Width, sz / tile.Height);
             g.FillPath(tb, path);
         }
         else

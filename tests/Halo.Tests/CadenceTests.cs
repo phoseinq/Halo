@@ -237,3 +237,38 @@ public class CadenceTests
             }
     }
 }
+
+
+// The panel folding away on the pull's own travel. A timer cannot do this - CloseSeconds is 0.38s against
+// a 26px dead zone - so the distance the hand has covered is the only clock available.
+public class HistoryFoldTests
+{
+    [Fact]
+    public void At_the_top_of_the_pull_the_panel_is_untouched()
+        => Assert.Equal(1f, NotchController.FoldFor(0f, 26f), 3);
+
+    [Fact]
+    public void By_the_end_of_the_dead_zone_the_panel_is_exactly_gone()
+        => Assert.Equal(0f, NotchController.FoldFor(26f, 26f), 3);
+
+    [Fact]
+    public void It_does_not_go_negative_when_the_pull_runs_on()
+        => Assert.Equal(0f, NotchController.FoldFor(400f, 26f), 3);
+
+    [Fact]
+    public void It_is_monotonic_across_the_dead_zone()
+    {
+        float prev = 2f;
+        for (float t = 0f; t <= 26f; t += 1f)
+        {
+            float v = NotchController.FoldFor(t, 26f);
+            Assert.True(v <= prev, $"fold rose at {t}px: {v} after {prev}");
+            prev = v;
+        }
+    }
+
+    // a dead zone of zero is a division waiting to happen, and it is reachable: Sc() rounds
+    [Fact]
+    public void A_dead_zone_of_nothing_is_already_spent()
+        => Assert.Equal(0f, NotchController.FoldFor(0f, 0f), 3);
+}

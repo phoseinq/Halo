@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "मेमोरी कम पड़ रही है।",
   "notice.context.title": "कॉन्टेक्स्ट {0}% भरा",
   "notice.context.body": "यहाँ से उत्तर धुँधले होते जाएँगे — मौका मिले तो /compact चलाएँ।",
+  "notice.question.title": "Claude का एक सवाल है",
+  "notice.question.more": "{0} (+{1} और)",
   "notice.battery.low": "कम",
   "notice.battery.critical": "गंभीर",
   "notice.battery.title": "बैटरी {0} — {1}%",
@@ -601,5 +603,12 @@
   "settings.launcher.enabled.label": "लॉन्चर",
   "settings.launcher.enabled.desc": "हॉटकी से नॉच के नीचे खोज बॉक्स खोलें",
   "settings.launcher.hotkey.label": "लॉन्चर हॉटकी",
-  "settings.launcher.hotkey.desc": "वह संयोजन जो इसे खोलता है। कोई दूसरा ऐप पहले से इसे ले सकता है"
+  "settings.launcher.hotkey.desc": "वह संयोजन जो इसे खोलता है। कोई दूसरा ऐप पहले से इसे ले सकता है",
+  "history.title": "हालिया",
+  "history.empty": "कुछ नहीं",
+  "history.clear": "सब हटाएँ",
+  "history.now": "अभी",
+  "history.readit": "पढ़ें",
+  "history.less": "कम",
+  "history.more": "{0} और"
 }

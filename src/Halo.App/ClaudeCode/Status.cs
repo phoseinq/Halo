@@ -39,6 +39,10 @@ internal sealed class CcStatus
     public int HostPid { get; set; }
 
     public long HostHwnd { get; set; }
+
+    public string? HostTitle { get; set; }
+
+    public string? Model { get; set; }
     public string? CurrentTool { get; set; }
     public string? ToolTarget { get; set; }
     public string? LastPrompt { get; set; }
@@ -51,6 +55,8 @@ internal sealed class CcStatus
     public CcUsage? Usage { get; set; }
     public string? UpdatedAt { get; set; }
     public bool Background { get; set; }
+
+    public string? Source { get; set; }
 }
 
 internal sealed class StatusStore
@@ -228,7 +234,11 @@ internal sealed class StatusStore
             foreach (var p in System.IO.Directory.EnumerateFiles(dir, pattern))
             {
                 _files.TryGetValue(p, out var prev);
-                if (Read(p, prev) is { } st) next[p] = st;
+                if (Read(p, prev) is { } st)
+                {
+                    st.FromDesktopApp = st.Source == "desktop";
+                    next[p] = st;
+                }
             }
             if (_appPath is not null)
             {
@@ -262,8 +272,23 @@ internal sealed class StatusStore
     internal static bool BackgroundHidden(CcStatus st) =>
         st.Background && st.State is not ("working" or "compacting" or "waiting_input");
 
+    internal static readonly TimeSpan DesktopIdleLinger = TimeSpan.FromMinutes(2);
+    internal static bool DesktopIdleHidden(CcStatus st, DateTimeOffset now)
+    {
+        if (st.Source != "desktop" || st.State is "working" or "compacting" or "waiting_input")
+            return false;
+        if (string.IsNullOrEmpty(st.StartedAt))
+            return true;
+        if (!DateTimeOffset.TryParse(st.UpdatedAt, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var updatedAt))
+            return true;
+        return now - updatedAt > DesktopIdleLinger;
+    }
+
     private IEnumerable<KeyValuePair<string, CcStatus>> LiveFiles(DateTimeOffset now) =>
-        _files.Where(kv => IsLiveStatus(kv.Value, _processStartedAt, now) && !BackgroundHidden(kv.Value))
+        _files.Where(kv => IsLiveStatus(kv.Value, _processStartedAt, now) && !BackgroundHidden(kv.Value)
+                && !DesktopIdleHidden(kv.Value, now))
             .GroupBy(kv => kv.Value.Pid > 0 ? kv.Value.Pid.ToString() : kv.Key)
             .Select(g => g.OrderByDescending(kv => kv.Value.UpdatedAt, StringComparer.Ordinal).First());
 

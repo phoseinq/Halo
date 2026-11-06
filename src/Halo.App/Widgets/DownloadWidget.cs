@@ -40,6 +40,8 @@ internal sealed class DownloadWidget : IWidget
 
     public bool IsActive => Downloads.Name != null;
 
+    public bool QuietArrival => true;
+
     public float RingProgress => Downloads.Name == null || Downloads.Installing || Downloads.Waiting || Downloads.NoPct
         ? -1f : Math.Clamp(Downloads.Percent / 100f, 0f, 1f);
 

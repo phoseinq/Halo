@@ -39,6 +39,8 @@ internal interface IWidget
     bool IsActive { get; }
     int Version { get; }
 
+    bool QuietArrival => false;
+
     FaceProp ArrivingProp => FaceProp.None;
 
     bool Animating => false;
@@ -64,6 +66,8 @@ internal interface IWidget
     string? RevealHint => null;
 
     long RevealHwnd => 0;
+
+    string? RevealTitle => null;
 
     string? RevealProcess => null;
 

@@ -60,6 +60,35 @@ public sealed class LocalAlertTests
         Assert.Equal("api", NotchController.NetTrouble(netDown: false, apiDown: true, slow: false, busy: true));
     }
 
+    // Reported: "claude is unreachable" kept arriving on a machine with no Claude Code running on it. With
+    // nothing trying to reach the API, its reachability is a fact about a service the user is not using,
+    // and every route wobble raised a banner about it.
+    [Fact]
+    public void The_api_being_unreachable_is_only_news_while_claude_code_is_running()
+    {
+        Assert.Null(NotchController.NetTrouble(netDown: false, apiDown: true, slow: false, busy: false,
+                                               agentLive: false));
+        Assert.Equal("api", NotchController.NetTrouble(netDown: false, apiDown: true, slow: false, busy: false,
+                                                       agentLive: true));
+    }
+
+    // the internet arms are about THIS machine and are worth knowing either way, so the same latch must
+    // not silence them
+    [Fact]
+    public void No_session_running_does_not_silence_the_internet_itself()
+    {
+        Assert.Equal("offline", NotchController.NetTrouble(netDown: true, apiDown: true, slow: false, busy: false,
+                                                           agentLive: false));
+        Assert.Equal("slow", NotchController.NetTrouble(netDown: false, apiDown: false, slow: true, busy: false,
+                                                        agentLive: false));
+    }
+
+    // with nothing running, a dead API must fall THROUGH to the slow banner rather than swallowing it
+    [Fact]
+    public void A_gated_api_still_lets_a_slow_link_be_reported()
+        => Assert.Equal("slow", NotchController.NetTrouble(netDown: false, apiDown: true, slow: true, busy: false,
+                                                           agentLive: false));
+
     [Theory]
     [InlineData("weekly", true)]
     [InlineData("secondary", true)]     // positional: nothing here can verify how long Codex's second bucket is

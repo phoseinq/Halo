@@ -81,9 +81,11 @@ internal sealed class NetWidget : IWidget
 
     internal bool Pinned;
 
-    public FaceProp ArrivingProp => FaceProp.Antenna;
+    public FaceProp ArrivingProp => FaceProp.None;
 
     public bool IsActive => AlwaysOn || Pinned || _meter.Busy;
+
+    public bool QuietArrival => true;
 
     public int Version => (int)(_meter.DownRate / 1024) ^ ((int)(_meter.UpRate / 1024) << 16)
                           ^ ((int)_window << 12) ^ (_split ? 0x8000 : 0);

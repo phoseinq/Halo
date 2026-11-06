@@ -481,7 +481,7 @@ internal static class Downloads
         catch { return null; }
     }
 
-    private static bool IsBrowser(IntPtr h)
+    internal static bool IsBrowser(IntPtr h)
     {
         try
         {

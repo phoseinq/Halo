@@ -90,7 +90,7 @@
 <h2 align="center">📁 File Tray</h2>
 
 <div align="center">
-<img src="ReadmeFiles/tray.gif" alt="کشیدنِ یک فایل روی قرص و بیرون‌کشیدنش" width="880">
+<img src="ReadmeFiles/tray.gif" alt="کشیدنِ یک فایل روی قرص و نگه‌داشتنش در سینی" width="880">
 </div>
 
 فایل‌ها رو موقت کنار دستت نگه دار.

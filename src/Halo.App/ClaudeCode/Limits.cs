@@ -116,12 +116,80 @@ internal static class Limits
         ThreadPool.QueueUserWorkItem(_ => { try { Refresh(); } finally { _busy = 0; } });
     }
 
+    private const string TokenUrl = "https://platform.claude.com/v1/oauth/token";
+    private const string ClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+
+    internal static bool NeedsRefresh(long? expiresAtMs, long nowMs)
+        => expiresAtMs is { } exp && nowMs >= exp - 60_000;
+
+    internal static JsonObject ApplyRefresh(JsonObject cred, string access, string? refresh, long expiresInSec, long nowMs)
+    {
+        var copy = (JsonObject)cred.DeepClone();
+        if (copy["claudeAiOauth"] is not JsonObject o) return copy;
+        o["accessToken"] = access;
+        if (!string.IsNullOrEmpty(refresh)) o["refreshToken"] = refresh;
+        o["expiresAt"] = nowMs + expiresInSec * 1000;
+        return copy;
+    }
+
+    private static readonly object _refreshGate = new();
+
+    private static string? RefreshToken(JsonObject cred)
+    {
+        lock (_refreshGate)
+        try
+        {
+            var o = cred["claudeAiOauth"] as JsonObject;
+            var rt = o?["refreshToken"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(rt)) return null;
+            var scopes = new List<string>();
+            if (o!["scopes"] is JsonArray arr)
+                foreach (var x in arr) if (x?.GetValue<string>() is { Length: > 0 } sc) scopes.Add(sc);
+            var body = new JsonObject
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = rt,
+                ["client_id"] = ClientId,
+                ["scope"] = string.Join(" ", scopes),
+            };
+            using var req = new HttpRequestMessage(HttpMethod.Post, TokenUrl)
+            {
+                Content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json"),
+            };
+            using var resp = Http.Send(req);
+            if ((int)resp.StatusCode != 200) return null;
+            var got = JsonNode.Parse(resp.Content.ReadAsStream());
+            var access = got?["access_token"]?.GetValue<string>();
+            long expiresIn = got?["expires_in"]?.GetValue<long>() ?? 0;
+            if (string.IsNullOrEmpty(access) || expiresIn <= 0) return null;
+
+            var now = JsonNode.Parse(File.ReadAllText(CredPath)) as JsonObject;
+            var nowRt = now?["claudeAiOauth"]?["refreshToken"]?.GetValue<string>();
+            if (now is null || nowRt != rt)
+                return now?["claudeAiOauth"]?["accessToken"]?.GetValue<string>();
+
+            var updated = ApplyRefresh(now, access, got?["refresh_token"]?.GetValue<string>(), expiresIn,
+                                       DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            string tmp = CredPath + ".halo-tmp";
+            File.WriteAllText(tmp, updated.ToJsonString());
+            File.Move(tmp, CredPath, overwrite: true);
+            return access;
+        }
+        catch { return null; }
+    }
+
     private static void Refresh()
     {
         try
         {
-            var tok = JsonNode.Parse(File.ReadAllText(CredPath))?["claudeAiOauth"]?["accessToken"]?.GetValue<string>();
+            var cred = JsonNode.Parse(File.ReadAllText(CredPath)) as JsonObject;
+            var tok = cred?["claudeAiOauth"]?["accessToken"]?.GetValue<string>();
             if (string.IsNullOrEmpty(tok)) return;
+
+            long? expiresAt = cred?["claudeAiOauth"]?["expiresAt"]?.GetValue<long>();
+            if (NeedsRefresh(expiresAt, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
+                tok = RefreshToken(cred!) ?? tok;
             if (tok != _lastToken)
             {
 
@@ -133,7 +201,20 @@ internal static class Limits
             var req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
             req.Headers.TryAddWithoutValidation("authorization", "Bearer " + tok);
             req.Headers.TryAddWithoutValidation("anthropic-beta", "oauth-2025-04-20");
-            using var resp = Http.Send(req);
+            var resp = Http.Send(req);
+
+            if ((int)resp.StatusCode == 401 && JsonNode.Parse(File.ReadAllText(CredPath)) is JsonObject again
+                && RefreshToken(again) is { } fresh)
+            {
+                resp.Dispose();
+                tok = fresh;
+                _lastToken = fresh;
+                req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
+                req.Headers.TryAddWithoutValidation("authorization", "Bearer " + tok);
+                req.Headers.TryAddWithoutValidation("anthropic-beta", "oauth-2025-04-20");
+                resp = Http.Send(req);
+            }
+            using var _resp = resp;
             if ((int)resp.StatusCode == 429)
             {
 

@@ -32,3 +32,34 @@ public class BackgroundSessionTests
     public void Foreground_sessions_are_never_hidden_by_this_gate(string? state)
         => Assert.False(StatusStore.BackgroundHidden(St(false, state)));
 }
+
+// The desktop app keeps idle engine processes alive for sessions that are merely open in its sidebar.
+public class DesktopIdleSessionTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 6, 12, 0, 0, TimeSpan.Zero);
+
+    private static CcStatus St(string? state, string? startedAt, TimeSpan sinceUpdate, string? source = "desktop") =>
+        new() { Source = source, State = state, StartedAt = startedAt, UpdatedAt = (Now - sinceUpdate).ToString("o") };
+
+    [Fact]
+    public void Never_prompted_desktop_session_is_hidden()
+        => Assert.True(StatusStore.DesktopIdleHidden(St("idle", null, TimeSpan.Zero), Now));
+
+    [Fact]
+    public void Finished_desktop_session_lingers_then_hides()
+    {
+        Assert.False(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromSeconds(90)), Now));
+        Assert.True(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromMinutes(3)), Now));
+    }
+
+    [Theory]
+    [InlineData("working")]
+    [InlineData("compacting")]
+    [InlineData("waiting_input")]
+    public void Busy_desktop_session_is_always_shown(string state)
+        => Assert.False(StatusStore.DesktopIdleHidden(St(state, null, TimeSpan.FromHours(1)), Now));
+
+    [Fact]
+    public void Cli_session_is_never_hidden_by_this_gate()
+        => Assert.False(StatusStore.DesktopIdleHidden(St("idle", null, TimeSpan.FromHours(1), source: null), Now));
+}

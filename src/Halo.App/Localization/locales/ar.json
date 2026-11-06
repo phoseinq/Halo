@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "الذاكرة تُوشك على النفاد.",
   "notice.context.title": "السياق ممتلئ بنسبة {0}%",
   "notice.context.body": "ستصبح الإجابات أقل دقة من هنا — استخدم ‎/compact متى أمكن.",
+  "notice.question.title": "لدى Claude سؤال",
+  "notice.question.more": "{0} (+{1} أخرى)",
   "notice.battery.low": "منخفضة",
   "notice.battery.critical": "حرجة",
   "notice.battery.title": "البطارية {0} — {1}%",
@@ -601,5 +603,12 @@
   "settings.launcher.enabled.label": "المشغّل",
   "settings.launcher.enabled.desc": "افتح مربع بحث أسفل الشق باختصار لوحة المفاتيح",
   "settings.launcher.hotkey.label": "اختصار المشغّل",
-  "settings.launcher.hotkey.desc": "التركيب الذي يفتحه. قد يكون تطبيق آخر يستخدمه بالفعل"
+  "settings.launcher.hotkey.desc": "التركيب الذي يفتحه. قد يكون تطبيق آخر يستخدمه بالفعل",
+  "history.title": "الأخيرة",
+  "history.empty": "لا شيء",
+  "history.clear": "مسح الكل",
+  "history.now": "الآن",
+  "history.readit": "اقرأ",
+  "history.less": "أقل",
+  "history.more": "{0} أخرى"
 }

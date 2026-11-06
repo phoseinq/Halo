@@ -6,7 +6,8 @@ namespace Halo.Interop;
 internal static class Uia
 {
     public const int NameProp = 30005, ControlTypeProp = 30003, BoundingRectProp = 30001, ClassNameProp = 30012;
-    public const int ValuePattern = 10002;
+    public const int ValuePattern = 10002, SelectionItemPattern = 10010;
+    public const int IsSelectedProp = 30079;
     public const int SliderType = 50015, TextType = 50020, TabItemType = 50019, TabType = 50018;
     public const int TreeScopeDescendants = 4;
 
@@ -34,6 +35,16 @@ internal static class Uia
         catch { return Array.Empty<double>(); }
     }
 
+    public static bool Select(IUIAutomationElement e)
+    {
+        try
+        {
+            e.GetCurrentPattern(SelectionItemPattern, out var raw);
+            return raw is IUIAutomationSelectionItemPattern p && p.Select() == 0;
+        }
+        catch { return false; }
+    }
+
     public static string? PatternValue(IUIAutomationElement e)
     {
         try
@@ -43,6 +54,12 @@ internal static class Uia
         }
         catch { return null; }
     }
+}
+
+[ComImport, Guid("A8EFA66A-0FDA-421A-9194-38021F3578EA"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IUIAutomationSelectionItemPattern
+{
+    [PreserveSig] int Select();
 }
 
 [ComImport, Guid("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

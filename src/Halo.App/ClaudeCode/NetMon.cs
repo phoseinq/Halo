@@ -68,7 +68,12 @@ internal static class NetMon
             if (DateTime.UtcNow - lastBg > TimeSpan.FromSeconds(10))
             {
                 lastBg = DateTime.UtcNow;
-                int apiMs = HttpLatency(HttpApi, "https://api.anthropic.com/v1/messages", fresh: true);
+                int apiMs = ApiLatency(fresh: true);
+                if (apiMs == Lost)
+                {
+
+                    if (ScoutProxy()) apiMs = ApiLatency(fresh: true);
+                }
                 bool apiDown = apiMs == Lost;
                 int netMs = HttpLatency(HttpNet, "https://www.google.com/generate_204", fresh: true);
                 bool netDown = apiDown && netMs == Lost;
@@ -132,26 +137,119 @@ internal static class NetMon
         Interlocked.Increment(ref Version);
     }
 
-    private static readonly System.Net.Http.HttpClient HttpApi = new(ProxiedHandler())
-    { Timeout = TimeSpan.FromSeconds(2.5) };
+    private static readonly object _apiLock = new();
+    private static System.Net.Http.HttpClient? _httpApi;
+    private static string? _apiVia;
+    private static bool _apiBuilt;
+
+    private static System.Net.Http.HttpClient HttpApi
+    {
+        get
+        {
+            var via = ProxyUrl;
+            lock (_apiLock)
+            {
+                if (_httpApi is null || !_apiBuilt || !string.Equals(via, _apiVia, StringComparison.Ordinal))
+                {
+                    var old = _httpApi;
+                    _httpApi = new System.Net.Http.HttpClient(ProxiedHandler(via))
+                    { Timeout = TimeSpan.FromSeconds(2.5) };
+                    _apiVia = via;
+                    _apiBuilt = true;
+                    try { old?.Dispose(); } catch { }
+                }
+                return _httpApi;
+            }
+        }
+    }
+
     private static readonly System.Net.Http.HttpClient HttpNet = new(
         new System.Net.Http.SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5), UseProxy = false })
     { Timeout = TimeSpan.FromSeconds(2.5) };
 
-    internal static string? ProxyUrl =>
-        Environment.GetEnvironmentVariable("HTTPS_PROXY") ?? Environment.GetEnvironmentVariable("HTTP_PROXY")
-        ?? Environment.GetEnvironmentVariable("HTTPS_PROXY", EnvironmentVariableTarget.User)
-        ?? Environment.GetEnvironmentVariable("HTTP_PROXY", EnvironmentVariableTarget.User);
+    internal static string? ProxyUrl
+    {
+        get
+        {
 
-    private static System.Net.Http.SocketsHttpHandler ProxiedHandler()
+            if (DateTime.UtcNow - _routeAt < TimeSpan.FromSeconds(10)) return _route;
+            _route = Environment.GetEnvironmentVariable("HTTPS_PROXY")
+                     ?? Environment.GetEnvironmentVariable("HTTP_PROXY")
+                     ?? Environment.GetEnvironmentVariable("HTTPS_PROXY", EnvironmentVariableTarget.User)
+                     ?? Environment.GetEnvironmentVariable("HTTP_PROXY", EnvironmentVariableTarget.User)
+                     ?? ProxyScout.FromSettingsFile()
+                     ?? SystemProxyUrl()
+                     ?? ProxyScout.Found;
+            _routeAt = DateTime.UtcNow;
+            return _route;
+        }
+    }
+
+    private static string? _route;
+    private static DateTime _routeAt = DateTime.MinValue;
+
+    private static string? SystemProxyUrl()
+    {
+        try
+        {
+            var target = new Uri("https://api.anthropic.com");
+            var via = System.Net.WebRequest.GetSystemWebProxy().GetProxy(target);
+            return via is null || via == target ? null : via.ToString();
+        }
+        catch { return null; }
+    }
+
+    private static System.Net.Http.SocketsHttpHandler ProxiedHandler(string? proxy)
     {
         var h = new System.Net.Http.SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
-        var proxy = ProxyUrl;
         if (!string.IsNullOrEmpty(proxy))
             try { h.Proxy = new System.Net.WebProxy(proxy); h.UseProxy = true; } catch { h.UseProxy = false; }
         else
             h.UseProxy = false;
         return h;
+    }
+
+    private static DateTime _lastScout = DateTime.MinValue;
+
+        private static bool ScoutProxy()
+    {
+        if (DateTime.UtcNow - _lastScout < TimeSpan.FromMinutes(2)) return false;
+        _lastScout = DateTime.UtcNow;
+        var hit = ProxyScout.Pick(ProxyScout.Ports, ProxyScout.IsOpen, ProxyCarries);
+        if (string.Equals(hit, ProxyScout.Found, StringComparison.Ordinal)) return false;
+        ProxyScout.Found = hit;
+        _routeAt = DateTime.MinValue;
+        IpCountry.Invalidate();
+        Interlocked.Increment(ref Version);
+        return true;
+    }
+
+    private static bool ProxyCarries(string url)
+    {
+        try
+        {
+            using var h = new System.Net.Http.SocketsHttpHandler
+            {
+                Proxy = new System.Net.WebProxy(url),
+                UseProxy = true,
+                ConnectTimeout = TimeSpan.FromSeconds(2),
+            };
+            using var c = new System.Net.Http.HttpClient(h) { Timeout = TimeSpan.FromSeconds(3) };
+            var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, ApiUrl);
+            req.Headers.ConnectionClose = true;
+            using var resp = c.Send(req, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
+            return !IsDownStatus((int)resp.StatusCode);
+        }
+        catch { return false; }
+    }
+
+    private const string ApiUrl = "https://api.anthropic.com/v1/messages";
+
+    private static int ApiLatency(bool fresh)
+    {
+        int ms = HttpLatency(HttpApi, ApiUrl, fresh);
+        if (ms != Lost || string.IsNullOrEmpty(ProxyUrl)) return ms;
+        return HttpLatency(HttpNet, ApiUrl, fresh);
     }
 
     private static int HttpLatency(System.Net.Http.HttpClient http, string url, bool fresh = false)

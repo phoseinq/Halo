@@ -79,7 +79,7 @@ internal static class Script
             float total = 0f, depth = 0f;
             for (int k = 0; k < strokes.Length; k++)
             {
-                var s = strokes[k];
+                var s = SmoothJoints(strokes[k]);
 
                 for (int i = 1; i < s.Length; i += 2) depth = MathF.Max(depth, s[i]);
                 var path = new GraphicsPath();
@@ -98,6 +98,52 @@ internal static class Script
         }
         _built = map;
         return map;
+    }
+
+    internal const float CornerDeg = 75f;
+
+    internal static float[] SmoothJoints(float[] s)
+    {
+        var o = (float[])s.Clone();
+
+        for (int j = 6; j + 7 < o.Length; j += 6)
+        {
+            float px = o[j], py = o[j + 1];
+            float ax = px - o[j - 2], ay = py - o[j - 1];
+            float bx = o[j + 2] - px, by = o[j + 3] - py;
+            float la = MathF.Sqrt(ax * ax + ay * ay), lb = MathF.Sqrt(bx * bx + by * by);
+            if (la < 1e-3f || lb < 1e-3f) continue;
+            float cos = (ax * bx + ay * by) / (la * lb);
+            if (cos < MathF.Cos(CornerDeg * MathF.PI / 180f)) continue;
+            float dx = ax / la + bx / lb, dy = ay / la + by / lb;
+            float ld = MathF.Sqrt(dx * dx + dy * dy);
+            if (ld < 1e-3f) continue;
+            dx /= ld; dy /= ld;
+            o[j - 2] = px - dx * la; o[j - 1] = py - dy * la;
+            o[j + 2] = px + dx * lb; o[j + 3] = py + dy * lb;
+        }
+
+        int n = o.Length;
+        if (n >= 8 && MathF.Abs(o[0] - o[n - 2]) < 0.01f && MathF.Abs(o[1] - o[n - 1]) < 0.01f)
+        {
+            float px = o[0], py = o[1];
+            float ax = px - o[n - 4], ay = py - o[n - 3];
+            float bx = o[2] - px, by = o[3] - py;
+            float la = MathF.Sqrt(ax * ax + ay * ay), lb = MathF.Sqrt(bx * bx + by * by);
+            if (la > 1e-3f && lb > 1e-3f
+                && (ax * bx + ay * by) / (la * lb) >= MathF.Cos(CornerDeg * MathF.PI / 180f))
+            {
+                float dx = ax / la + bx / lb, dy = ay / la + by / lb;
+                float ld = MathF.Sqrt(dx * dx + dy * dy);
+                if (ld > 1e-3f)
+                {
+                    dx /= ld; dy /= ld;
+                    o[n - 4] = px - dx * la; o[n - 3] = py - dy * la;
+                    o[2] = px + dx * lb; o[3] = py + dy * lb;
+                }
+            }
+        }
+        return o;
     }
 
     private static float Measure(GraphicsPath p)

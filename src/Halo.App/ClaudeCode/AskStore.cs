@@ -55,7 +55,32 @@ internal sealed class AskQueue
         return null;
     }
 
-    internal void Remove(string nonce) => _items.RemoveAll(i => i.Nonce == nonce);
+    internal PendingAsk? Permission(DateTimeOffset now)
+    {
+        foreach (var item in _items)
+            if (now < item.ExpiresAt && !item.IsQuestion) return item;
+        return null;
+    }
+
+    private readonly HashSet<string> _told = new(StringComparer.OrdinalIgnoreCase);
+
+    internal PendingAsk? TakeNewQuestion(DateTimeOffset now)
+    {
+        foreach (var item in _items)
+        {
+            if (now >= item.ExpiresAt || !item.IsQuestion || _told.Contains(item.Nonce)) continue;
+            bool boxTold = _items.Exists(o => _told.Contains(o.Nonce) && o.Pid == item.Pid && o.Session == item.Session);
+            _told.Add(item.Nonce);
+            if (!boxTold) return item;
+        }
+        return null;
+    }
+
+    internal void Remove(string nonce)
+    {
+        _items.RemoveAll(i => i.Nonce == nonce);
+        _told.Remove(nonce);
+    }
 
     internal IReadOnlyList<string> Nonces() => _items.ConvertAll(i => i.Nonce);
 
@@ -88,7 +113,12 @@ internal sealed class AskStore
 
     internal PendingAsk? Pending
     {
-        get { lock (_lock) return _queue.Head(_clock()); }
+        get { lock (_lock) return _queue.Permission(_clock()); }
+    }
+
+    internal PendingAsk? TakeNewQuestion()
+    {
+        lock (_lock) return _queue.TakeNewQuestion(_clock());
     }
 
     internal void Rescan()
@@ -98,7 +128,7 @@ internal sealed class AskStore
             if (!Directory.Exists(_dir)) return;
             var now = _clock();
             string? before;
-            lock (_lock) before = _queue.Head(now)?.Nonce;
+            lock (_lock) before = _queue.Permission(now)?.Nonce;
 
             var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in Directory.GetFiles(_dir, "ask-*.json"))
@@ -124,7 +154,7 @@ internal sealed class AskStore
             foreach (var nonce in expired) Forget(nonce);
 
             string? after;
-            lock (_lock) after = _queue.Head(now)?.Nonce;
+            lock (_lock) after = _queue.Permission(now)?.Nonce;
             if (before != after) System.Threading.Interlocked.Increment(ref _version);
         }
         catch { }

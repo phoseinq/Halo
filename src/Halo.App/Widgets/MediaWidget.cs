@@ -140,6 +140,8 @@ internal sealed class MediaWidget : IWidget
     }
     public int Version { get { lock (_lock) { return _version; } } }
 
+    public bool QuietArrival => true;
+
     public void Tick()
     {
         bool playing;
@@ -172,6 +174,8 @@ internal sealed class MediaWidget : IWidget
         if (key != _artKey || stale)
         {
 
+            bool late = key == _artKey;
+
             long hash = ThumbHash(thumb);
             if (hash == _artHash)
             {
@@ -181,7 +185,9 @@ internal sealed class MediaWidget : IWidget
 
             _prevArt?.Dispose();
             _prevArt = _art != null ? (Bitmap)_art.Clone() : null;
-            _flipAt = Environment.TickCount64 - (_prevArt == null ? FlipMs / 2 : 0);
+            _artCross = late;
+            _flipAt = late ? Environment.TickCount64
+                : Environment.TickCount64 - (_prevArt == null ? FlipMs / 2 : 0);
             _artHash = hash;
             DisposeFrames();
             (_frames, _delays) = DecodeFrames(thumb);
@@ -277,13 +283,15 @@ internal sealed class MediaWidget : IWidget
                 epoch = _trackEpoch;
             }
             if (chase) ChaseArt(s, epoch);
+            else WatchArt(s, epoch);
         }
         catch { }
     }
 
     private static readonly int[] ArtRetries = [350, 700, 1400, 2600, 4500, 6000];
     private const int ArtSlowRetry = 10_000;
-    private const int ArtSlowTries = 30;
+
+    private const int ArtSlowTries = 90;
 
     internal static int ArtDelay(int attempt)
         => attempt < 0 ? -1
@@ -325,6 +333,7 @@ internal sealed class MediaWidget : IWidget
                         _artStale = true;
                         _version++;
                     }
+                    WatchArt(s, epoch);
                     return;
                 }
                 catch { }
@@ -333,6 +342,59 @@ internal sealed class MediaWidget : IWidget
         catch { }
         finally { _chasing = false; }
     }
+
+    private const int ArtWatchEvery = 4_000;
+    private const int ArtWatchTries = 30;
+    private const int ArtWatchSlow = 15_000;
+    private const int ArtWatchSlowTries = 52;
+
+    internal static int ArtWatchDelay(int attempt)
+        => attempt < 0 ? -1
+        : attempt < ArtWatchTries ? ArtWatchEvery
+        : attempt < ArtWatchTries + ArtWatchSlowTries ? ArtWatchSlow
+        : -1;
+
+    private int _watchEpoch = -1;
+
+    private async void WatchArt(GlobalSystemMediaTransportControlsSession s, int epoch)
+    {
+        lock (_lock)
+        {
+            if (_watchEpoch == epoch) return;
+            _watchEpoch = epoch;
+        }
+        try
+        {
+            for (int i = 0; ; i++)
+            {
+                int delay = ArtWatchDelay(i);
+                if (delay < 0) return;
+                await System.Threading.Tasks.Task.Delay(delay);
+                lock (_lock) { if (!ReferenceEquals(_session, s) || _trackEpoch != epoch) return; }
+                try
+                {
+                    var props = await s.TryGetMediaPropertiesAsync();
+                    byte[]? thumb = props.Thumbnail != null ? await ReadStream(props.Thumbnail) : null;
+                    if (thumb is not { Length: > 0 }) continue;
+                    bool wide = ThumbIsWide(thumb);
+                    lock (_lock)
+                    {
+                        if (!ReferenceEquals(_session, s) || _trackEpoch != epoch) return;
+                        if (SameArt(_thumb, thumb)) continue;
+                        _thumb = thumb;
+                        _thumbWide = wide;
+                        _artStale = true;
+                        _version++;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+
+    internal static bool SameArt(byte[]? a, byte[]? b)
+        => a is not null && b is not null && a.AsSpan().SequenceEqual(b);
 
     internal enum ArtChase { Done, Restart, Fetch }
 
@@ -911,7 +973,7 @@ internal sealed class MediaWidget : IWidget
         var art = ArtRect(h);
         float artX = art.X, artY = art.Y, artSize = art.Width;
 
-        Fx.Glow(g, w, h, fade, artX + artSize / 2f, artY + artSize / 2f, w * 1.35f, h * 1.9f, 38, _accent);
+        Fx.Glow(g, w, h, fade, artX + artSize / 2f, artY + artSize / 2f, w * 1.35f, h * 1.9f, 30, _accent);
         DrawArt(g, artX, artY, artSize, fade, ArtRadius(h));
 
         float tx = artX + artSize + 22, tw = w - tx - 26;
@@ -1225,7 +1287,8 @@ internal sealed class MediaWidget : IWidget
     internal static void ArtGlow(Graphics g, int w, int h, float fade, Color accent)
     {
         var a = ArtRect(h);
-        Fx.Glow(g, w, h, fade, a.X + a.Width / 2f, h / 2f, a.Width * 2.1f, h * 1.7f, 34, accent);
+
+        Fx.Glow(g, w, h, fade, a.X + a.Width / 2f, h / 2f, a.Width * 2.1f, h * 1.7f, 27, accent);
     }
 
     internal static RectangleF ArtRect(float h)
@@ -1271,9 +1334,25 @@ internal sealed class MediaWidget : IWidget
         return (Math.Max(MathF.Abs(MathF.Cos(e * MathF.PI)), 0.001f), t < 0.5f);
     }
 
+    internal const int CrossMs = 420;
+    private bool _artCross;
+
     private void DrawArt(Graphics g, float x, float y, float size, float fade, float radius = 14f)
     {
         long el = Environment.TickCount64 - _flipAt;
+        if (_artCross && el is >= 0 and < CrossMs)
+        {
+            float t = el / (float)CrossMs;
+            t = t * t * (3f - 2f * t);
+
+            Bitmap? old = _prevArt;
+            if (old == null) { string? id; lock (_lock) { id = _appId; } old = AppIcon.ForSessionApp(id); }
+            if (old != null)
+                using (var op = Rounded(new RectangleF(x, y, size, size), radius))
+                    CoverFill(g, old, x, y, size, op, fade * (1f - t));
+            DrawArtFace(g, x, y, size, fade * t, radius);
+            return;
+        }
         if (el is >= 0 and < FlipMs)
         {
 

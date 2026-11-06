@@ -72,7 +72,7 @@ public class MediaArtChaseTests
     [Fact]
     public void The_tail_is_capped_rather_than_endless()
     {
-        Assert.Equal(-1, MediaWidget.ArtDelay(6 + 30));
+        Assert.Equal(-1, MediaWidget.ArtDelay(6 + 90));   // ~15 minutes: a long track, not all day
         Assert.Equal(-1, MediaWidget.ArtDelay(10_000));
     }
 }

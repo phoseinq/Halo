@@ -69,12 +69,34 @@ internal static class FaceInterrupt
         => faceWanted && !expanded && !banner && !asking && !greeting && !privacy && !moving && !alreadyBusy;
 }
 
+internal sealed class LaunchWatch
+{
+
+    internal const double FreshMs = 20_000;
+
+    private const int Cap = 64;
+
+    private readonly HashSet<uint> _seen = new();
+    private readonly Queue<uint> _order = new();
+
+        internal bool Fresh(uint pid, double ageMs)
+    {
+
+        if (pid == 0 || ageMs < 0 || ageMs > FreshMs) return false;
+        if (!_seen.Add(pid)) return false;
+        _order.Enqueue(pid);
+        while (_order.Count > Cap) _seen.Remove(_order.Dequeue());
+        return true;
+    }
+}
+
 internal sealed class AgentNoticeCoordinator
 {
     private readonly Dictionary<int, AgentNotice> _previous = new();
     private readonly Dictionary<int, NoticeWindow> _pending = new();
     private long _nextOrder;
     private int _restore = -1;
+    private int _announced = -1;
 
     internal AgentNoticeCoordinator(int primary) => Primary = primary;
 
@@ -108,6 +130,18 @@ internal sealed class AgentNoticeCoordinator
         if (allowSelection)
             Select(now, static _ => true);
     }
+
+    internal void Announce(int widgetIndex, DateTimeOffset until)
+    {
+        _announced = widgetIndex;
+        _pending[widgetIndex] = new NoticeWindow(until, false, _nextOrder++, Arrival: true);
+    }
+
+    internal bool IsAnnouncing(int widgetIndex)
+        => widgetIndex >= 0 && widgetIndex == _announced && _pending.ContainsKey(widgetIndex);
+
+    internal bool HasNotice(int widgetIndex)
+        => _pending.TryGetValue(widgetIndex, out var window) && !window.Arrival;
 
     internal void Hold(DateTimeOffset until)
     {
@@ -148,19 +182,27 @@ internal sealed class AgentNoticeCoordinator
         }
     }
 
-    private readonly record struct NoticeWindow(DateTimeOffset Until, bool DesktopBacked, long Order);
+    private readonly record struct NoticeWindow(DateTimeOffset Until, bool DesktopBacked, long Order, bool Arrival = false);
 }
 
 internal sealed partial class NotchController
 {
-    private const int CollapsedW = 220, CollapsedH = 40, CollapsedR = 20;
-    private const int ExpandedW = 560, ExpandedH = 220, ExpandedR = 30;
-    private const int TintDeskCollapsed = 255;
-    internal const int TintDeskExpanded = 245;
+    internal const int CollapsedW = 220, CollapsedH = 40;
+    private const int CollapsedR = 20;
 
-    internal const int TintAppCollapsed = 120, TintAppExpanded = 48;
+    private const float PillFloatTop = 6f;
+    private const int ExpandedW = 560, ExpandedH = 220, ExpandedR = 30;
+
+    private const int TintDeskCollapsed = 96;
+    internal const int TintDeskExpanded = 60;
+
+    internal const int TintAppCollapsed = 60, TintAppExpanded = 24;
 
     internal const int TintAskDesk = 150, TintAskApp = 34;
+
+    internal const int TintHistoryDesk = 228, TintHistoryApp = 222;
+
+    internal const int TintNotifDesk = 205, TintNotifApp = 200;
 
     private const int AskSwipeStrip = 26, AskSwipeDist = 30;
 
@@ -229,6 +271,43 @@ internal sealed partial class NotchController
     private float _offsetX;
     private bool _moving;
     private float _holdT;
+
+    private bool _historyOpen;
+    private float _historyT;
+
+    private bool _historyDragging;
+    private float _historyPullT;
+
+    private float _historyTravel;
+
+    private const int PullOpen = 150;
+    private const float PullCommit = 0.42f;
+    private float _historyScroll;
+
+    private float _historyScrollTo;
+
+    private bool _historyDeckOpen;
+    private int _historyHover = -1;
+    private bool _historyClearHover;
+
+    private int _historyOpenRow = -1;
+
+    private float _historyOpenExtra;
+
+    private float _historyOpenT;
+    private float _historyHoverT;
+
+    private System.Drawing.PointF _historyPressAt;
+    private int _historyPressRow = NoPress;
+    private bool _historySwiping;
+    private int _historySwipeRow = -1;
+    private float _historySwipeDX;
+
+    private Halo.Notifications.NotifItem? _historyLeaving;
+    private int _historyLeaveAt = -1;
+    private float _historyLeaveDX, _historyLeaveH;
+    private Halo.Notifications.NotifItem[] _historyItems = Array.Empty<Halo.Notifications.NotifItem>();
+    private const int PullDown = 26;
     private DateTime _holdStart = DateTime.MaxValue;
     private Win32.POINT _holdAnchor;
     private int _moveGrabDX;
@@ -269,6 +348,26 @@ internal sealed partial class NotchController
 
     private bool _handDone;
 
+    private const int HandCoolMs = 3_000;
+    private long _handCoolAt;
+
+    private bool _handArmed;
+
+    private int _handFor = -1;
+
+    private const double ArrivalHoldSeconds = 4;
+
+    private bool _liveEmpty;
+    private readonly LaunchWatch _launches = new();
+    private IntPtr _lastLaunchFg = IntPtr.Zero;
+
+    private bool _handIconOwned;
+    private Halo.Widgets.FaceProp _actProp;
+    private long _actPropAt = long.MinValue / 2;
+
+    private const int RepeatActMs = 90_000;
+    private int _lastActiveCount;
+
     private System.Drawing.Image? _handIcon;
     private string? _handAumid;
     private int _eatPick = -1;
@@ -289,7 +388,7 @@ internal sealed partial class NotchController
 
     private enum CatMood { Read, Doze, Bored, Thrilled }
 
-    private const int CatOdds = 3;
+    private const int CatOdds = 10;
 
     private void CatCast(Halo.Notifications.NotifItem? toast)
     {
@@ -308,7 +407,7 @@ internal sealed partial class NotchController
     private long _deskPolledAt;
     private const long DeskPollMs = 300;
 
-    private const float FrostMix = 0.6f;
+    private const float FrostMix = 0.72f;
 
     private float _askT;
     private int _askH = 120;
@@ -368,6 +467,9 @@ internal sealed partial class NotchController
     private long _langFgSince;
     private IntPtr _behind = IntPtr.Zero;
     private long _lastCaptureAt;
+    private long _gateNotedAt;
+    private static readonly bool GlassDebugOn =
+        Environment.GetEnvironmentVariable("HALO_DUMP_GLASS") == "1";
     private long _animDrewAt;
     private int _lastCaptureVer;
 
@@ -467,6 +569,7 @@ internal sealed partial class NotchController
         _widgets = [.. widgets];
         StartLauncher();
         FlushNet = _net.Flush;
+        BeginGoodbye = StartGoodbye;
 
         var active = ActiveIndices();
         LoadOffset();
@@ -574,6 +677,7 @@ internal sealed partial class NotchController
 
         bool watching = !_hiddenForFullscreen
                         && (_progress > 0.02f || _drop >= 0f || _faceT > 0f
+                            || _historyOpen || _historyT > 0f
                             || (_notif != null && !_overFullscreen)
                             || _cue.Alive(Environment.TickCount64));
         int target = _fps;
@@ -611,6 +715,9 @@ internal sealed partial class NotchController
     internal const float StripSwallowOut = 0.30f;
     internal static float ContentFade(float t) => Math.Clamp((t - ContentIn) / (1f - ContentIn), 0f, 1f);
     internal static float MiniFade(float t) => Math.Clamp(1f - t / MiniOut, 0f, 1f);
+
+    internal static float FoldFor(float travelPx, float pullDown) =>
+        pullDown <= 0f ? 0f : Math.Clamp(1f - travelPx / pullDown, 0f, 1f);
 
     internal static bool MorphHasContent(float t) => ContentFade(t) + MiniFade(t) > 0.3f;
 
@@ -706,15 +813,29 @@ internal sealed partial class NotchController
         catch { }
     }
 
+    private static readonly int FpsForce =
+        int.TryParse(Environment.GetEnvironmentVariable("HALO_FPSLOCK"), out int f) && f > 0 ? f : 0;
+
     private int _cadence = MaxFps;
+    private float _renderMs;
+
     private void ApplyCadence()
     {
 
         int ceiling = FpsCeiling;
         int fps = _morphing ? Reach(ceiling) : Capped(_fps, ceiling);
+        if (FpsForce > 0) fps = FpsForce;
         if (fps == _cadence) return;
         _cadence = fps;
         _timer.Interval = TimeSpan.FromMilliseconds(IntervalMs(fps));
+    }
+
+    private void NoteRenderCost(long t0)
+    {
+        float ms = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0
+                           / System.Diagnostics.Stopwatch.Frequency);
+
+        _renderMs = _renderMs <= 0f ? ms : _renderMs + (ms - _renderMs) * 0.05f;
     }
 
     private static int TierOf(int[] tiers, int pct)
@@ -1070,6 +1191,37 @@ internal sealed partial class NotchController
     private readonly NetMeter _net = new();
 
     internal static Action? FlushNet;
+
+    internal static Action<Action>? BeginGoodbye;
+    private long _byeAt;
+    private Action? _byeThen;
+
+    private static readonly long QuitAfterMs =
+        long.TryParse(Environment.GetEnvironmentVariable("HALO_QUIT_AFTER"), out var qa) ? qa : 0;
+    private readonly long _startedAt = Environment.TickCount64;
+    private int _byeDone;
+
+    private void StartGoodbye(Action then)
+    {
+        if (_byeAt > 0) return;
+        bool onScreen = false;
+        try { onScreen = Win32.IsWindowVisible(_notch.Hwnd); } catch { }
+        _byeThen = then;
+        if (!onScreen) { FinishGoodbye(); return; }
+        _byeAt = Environment.TickCount64;
+
+        _ = new System.Threading.Timer(_ => FinishGoodbye(), null, Halo.Shell.Goodbye.DurationMs + 800,
+                                       System.Threading.Timeout.Infinite);
+    }
+
+    private float ByeT => _byeAt > 0
+        ? Math.Clamp((Environment.TickCount64 - _byeAt) / (float)Halo.Shell.Goodbye.DurationMs, 0f, 1f) : 0f;
+
+    private void FinishGoodbye()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _byeDone, 1) != 0) return;
+        try { _byeThen?.Invoke(); } catch { Environment.Exit(0); }
+    }
     private void CheckHeat()
     {
         if (Almanac.Latest is not { } wx) return;
@@ -1245,7 +1397,7 @@ internal sealed partial class NotchController
     private void CheckInternet()
     {
         var trouble = NetTrouble(ClaudeCode.NetMon.NetDown, ClaudeCode.NetMon.ApiDown, ClaudeCode.NetMon.Slow,
-                                 _net.Busy);
+                                 _net.Busy, AgentLive);
         if (trouble == _netShown) return;
         _netShown = trouble;
         if (trouble is null) return;
@@ -1275,8 +1427,13 @@ internal sealed partial class NotchController
         _notifSrc.EnqueueLocal(item);
     }
 
-    internal static string? NetTrouble(bool netDown, bool apiDown, bool slow, bool busy)
-        => netDown ? "offline" : apiDown ? "api" : slow && !busy ? "slow" : null;
+    internal static string? NetTrouble(bool netDown, bool apiDown, bool slow, bool busy, bool agentLive = true)
+        => netDown ? "offline" : apiDown && agentLive ? "api" : slow && !busy ? "slow" : null;
+
+    private bool AgentLive
+    {
+        get { try { return _claudeStore.IsLive; } catch { return false; } }
+    }
 
     internal static readonly TimeSpan WakeGap = TimeSpan.FromSeconds(90);
     private DateTime _lastTickUtc = DateTime.UtcNow;
@@ -1286,8 +1443,6 @@ internal sealed partial class NotchController
 
     private bool FaceWanted =>
         _settings.Current.Bool(Halo.Settings.SettingsKeys.Face, true);
-
-    private bool _fgFullscreen;
 
     private float _gazeX, _gazeY, _near;
 
@@ -1320,25 +1475,74 @@ internal sealed partial class NotchController
         _near += (wantNear - _near) * Math.Min(1f, _dt / 0.22f);
     }
 
+    private float _press;
+    private bool _pressOwned, _pressDown;
+
+    private void PressFrame()
+    {
+        bool down = false;
+        try { down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0; } catch { }
+        if (down && !_pressDown)
+        {
+            _pressOwned = false;
+            try
+            {
+                if (Win32.GetCursorPos(out var p))
+                    _pressOwned = _progress > 0.02f
+                        ? InRect(p, _el, _et, Sc(ExpandedW), Sc(ExpandedH))
+                        : InRect(p, _cl, _ct, Sc(_curW), Sc(_curH));
+            }
+            catch { }
+        }
+        if (!down) _pressOwned = false;
+        _pressDown = down;
+        bool held = _pressOwned && !_moving && _byeAt == 0;
+        _press = PressFeel.Step(_press, held, _dt);
+        LayeredNotch.PressScale = PressFeel.Scale(_press);
+    }
+
+    private Halo.Widgets.FaceReaction _faceReaction;
+    private bool _faceMouseDown;
+
+    private void FaceClickFrame()
+    {
+        bool down;
+        try { down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0; }
+        catch { return; }
+        bool pressed = down && !_faceMouseDown;
+        _faceMouseDown = down;
+        if (!pressed || _faceT < 0.5f || _handT >= 0f || _moving) return;
+        try
+        {
+            if (!Win32.GetCursorPos(out var c)) return;
+            bool onFace = c.X >= _cl && c.X < _cl + Sc(_curW) && c.Y >= _ct && c.Y < _ct + Sc(_curH);
+            _faceReaction = new Halo.Widgets.FaceReaction(
+                onFace ? Halo.Widgets.FaceReaction.Kind.Giggle : Halo.Widgets.FaceReaction.Kind.Surprise,
+                Environment.TickCount64);
+        }
+        catch { }
+    }
+
     private Halo.Widgets.Face.Look FaceLook()
     {
         var look = Halo.Widgets.FaceDirector.At(_faceAge);
         float own = _handT >= 0f ? 0f : 1f;
         if (own <= 0f) return look;
-        return look with
+        var idle = look with
         {
             GazeX = look.GazeX * (1f - own) + _gazeX * own,
             GazeY = look.GazeY * (1f - own) + _gazeY * own,
             Open = look.Open * (1f + 0.22f * _near * own),
             Glow = look.Glow * (1f + 0.30f * _near * own),
         };
+        idle = _faceReaction.Apply(idle, Environment.TickCount64);
+        return _byeAt > 0 ? idle with { Open = idle.Open * (1f - Halo.Shell.Goodbye.EyesShut(ByeT)) } : idle;
     }
 
-    private bool FaceOverFullscreen => _fgFullscreen && Pinned(_pinned) && _handT >= 0f;
+    private bool FaceWakes => (FacePinned || (_empty && _lastDesktop)) && !_handDone && FaceMayShow;
 
-    private bool FaceWakes =>
-        (FacePinned || (_empty && (_lastDesktop || FaceOverFullscreen)))
-        && !_handDone && FaceWanted && !Privacy.Active && !_moving
+    private bool FaceMayShow =>
+        FaceWanted && !Privacy.Active && !_moving
         && _notif == null && _ask == null && _askGhost == null && _panelGhost == null
         && _greet == GreetingKind.None;
 
@@ -1806,6 +2010,7 @@ internal sealed partial class NotchController
             }
             catch { }
             _handAumid = aumid;
+            ReleaseHandIcon();
             _handIcon = Halo.Launcher.LauncherIcons.Get(aumid);
             _handProp = Halo.Widgets.FaceProp.AppIcon;
 
@@ -1825,6 +2030,7 @@ internal sealed partial class NotchController
             _handSolo = true;
             _handDone = false;
             _handT = 0f;
+            MarkAct();
 
             _faceT = 1f;
             _faceAge = 0f;
@@ -1852,6 +2058,8 @@ internal sealed partial class NotchController
     private bool FaceOnly => _faceT > 0f && (_empty || FacePinned || _handT >= 0f);
 
     private static readonly bool VisDebug = Environment.GetEnvironmentVariable("HALO_VISDEBUG") == "1";
+    private static readonly bool ForceFullscreen =
+        Environment.GetEnvironmentVariable("HALO_FORCE_FULLSCREEN") == "1";
 
     private void LogVis(string what, IntPtr fg, int activeLen)
     {
@@ -1897,6 +2105,67 @@ internal sealed partial class NotchController
 
     private float _dt = 0.008f;
     private long _lastFrameAt;
+
+    private static readonly bool FpsDbg = Environment.GetEnvironmentVariable("HALO_FPSDEBUG") == "1";
+    private long _fpsWindowAt;
+    private int _fpsFrames;
+    private float _fpsWorst;
+
+    private bool _fpsWorstTick, _fpsWorstCapture;
+    private int _fpsGen0, _fpsGen1, _fpsGen2, _fpsCaps;
+    private bool _frameIsTick;
+    private System.IO.StreamWriter? _fpsLog;
+
+    private void FpsDebug()
+    {
+        if (!FpsDbg) return;
+        if (_historyT <= 0f && !_historyOpen)
+        {
+            if (_fpsFrames > 0) { try { _fpsLog?.Flush(); } catch { } }
+            _fpsFrames = 0; _fpsWorst = 0f; _fpsWindowAt = 0; return;
+        }
+        _fpsFrames++;
+        if (_dt > _fpsWorst)
+        {
+            _fpsWorst = _dt;
+            _fpsWorstTick = _frameIsTick;
+            _fpsWorstCapture = _notch.CaptureVersion != _fpsCaps;
+        }
+        _fpsCaps = _notch.CaptureVersion;
+        if (_fpsWindowAt == 0)
+        {
+            _fpsWindowAt = _lastFrameAt;
+            _fpsGen0 = GC.CollectionCount(0); _fpsGen1 = GC.CollectionCount(1); _fpsGen2 = GC.CollectionCount(2);
+            return;
+        }
+        long span = _lastFrameAt - _fpsWindowAt;
+        if (span < 1000) return;
+
+        try
+        {
+            _fpsLog ??= new System.IO.StreamWriter(System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Halo", "fps-debug.txt"), append: true) { AutoFlush = false };
+            _fpsLog.WriteLine(
+                $"{DateTime.Now:HH:mm:ss}  {_fpsFrames * 1000.0 / span:0} fps  " +
+                $"avg {span / (double)_fpsFrames:0.0}ms  worst {_fpsWorst * 1000f:0.0}ms  " +
+                $"drag={_historyDragging} cadence={_cadence} raised={_timerRaised} " +
+                $"cost {_renderMs:0.00}ms  " +
+
+                $"shape {LayeredNotch.MsShape:0.0} content {LayeredNotch.MsContent:0.0} " +
+                $"blit {LayeredNotch.MsBlit:0.0}  " +
+                $"cache {LayeredNotch.ShapeHit}/{LayeredNotch.ShapeMiss}/{LayeredNotch.ShapeBypass}" +
+                (LayeredNotch.ShapeMiss > 0 ? $" why={LayeredNotch.ShapeWhy}" : "") +
+                $"  worst@tick={_fpsWorstTick} cap={_fpsWorstCapture}  " +
+                $"gc {GC.CollectionCount(0) - _fpsGen0}/{GC.CollectionCount(1) - _fpsGen1}/" +
+                $"{GC.CollectionCount(2) - _fpsGen2}");
+            LayeredNotch.ShapeHit = LayeredNotch.ShapeMiss = LayeredNotch.ShapeBypass = 0;
+            _fpsLog.Flush();
+        }
+        catch { }
+        _fpsFrames = 0; _fpsWorst = 0f; _fpsWindowAt = _lastFrameAt;
+        _fpsGen0 = GC.CollectionCount(0); _fpsGen1 = GC.CollectionCount(1); _fpsGen2 = GC.CollectionCount(2);
+    }
     private void Frame()
     {
         DrainPosted();
@@ -1904,6 +2173,8 @@ internal sealed partial class NotchController
         long frameNow = Environment.TickCount64;
         _dt = _lastFrameAt == 0 ? 0.008f : Math.Clamp((frameNow - _lastFrameAt) / 1000f, 0.001f, 0.05f);
         _lastFrameAt = frameNow;
+        FpsDebug();
+        long workT0 = System.Diagnostics.Stopwatch.GetTimestamp();
         PollDisplay();
         LauncherFrame();
         RefreshFeatureMask();
@@ -1918,14 +2189,33 @@ internal sealed partial class NotchController
         DetectAgentCancel(fg);
         DetectLanguageChange(fg);
 
-        _fgFullscreen = _notch.IsFullscreen(fg);
-        bool fullscreen = !Pinned(_pinned) && _fgFullscreen;
+        bool fullscreen = ForceFullscreen || (!Pinned(_pinned) && _notch.IsFullscreen(fg));
 
         _overFullscreen = fullscreen;
 
         for (int i = 0; i < _widgets.Length; i++)
             if (_widgets[i] is Widgets.NetWidget nw) { nw.Pinned = i == _userPicked; LogNet(nw, i); }
-        var active = fullscreen ? [] : ActiveIndices();
+
+        var awake = ActiveIndices();
+        var active = fullscreen ? [] : awake;
+
+        if (_wasActive.Length != _widgets.Length) _wasActive = new bool[_widgets.Length];
+        bool wasLiveEmpty = _liveEmpty;
+        _liveEmpty = awake.Length == 0;
+        int dressed = -1;
+        foreach (int i in awake)
+            if (!_wasActive[i] && _widgets[i].ArrivingProp != Halo.Widgets.FaceProp.None) { dressed = i; break; }
+        bool ontoEmpty = wasLiveEmpty && !_liveEmpty;
+
+        if (!_handArmed) { _handArmed = true; dressed = -1; ontoEmpty = false; }
+        bool cooled = ontoEmpty || _lastFrameAt >= _handCoolAt;
+
+        bool repeat = dressed >= 0 && _widgets[dressed].ArrivingProp == _actProp
+                      && _actProp != Halo.Widgets.FaceProp.None
+                      && _lastFrameAt - _actPropAt < RepeatActMs;
+        bool wantsBeat = (dressed >= 0 || ontoEmpty) && _handT < 0f && FaceMayShow && cooled && !repeat;
+
+        if (fg != _lastLaunchFg) { _lastLaunchFg = fg; AppLaunchBeat(fg); }
 
         if (!fullscreen)
         {
@@ -1938,7 +2228,10 @@ internal sealed partial class NotchController
 
         bool notifLive = _notif != null || _notifSrc.HasPending;
 
-        var visibility = NotchVisibility.Decide(_userHidden || (fullscreen && !notifLive),
+        _passThrough = ClickThroughZone();
+        _notch.SetClickThrough(_passThrough);
+        bool beatLive = _handT >= 0f || wantsBeat;
+        var visibility = NotchVisibility.Decide(_userHidden || (fullscreen && !notifLive && !beatLive),
                                                 _hiddenForFullscreen);
         _hiddenForFullscreen = visibility.HiddenForFullscreen;
 
@@ -1972,33 +2265,42 @@ internal sealed partial class NotchController
 
         bool wasEmpty = _empty;
         _empty = active.Length == 0;
+        _lastActiveCount = active.Length;
 
         if (_empty) _handDone = false;
-        if (_wasActive.Length != _widgets.Length) _wasActive = new bool[_widgets.Length];
-        int dressed = -1;
-        foreach (int i in active)
-            if (!_wasActive[i] && _widgets[i].ArrivingProp != Halo.Widgets.FaceProp.None) { dressed = i; break; }
-        if (_faceT > 0.5f && _handT < 0f)
+
+        if ((dressed >= 0 || ontoEmpty) && !wantsBeat)
+            HandRefused(dressed, ontoEmpty, cooled, repeat);
+        if (wantsBeat)
         {
 
             _handSolo = false;
-            _handIcon = null;
+            ReleaseHandIcon();
             if (dressed >= 0)
             {
                 _handProp = _widgets[dressed].ArrivingProp;
                 _handT = 0f;
+                MarkAct();
+                _handFor = dressed;
             }
 
-            else if (wasEmpty && !_empty && active.Length > 0)
+            else if (ontoEmpty)
             {
-                int arriving = PreferredPrimary(active);
+                int arriving = PreferredPrimary(awake);
                 _handProp = arriving >= 0 && arriving < _widgets.Length
                     ? _widgets[arriving].ArrivingProp : Halo.Widgets.FaceProp.None;
                 _handT = 0f;
+                MarkAct();
+                _handFor = arriving;
             }
+
+            if (_handT >= 0f && _faceT <= 0.5f) { _faceT = 1f; _faceAge = 0f; }
+
+            if (_handT >= 0f) _handDone = false;
         }
+
         Array.Clear(_wasActive);
-        foreach (int i in active) _wasActive[i] = true;
+        foreach (int i in awake) _wasActive[i] = true;
         if (justShown) LogVis("show:settled", fg, active.Length);
 
         if (!_empty && _drop < 0f && Array.IndexOf(active, _primary) < 0)
@@ -2027,7 +2329,8 @@ internal sealed partial class NotchController
 
         if (_userPicked >= 0 && Array.IndexOf(active, _userPicked) < 0) _userPicked = -1;
 
-        if (_drop < 0f && !_empty && _userPicked < 0 && _widgets[_primary].AgentNotice.State != "working")
+        if (_drop < 0f && !_empty && _userPicked < 0 && !_agentNotices.IsAnnouncing(_primary)
+            && _widgets[_primary].AgentNotice.State != "working")
         {
             int best = -1; long bestRank = 0;
             foreach (var i in active)
@@ -2104,6 +2407,7 @@ internal sealed partial class NotchController
 
         bool pointerMoved = p.X != _ptrX || p.Y != _ptrY;
         _ptrX = p.X; _ptrY = p.Y;
+        if (pointerMoved) _ptrStillSince = _lastFrameAt;
 
         float prevGreetT = _greetT;
         var prevGreet = _greet;
@@ -2156,6 +2460,8 @@ internal sealed partial class NotchController
         int prevAskHover = _askHover;
         var pendingAsk = _notif == null && _settings.Current.Bool("claude.ask", true) ? _asks.Pending : null;
 
+        if (_asks.TakeNewQuestion() is { } question) AnnounceQuestion(question);
+
         if (pendingAsk != null && pendingAsk.Nonce == _askDismissed) pendingAsk = null;
         if (pendingAsk?.Nonce != _ask?.Nonce)
         {
@@ -2176,6 +2482,11 @@ internal sealed partial class NotchController
 
         else if (_notif == null && _askGhost == null) LayeredNotch.WantCaptureHeight(0);
         _askT = Math.Clamp(_askT + (_ask != null ? _dt / 0.24f : -_dt / 0.30f), 0f, 1f);
+
+        if (_historyDragging) _historyT = Math.Clamp(_historyPullT, 0f, 1f);
+        else _historyT = Math.Clamp(_historyT + (_historyOpen ? _dt / 0.24f : -_dt / 0.30f), 0f, 1f);
+        if (_historyT <= 0f && !_historyOpen && _historyItems.Length > 0)
+            _historyItems = Array.Empty<Halo.Notifications.NotifItem>();
         if (_askT <= 0f) _askGhost = null;
         if (_ask != null)
         {
@@ -2220,7 +2531,9 @@ internal sealed partial class NotchController
         if (_notif != null)
         {
             overNotif = InRect(p, NotifLeft(), _ct, Sc(_curW), Sc(_curH));
-            if (overNotif && !_notifDetailOn && _notif.Kind != "language")
+
+            if (overNotif && !_notifDetailOn && _notif.Kind != "language"
+                && _lastFrameAt - _ptrStillSince < BannerStillMs)
                 _notifDeadline = Max(_notifDeadline, DateTime.UtcNow.AddSeconds(2.5));
             if (!_notifDetailOn && DateTime.UtcNow > _notifDeadline) _notifClosing = true;
 
@@ -2264,20 +2577,29 @@ internal sealed partial class NotchController
         _handle = Math.Clamp(_handle + (inHandle || _resizing ? 1 : -1) * _dt / 0.12f, 0f, 1f);
         _notch.HandleAlpha = _handle;
 
-        bool hovered = _resizing || _moving || (_progress > 0.02f
+        bool hovered = !_passThrough && (_resizing || _moving || (_progress > 0.02f
             ? InRect(p, _el, _et, Sc(ExpandedW), Sc(ExpandedH))
-            : InRect(p, _cl, _ct, Sc(CollapsedW), Sc(CollapsedH)));
+            : InRect(p, _cl, _ct, Sc(CollapsedW), Sc(CollapsedH))));
         float prevOffsetX = _offsetX, prevHoldT = _holdT;
+        float prevHistoryT = _historyT; int prevHistoryHover = _historyHover, prevHistoryOpen = _historyOpenRow;
         UpdateMove(p, down, hovered);
 
-        bool open = (hovered || notice || FileTray.DragActive || _apiHold || PinOpen)
+        bool quietHold = !_empty && _primary >= 0 && _primary < _widgets.Length
+                         && _widgets[_primary].QuietArrival && !_agentNotices.HasNotice(_primary);
+
+        bool open = (hovered || (notice && !quietHold) || FileTray.DragActive || _apiHold || PinOpen)
             && !_empty && _notif == null && !_moving;
+
+        if (!open && _progress <= 0.001f && _cue.Alive(Environment.TickCount64)) _cue = default;
 
         int dir = open ? 1 : -1;
 
         float step = _dt / ((open ? OpenSeconds : CloseSeconds) * MotionScale);
 
         float next = open && FileTray.DragActive ? 1f : Math.Clamp(_progress + dir * step, 0f, 1f);
+
+        if (_historyDragging) next = Math.Min(_progress, FoldFor(_historyTravel, Sc(PullDown)));
+        else if (_historyOpen || _historyT > 0f) next = _progress;
 
         int alt = AltIndices().Length;
         bool inMenu = _progress < 0.05f && _drop < 0f && InMenu(p);
@@ -2299,7 +2621,7 @@ internal sealed partial class NotchController
         float dnext = _drop;
         if (_drop >= 0f)
         {
-            dnext = _drop + _dt / 0.34f;
+            dnext = _drop + _dt / 0.85f;
             if (dnext >= 1f)
             {
                 if (!_dropOut) { _primary = _pending; _agentNotices.SetPrimary(_primary); _arrive = 0f; _userPicked = _pending; }
@@ -2353,6 +2675,14 @@ internal sealed partial class NotchController
         if (_heavy) captureEveryMs *= 3;
 
         if (!sheet) captureEveryMs *= Math.Clamp(1 + _notch.StaleStreak / 6, 1, 4);
+
+        if (GlassDebugOn && frameNow - _gateNotedAt >= 1000)
+        {
+            _gateNotedAt = frameNow;
+            LayeredNotch.GlassNote($"gate desk={_lastDesktop} behind=0x{_behind.ToInt64():X} "
+                + $"due={frameNow - _lastCaptureAt >= captureEveryMs} every={captureEveryMs} "
+                + $"sheet={sheet} heavy={_heavy}");
+        }
         if (!_lastDesktop && _behind != IntPtr.Zero && frameNow - _lastCaptureAt >= captureEveryMs)
         {
 
@@ -2368,19 +2698,28 @@ internal sealed partial class NotchController
 
         bool tick = DateTime.Now.Second != _lastSec;
         _lastSec = DateTime.Now.Second;
+        _frameIsTick = tick;
 
         bool forceAnim = false;
 
         if (_cue.Alive(Environment.TickCount64)) forceAnim = true;
+        if (_faceReaction.Alive(Environment.TickCount64)) forceAnim = true;
+        if (_byeAt > 0) forceAnim = true;
+        if (_press > 0.001f) forceAnim = true;
+        if (QuitAfterMs > 0 && _byeAt == 0 && Environment.TickCount64 - _startedAt > QuitAfterMs)
+            try { Program.Quit(); } catch { }
         bool animating = _widgets[_primary].Animating;
 
         bool sprint = animating && _widgets[_primary].Sprinting;
+
+        if (_drop >= 0f) forceAnim = true;
         if (animating && (_progress >= 0.5f || sprint)) forceAnim = true;
 
         else if (animating && _lastFrameAt - _animDrewAt >= 16) { _animDrewAt = _lastFrameAt; forceAnim = true; }
 
         if (_faceT > 0f && _lastFrameAt - _faceDrewAt >= 16) { _faceDrewAt = _lastFrameAt; forceAnim = true; }
 
+        bool historyMoving = _historyOpen && HistoryAnimate();
         bool overNow = _notif != null ? overNotif : hovered && next > 0.98f;
         var mouse = _notif != null
             ? new PointF((p.X - NotifLeft()) / S, (p.Y - _ct) / S)
@@ -2392,10 +2731,21 @@ internal sealed partial class NotchController
         WidgetInput.Down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0;
 
         bool wheelWidget = _primary >= 0 && _primary < _widgets.Length && _widgets[_primary].WantsWheel;
-        Halo.Interop.WheelGrab.WantWheel = overNow && wheelWidget && next > 0.98f;
+
+        float historyMax = Halo.Widgets.HistoryLayout.MaxScroll(_historyItems.Length, HistoryExtra,
+                                                                _historyDeckOpen);
+        bool wheelHistory = _historyOpen && historyMax > 0f && HistoryPoint(p) is not null;
+        Halo.Interop.WheelGrab.WantWheel = wheelHistory || (overNow && wheelWidget && next > 0.98f);
         int notches = Halo.Interop.WheelGrab.TakeNotches();
         bool wheeled = false;
-        if (notches != 0 && wheelWidget)
+        if (notches != 0 && wheelHistory)
+        {
+
+            _historyScrollTo = Math.Clamp(_historyScrollTo - notches * Halo.Widgets.HistoryLayout.RowH,
+                                          0f, historyMax);
+            wheeled = true;
+        }
+        else if (notches != 0 && wheelWidget)
         {
             try { _widgets[_primary].Wheel(notches); } catch { }
             wheeled = true;
@@ -2420,13 +2770,20 @@ internal sealed partial class NotchController
                     _handProp = Halo.Widgets.FaceProp.Search;
             }
 
-            if (_handT >= beat + Halo.Widgets.FaceDirector.MeltSeconds || (_empty && !_handSolo))
+            if (_handT >= beat && prevHandT < beat && _handFor >= 0 && _handFor < _widgets.Length)
+                _agentNotices.Announce(_handFor, now.AddSeconds(ArrivalHoldSeconds));
+
+            if (_handT >= beat + Halo.Widgets.FaceDirector.MeltSeconds || (_liveEmpty && !_handSolo))
             {
                 _handT = -1f;
                 _faceT = 0f;
                 _handDone = true;
                 _handSolo = false;
-                _handIcon = null;
+                _handFor = -1;
+
+                _handCoolAt = _lastFrameAt + HandCoolMs;
+
+                ReleaseHandIcon();
                 _handAumid = null;
             }
         }
@@ -2454,6 +2811,8 @@ internal sealed partial class NotchController
 
         float prevGaze = _gazeX + _gazeY + _near;
         GazeFrame();
+        FaceClickFrame();
+        PressFrame();
         float prevGrip = _catGrip, prevDuck = _catDuck;
         if (CatDrop > 0f)
             CatFrame(new System.Drawing.RectangleF(0.5f, 0.5f, _curW - 1f, _curH - 1f));
@@ -2471,6 +2830,8 @@ internal sealed partial class NotchController
             || _stripT != prevStrip || _notifT != prevNotifT || _notifDetail != prevNotifDetail
             || wheeled
             || _offsetX != prevOffsetX || _holdT != prevHoldT || !ReferenceEquals(_notif, notifStart)
+            || _historyT != prevHistoryT || _historyHover != prevHistoryHover
+            || _historyOpenRow != prevHistoryOpen || historyMoving
             || _notifInk != _drawnNotifInk || _notifFold != prevNotifFold
             || _askT != prevAskT || _askHover != prevAskHover || _askTyped != _drawnTyped
             || _greetT != prevGreetT || _greet != prevGreet
@@ -2480,18 +2841,19 @@ internal sealed partial class NotchController
             || _dragHeld >= DragHold;
 
         bool morphing = next != _progress || _notifT != prevNotifT || _askT != prevAskT || _shrink != prevShrink
-            || sprint;
+            || sprint || _drop >= 0f || (_historyT > 0f && _historyT < 1f) || (_historyOpen && _historyT < 1f);
 
         int ss = morphing || _ask != null || _askGhost != null || _panelGhost != null ? 1 : 2;
         LayeredNotch.Supersample = ss;
         if (ss != _drawnSs) changed = true;
 
-        bool watched = hovered || notice
+        bool watched = hovered || notice || _historyOpen || _historyT > 0f
                        || _notif != null || _ask != null || _greet != GreetingKind.None;
 
         bool glassLive = GlassWantsFineTimer(sheet, watched, _lastDesktop, _notch.StaleStreak);
         _raiseDbg = $"sheet={sheet} watched={watched} desk={_lastDesktop} stale={_notch.StaleStreak} live={glassLive} morph={morphing}";
-        RaiseTimer(morphing || glassLive
+
+        RaiseTimer(morphing || glassLive || _historyOpen || _historyT > 0f
                    || (next > 0.5f && animating && (watched || _apiHold || FileTray.DragActive)),
                    pointerMoved);
         if (morphing != _morphing) { _morphing = morphing; ApplyCadence(); }
@@ -2513,6 +2875,8 @@ internal sealed partial class NotchController
         if (changed) Apply(_progress);
         _drawnSs = ss;
         _drawnNotifInk = _notifInk;
+
+        if (changed) NoteRenderCost(workT0);
     }
 
     private PointF PanelLocal(Win32.POINT p)
@@ -2824,6 +3188,18 @@ internal sealed partial class NotchController
 
     private void PollClick(Win32.POINT p)
     {
+        if (_byeAt > 0) return;
+
+        bool lb = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0;
+        if (_historyOpen)
+        {
+
+            if (!_historySwiping) HistoryHover(p);
+            if (lb && !_lastMouseDown) { HistoryPress(p); _lastMouseDown = true; return; }
+            if (lb) { HistoryDrag(p); return; }
+            if (_lastMouseDown) { _lastMouseDown = false; HistoryRelease(p); return; }
+            if (_historyOpen) return;
+        }
 
         bool overPill = _progress > 0.02f
             ? InRect(p, _el, _et, Sc(ExpandedW), Sc(ExpandedH))
@@ -3025,6 +3401,38 @@ internal sealed partial class NotchController
         _trayPressPath = null; _trayMode = -1;
     }
 
+    private const long BannerStillMs = 66_000;
+    private long _ptrStillSince;
+    private bool _passThrough;
+    private long _zoneNotedAt;
+
+    private bool ClickThroughZone()
+    {
+        try
+        {
+            bool busy = _moving || _resizing || _drop >= 0f || _progress > 0.02f;
+            if (!Win32.GetCursorPos(out var p) || !Win32.GetWindowRect(_notch.Hwnd, out var r))
+                return false;
+            bool inside = p.X >= r.left && p.X < r.right && p.Y >= r.top && p.Y < r.bottom;
+            bool leftHalf = p.X < r.left + (r.right - r.left) / 2;
+
+            var fg = Win32.GetForegroundWindow();
+            bool browser = inside && (Halo.Widgets.Downloads.IsBrowser(fg)
+                                      || (_behind != IntPtr.Zero && Halo.Widgets.Downloads.IsBrowser(_behind)));
+            bool on = !busy && inside && leftHalf && browser;
+
+            if (inside && GlassDebugOn && _lastFrameAt - _zoneNotedAt >= 500)
+            {
+                _zoneNotedAt = _lastFrameAt;
+                LayeredNotch.GlassNote($"zone on={on} busy={busy} left={leftHalf} browser={browser} "
+                    + $"cur={p.X},{p.Y} rect={r.left},{r.top}-{r.right},{r.bottom} "
+                    + $"fg={LayeredNotch.ClassNameOf(fg)} behind={LayeredNotch.ClassNameOf(_behind)} prog={_progress:0.000}");
+            }
+            return on;
+        }
+        catch { return false; }
+    }
+
     private bool CursorOverNotch()
     {
         return Win32.GetCursorPos(out var p) && Win32.GetWindowRect(_notch.Hwnd, out var r)
@@ -3119,6 +3527,7 @@ internal sealed partial class NotchController
             h = (int)Lerp(h, Halo.Widgets.Face.PlateH, faceIn);
             r = (int)Lerp(r, 0, faceIn);
         }
+
         bool glass = !_lastDesktop;
 
         int cT = TintFor(glass ? TintAppCollapsed : TintDeskCollapsed, GlassScale);
@@ -3142,6 +3551,19 @@ internal sealed partial class NotchController
             fade = ContentFade(_panelT);
             mini *= MiniFade(_panelT);
         }
+        if (_historyT > 0f)
+        {
+
+            float eh = _historyDragging ? _historyT : EaseOutBack(_historyT);
+            w = (int)Lerp(w, Halo.Widgets.HistoryLayout.W, eh);
+            h = (int)Lerp(h, Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra,
+                                                               _historyDeckOpen), eh);
+            r = (int)Lerp(r, 26, eh);
+            tint = (int)Lerp(cT, glass ? TintHistoryApp : TintHistoryDesk, _historyT);
+            fade = ContentFade(_historyT);
+
+            mini *= Math.Clamp(1f - _historyT / ContentIn, 0f, 1f);
+        }
         if (_notif == null && (_ask ?? _askGhost) != null && _askT > 0f)
         {
             float ea = EaseOutBack(_askT);
@@ -3161,10 +3583,14 @@ internal sealed partial class NotchController
             h = (int)Lerp(h, nh, en);
             r = (int)Lerp(r, 26, en);
 
-            tint = _notifFloat ? 0 : (int)Lerp(cT, eT, _notifT);
+            tint = _notifFloat ? 0 : (int)Lerp(cT, TintFor(glass ? TintNotifApp : TintNotifDesk, GlassScale), _notifT);
             fade = ContentFade(_notifT);
             mini *= MiniFade(_notifT);
         }
+
+        float lean = _drop >= 0f && !_dropOut ? LayeredNotch.DropStretch(_drop) : 0f;
+        if (lean != 0f) w += (int)MathF.Round(2f * lean);
+
         float arrive = _arrive < 0f ? 1f : 1f - (1f - _arrive) * (1f - _arrive);
         mini *= arrive;
 
@@ -3239,6 +3665,8 @@ internal sealed partial class NotchController
             DropImage = _dropImage,
             Drop = _drop >= 0f ? _drop : 0f,
         };
+
+        if (_byeAt > 0) frame.Appear *= Halo.Shell.Goodbye.At(1, 1, ByeT).Content;
         frame.Outward = _dropOut;
         if (frame.Dropping)
         {
@@ -3264,7 +3692,16 @@ internal sealed partial class NotchController
             _stripT = 0f;
         }
 
-        Action<Graphics, int, int, float> content = _greet != GreetingKind.None
+        Action<Graphics, int, int, float> content = _historyT > 0f
+            ? (g, cw, ch, f) => Halo.Widgets.HistoryView.Draw(g, cw, ch, f, HistoryRows(),
+                                                              _historyScroll, _historyDeckOpen,
+                                                              _historyHover, _historyHoverT, _historyClearHover,
+                                                              Halo.Widgets.Face.RingTone
+                                                              ?? (Halo.Widgets.Face.HaloLeft, Halo.Widgets.Face.HaloRight),
+                                                              HistoryShift, HistoryLeaving,
+
+                                                              _historyDragging ? _historyT : EaseOutBack(_historyT))
+            : _greet != GreetingKind.None
             ? (g, cw, ch, f) => DrawGreeting(g, cw, ch)
             : _notif == null && (_ask ?? _askGhost) is { } q && _askT > 0f
             ? (g, cw, ch, f) => AskBanner.Draw(g, cw, ch, f, q, _askHover, tint, _askTyped, _askCloseHover,
@@ -3285,6 +3722,10 @@ internal sealed partial class NotchController
                                                 Math.Max(_catDuck, CatRecoil()), on, _catAnchor);
 
                     _notch.FrostInto(g, outline0, cw, ch, on * FrostMix, BannerClarity);
+
+                    using (var wash = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(
+                               (int)(TintFor(!_lastDesktop ? TintNotifApp : TintNotifDesk, GlassScale) * on), 0, 0, 0)))
+                        g.FillPath(wash, outline0);
                     Halo.Widgets.Face.Glass(g, sheet, 26f, on);
 
                     var saved = g.Save();
@@ -3313,13 +3754,24 @@ internal sealed partial class NotchController
             : _empty ? static (_, _, _, _) => { } : _widgets[_primary].DrawContent;
 
         bool pin = _notif == null && _ask == null && _askGhost == null && _panelGhost == null
-            && _greet == GreetingKind.None && !TrayFront && !faceOnly;
+            && _greet == GreetingKind.None && !TrayFront && !faceOnly && _historyT <= 0f;
 
         _notch.SkipShape = floating;
 
-        _notch.OffsetY = Halo.Widgets.Face.FloatTop *
-              Math.Max(faceOnly ? faceIn : 0f, _notifFloat ? Math.Min(1f, _notifT * 3f) : 0f);
+        _notch.OffsetY = PillFloatTop;
 
+        if (_byeAt > 0)
+        {
+            float bt = ByeT;
+            int h0 = h;
+            var bye = Halo.Shell.Goodbye.At(w, h, bt);
+            w = bye.W; h = bye.H; r = bye.R;
+            fade *= bye.Content;
+            mini *= bye.Content;
+            _notch.OffsetY = PillFloatTop + (h0 - h) / 2f;
+            LayeredNotch.SurfaceAlpha = bye.Alpha;
+            if (bt >= 1f) FinishGoodbye();
+        }
         float drop = CatDrop;
         float side = drop > 0f ? Halo.Widgets.Face.CatSide : 0f;
         if (drop > 0f) { h += (int)drop; w += (int)side; }
@@ -3582,12 +4034,124 @@ internal sealed partial class NotchController
         }
     }
 
+    private void AppLaunchBeat(IntPtr fg)
+    {
+        if (_handT >= 0f || _drop >= 0f || !FaceMayShow || _lastFrameAt < _handCoolAt) return;
+        try
+        {
+            if (fg == _notch.Hwnd) return;
+            uint pid = RealForegroundPid(fg);
+            if (pid == 0) return;
+            using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+            if (!_launches.Fresh(pid, (DateTime.Now - proc.StartTime).TotalMilliseconds)) return;
+
+            string? exe = null;
+            try { exe = proc.MainModule?.FileName; } catch { }
+
+            if (exe is null
+                || string.Equals(System.IO.Path.GetFileName(exe), "explorer.exe", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var known = Halo.Widgets.AppCostume.For(proc.ProcessName);
+            var icon = known == Halo.Widgets.FaceProp.None
+                ? Halo.Notifications.ShellIcon.ForPath(exe) : null;
+            ReleaseHandIcon();
+            _handIcon = icon;
+            _handIconOwned = icon != null;
+
+            _handProp = known != Halo.Widgets.FaceProp.None ? known
+                : icon is null ? Halo.Widgets.FaceProp.Search : Halo.Widgets.FaceProp.AppIcon;
+            _handSolo = true;
+            _handAumid = null;
+            _handFor = -1;
+            _handT = 0f;
+            MarkAct();
+            if (_faceT <= 0.5f) { _faceT = 1f; _faceAge = 0f; }
+            _handDone = false;
+        }
+        catch { }
+    }
+
+    private static uint RealForegroundPid(IntPtr fg)
+    {
+        Win32.GetWindowThreadProcessId(fg, out uint pid);
+        if (pid == 0) return 0;
+        try
+        {
+            using var host = System.Diagnostics.Process.GetProcessById((int)pid);
+            if (!string.Equals(host.ProcessName, "ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
+                return pid;
+        }
+        catch { return pid; }
+
+        uint inner = 0;
+        try
+        {
+            Win32.EnumChildWindows(fg, (child, _) =>
+            {
+                Win32.GetWindowThreadProcessId(child, out uint childPid);
+
+                if (childPid != 0 && childPid != pid) { inner = childPid; return false; }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { }
+        return inner != 0 ? inner : pid;
+    }
+
+    private void MarkAct()
+    {
+        _actProp = _handProp;
+        _actPropAt = _lastFrameAt;
+        HandLog($"PLAYED {_handProp} solo={_handSolo} icon={(_handIcon is null ? "no" : "yes")}");
+    }
+
+    private void HandLog(string what)
+    {
+        if (Environment.GetEnvironmentVariable("HALO_FACEDEBUG") != "1") return;
+        try
+        {
+            Halo.Reports.DebugFile.Append(
+                System.IO.Path.Combine(HaloDir, "face-acts.txt"),
+                $"{DateTime.Now:HH:mm:ss.fff} {what}\r\n", 64 * 1024);
+        }
+        catch { }
+    }
+
+    private void ReleaseHandIcon()
+    {
+        if (_handIconOwned) { try { _handIcon?.Dispose(); } catch { } }
+        _handIconOwned = false;
+        _handIcon = null;
+    }
+
+    private void HandRefused(int dressed, bool ontoEmpty, bool cooled, bool repeat)
+    {
+        if (Environment.GetEnvironmentVariable("HALO_FACEDEBUG") != "1") return;
+        try
+        {
+            Halo.Reports.DebugFile.Append(
+                System.IO.Path.Combine(HaloDir, "face-acts.txt"),
+                $"{DateTime.Now:HH:mm:ss.fff} REFUSED dressed={dressed} "
+                + $"({(dressed >= 0 && dressed < _widgets.Length ? _widgets[dressed].GetType().Name : "-")}) "
+                + $"ontoEmpty={ontoEmpty} busy={_handT >= 0f} cooled={cooled} repeat={repeat} "
+                + $"mayShow={FaceMayShow} want={FaceWanted} privacy={Privacy.Active} moving={_moving} "
+                + $"notif={_notif != null} ask={_ask != null} askGhost={_askGhost != null} "
+                + $"panelGhost={_panelGhost != null} greet={_greet}\r\n", 64 * 1024);
+        }
+        catch { }
+    }
+
     private void FaceDebug(bool wakes)
     {
         if (Environment.GetEnvironmentVariable("HALO_FACEDEBUG") != "1") return;
         string line = $"wakes={wakes} empty={_empty} desk={_lastDesktop} want={FaceWanted} "
             + $"privacy={Privacy.Active} moving={_moving} notif={_notif != null} "
             + $"ask={_ask != null || _askGhost != null} panel={_panelGhost != null} greet={_greet} "
+
+            + $"pri={(_primary >= 0 && _primary < _widgets.Length ? _widgets[_primary].GetType().Name : "-")} "
+            + $"prog={_progress:0.00} n={_lastActiveCount} "
+            + $"for={_handFor} co={_agentNotices.Primary} drop={_drop:0.00} "
             + $"t={_faceT:0.00} shrink={_shrink:0.00} hand={_handT:0.00}/{_handProp} done={_handDone} "
 
             + $"solo={_handSolo} icon={(_handIcon is null ? "none" : $"{_handIcon.Width}x{_handIcon.Height}")}"
@@ -3615,7 +4179,8 @@ internal sealed partial class NotchController
         using (var outline = Halo.Widgets.Face.SheetPath(Halo.Widgets.Face.SheetRect(w, h), h / 2f))
             _notch.FrostInto(g, outline, w, h, alpha * FrostMix, BannerClarity);
 
-        var box = Halo.Widgets.Face.BeatBox(w, h, beat.Bob, beat.Sway, beat.Scale, beat.Squash);
+        var (poke, squeeze) = _handT >= 0f ? (0f, 0f) : _faceReaction.Body(Environment.TickCount64);
+        var box = Halo.Widgets.Face.BeatBox(w, h, beat.Bob + poke, beat.Sway, beat.Scale, beat.Squash + squeeze);
 
         Halo.Widgets.Face.FilmTint = null;
         foreach (var fw in _widgets)
@@ -3624,10 +4189,13 @@ internal sealed partial class NotchController
             (float)DateTime.Now.TimeOfDay.TotalHours,
             FaceConditions());
 
-        Halo.Widgets.Face.DrawGlass(g, w, h, alpha);
+        Halo.Widgets.Fx.Supersampled(g, new RectangleF(0, 0, w, h), 4, sg =>
+        {
+            Halo.Widgets.Face.DrawGlass(sg, w, h, alpha);
 
-        Halo.Widgets.Face.Waves(g, box, beat.Phase, beat.Wave, alpha);
-        Halo.Widgets.Face.Draw(g, box, beat.Look, alpha, beat.Liquid, beat.Chase, beat.Film);
+            Halo.Widgets.Face.Waves(sg, box, beat.Phase, beat.Wave, alpha);
+            Halo.Widgets.Face.Draw(sg, box, beat.Look, alpha, beat.Liquid, beat.Chase, beat.Film);
+        });
         float prop = beat.Prop;
 
         if (prop > 0.001f || _handProp == Halo.Widgets.FaceProp.AppIcon)
@@ -3635,7 +4203,9 @@ internal sealed partial class NotchController
             Halo.Widgets.Face.DrawProp(g, box, _handProp, prop, alpha, _handIcon,
                 Math.Clamp(_handT / Halo.Widgets.FaceDirector.HandSeconds(_handProp), 0f, 1f));
 
-        Halo.Widgets.Face.Letterbox(g, w, h, beat.Letterbox, alpha);
+        if (beat.Letterbox > 0.001f)
+            Halo.Widgets.Fx.Supersampled(g, new RectangleF(0, 0, w, h), 4,
+                sg => Halo.Widgets.Face.Letterbox(sg, w, h, beat.Letterbox, alpha));
     }
 
     private Halo.Widgets.HaloMood.Conditions FaceConditions()
@@ -3775,10 +4345,39 @@ internal sealed partial class NotchController
 
     private void RevealPrimaryApp()
     {
+        if (_empty || _primary < 0 || _primary >= _widgets.Length) return;
+        RevealApp(_widgets[_primary]);
+    }
+
+        private void AnnounceQuestion(Halo.ClaudeCode.PendingAsk ask)
+    {
         try
         {
-            if (_empty || _primary < 0 || _primary >= _widgets.Length) return;
-            var widget = _widgets[_primary];
+            string body = Fx.CleanText(ask.Question ?? "").Trim();
+            if (ask.Total > 1) body = Halo.Localization.Strings.Format("notice.question.more", body, ask.Total - 1);
+            _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+            {
+                App = Halo.Localization.Strings.Get("notice.app.claude"),
+                Title = Halo.Localization.Strings.Get("notice.question.title"),
+                Body = body,
+
+                Icon = ClaudeCodeWidget.PlainIcon?.Clone() as System.Drawing.Bitmap,
+                Kind = "ask-" + ask.Pid, Duration = 8,
+
+                OnActivate = () =>
+                {
+                    foreach (var w in _widgets)
+                        if (w is ClaudeCodeWidget && w.OwnerPids.Contains(ask.Pid)) { RevealApp(w); return; }
+                },
+            });
+        }
+        catch { }
+    }
+
+    private void RevealApp(IWidget widget)
+    {
+        try
+        {
 
             var hwnd = AppFront.VerifiedHwnd(widget.RevealHwnd, widget.RevealPid);
             if (hwnd == IntPtr.Zero) hwnd = AppFront.TopLevelForPid(widget.RevealPid, widget.RevealHint);
@@ -3789,7 +4388,10 @@ internal sealed partial class NotchController
                 hwnd = AppFront.TopLevelForProcess(media.App);
             if (hwnd == IntPtr.Zero && widget.RevealProcess is { Length: > 0 } app)
                 hwnd = AppFront.TopLevelForProcess(app);
-            if (hwnd != IntPtr.Zero) AppFront.Front(hwnd);
+            if (hwnd == IntPtr.Zero) return;
+            AppFront.Front(hwnd);
+
+            TerminalTabs.Select(hwnd, widget.RevealTitle);
         }
         catch { }
     }
@@ -4150,6 +4752,12 @@ internal sealed partial class NotchController
 
     internal static void DrawPushpin(Graphics g, RectangleF r, bool pinned, float hover, float a,
         bool recordable = false, float holdT = 0f)
+
+        => Fx.Supersampled(g, RectangleF.Inflate(r, 4f, 4f), 4,
+                           sg => DrawPushpinRaw(sg, r, pinned, hover, a, recordable, holdT));
+
+    private static void DrawPushpinRaw(Graphics g, RectangleF r, bool pinned, float hover, float a,
+        bool recordable, float holdT)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var st = g.Save();
@@ -4198,6 +4806,8 @@ internal sealed partial class NotchController
     private void DetectAgentCancel(IntPtr fg)
     {
         if ((Win32.GetAsyncKeyState(Win32.VK_ESCAPE) & 0x8000) == 0) return;
+
+        if (_historyOpen) { CloseHistory(); return; }
         if (!ForegroundIsAgentHost(fg)) return;
         if (_claudeStore.Current?.State == "compacting")
             ClaudeCodeWidget.MarkCompactCancelled(_claudeStore.Current?.StartedAt);
@@ -4554,6 +5164,276 @@ internal sealed partial class NotchController
         return false;
     }
 
+    private void OpenHistory()
+    {
+
+        _historyItems = _notifSrc.History();
+        _historyOpen = true;
+        _historyScroll = 0f; _historyScrollTo = 0f;
+        _historyDeckOpen = false;
+        _historyHover = -1;
+        _historyOpenRow = -1;
+        _historyOpenExtra = 0f;
+    }
+
+    private void CloseHistory()
+    {
+        _historyOpen = false; _historyHover = -1; _historyClearHover = false;
+        _historyDeckOpen = false;
+        _historyOpenRow = -1; _historyOpenExtra = 0f;
+        _historyPressRow = NoPress; _historySwiping = false;
+        _historySwipeRow = -1; _historySwipeDX = 0f;
+        _historyLeaving = null; _historyLeaveAt = -1;
+    }
+
+        private Halo.Widgets.HistoryRow[] HistoryRows()
+    {
+        var rows = new Halo.Widgets.HistoryRow[_historyItems.Length];
+        for (int i = 0; i < rows.Length; i++)
+            rows[i] = new Halo.Widgets.HistoryRow(_historyItems[i],
+                                                  i == _historySwipeRow ? _historySwipeDX : 0f,
+                                                  i == _historyOpenRow);
+        return rows;
+    }
+
+        private Halo.Widgets.HistoryRow? HistoryLeaving =>
+        _historyLeaving is { } gone ? new Halo.Widgets.HistoryRow(gone, _historyLeaveDX, false) : null;
+
+        private Halo.Widgets.HistoryShift HistoryShift =>
+        new(_historyOpenRow, _historyOpenExtra * EaseOutCubic(_historyOpenT), _historyLeaveAt, _historyLeaveH);
+
+    private static float EaseOutCubic(float t)
+    {
+        float u = 1f - Math.Clamp(t, 0f, 1f);
+        return 1f - u * u * u;
+    }
+
+    private float HistoryExtra => HistoryShift.Total;
+
+    private System.Drawing.PointF? HistoryPoint(Win32.POINT p)
+    {
+        if (_historyT <= 0.5f) return null;
+        var q = HistoryLocal(p);
+        return q.X < 0 || q.Y < 0 || q.X > Halo.Widgets.HistoryLayout.W
+               || q.Y > Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra, _historyDeckOpen)
+            ? null : q;
+    }
+
+        private int HistoryRowAt(float y) =>
+        Halo.Widgets.HistoryLayout.RowAt(y, _historyItems.Length, _historyScroll,
+                                         HistoryShift, _historyDeckOpen);
+
+    private System.Drawing.PointF HistoryLocal(Win32.POINT p) =>
+        new((p.X - NotifLeft()) / S, (p.Y - _ct) / S);
+
+    private void HistoryHover(Win32.POINT p)
+    {
+        var q = HistoryPoint(p);
+        if (q is null) { _historyHover = -1; _historyClearHover = false; return; }
+        int wasHover = _historyHover;
+        _historyHover = HistoryRowAt(q.Value.Y);
+        if (_historyHover != wasHover) _historyHoverT = 0f;
+
+        _historyClearHover = _historyItems.Length > 0
+                             && Halo.Widgets.HistoryLayout.ClearAll().Contains(q.Value);
+    }
+
+    private const int NoPress = -2;
+
+        private void HistoryPress(Win32.POINT p)
+    {
+        var q = HistoryPoint(p);
+        if (q is null) { CloseHistory(); return; }
+        _historyPressAt = q.Value;
+        _historyPressRow = HistoryRowAt(q.Value.Y);
+        _historySwiping = false;
+    }
+
+        private void HistoryDrag(Win32.POINT p)
+    {
+        if (_historyPressRow < 0) return;
+        var q = HistoryLocal(p);
+        float dx = q.X - _historyPressAt.X, dy = q.Y - _historyPressAt.Y;
+        const float Arm = 10f;
+        if (!_historySwiping)
+        {
+
+            if (dx < -Arm && Math.Abs(dy) < -dx)
+            {
+                _historySwiping = true;
+                _historySwipeRow = _historyPressRow;
+                if (_historyOpenRow == _historySwipeRow) { _historyOpenRow = -1; _historyOpenExtra = 0f; }
+            }
+            else { if (Math.Abs(dy) > Arm) _historyPressRow = NoPress; return; }
+        }
+
+        _historySwipeDX = Math.Clamp(dx + Arm, -Halo.Widgets.HistoryLayout.SwipeOut, 0f);
+    }
+
+        private void HistoryRelease(Win32.POINT p)
+    {
+        if (_historySwiping)
+        {
+            _historySwiping = false;
+
+            if (_historySwipeDX <= -Halo.Widgets.HistoryLayout.CardW / 3f && _historySwipeRow >= 0
+                && _historySwipeRow < _historyItems.Length)
+            {
+                DismissRow(_historySwipeRow, _historySwipeDX);
+                _historySwipeRow = -1; _historySwipeDX = 0f;
+            }
+            _historyPressRow = NoPress;
+            return;
+        }
+        if (_historyPressRow == NoPress) return;
+        _historyPressRow = NoPress;
+        HistoryClick(p);
+    }
+
+        private bool HistoryClick(Win32.POINT p)
+    {
+        if (!_historyOpen) return false;
+        var q = HistoryPoint(p);
+        if (q is null) { CloseHistory(); return true; }
+
+        if (_historyClearHover)
+        {
+            _notifSrc.ForgetAll();
+            _historyItems = Array.Empty<Halo.Notifications.NotifItem>();
+            CloseHistory();
+            return true;
+        }
+
+        if (!_historyDeckOpen
+            && Halo.Widgets.HistoryLayout.Deck(_historyItems.Length, _historyScroll, HistoryShift)
+                                         .Contains(q.Value))
+        {
+            _historyDeckOpen = true;
+            return true;
+        }
+
+        int row = HistoryRowAt(q.Value.Y);
+        if (row < 0) return true;
+        var item = _historyItems[row];
+        float top = Halo.Widgets.HistoryLayout.RowTop(row, _historyScroll, HistoryShift);
+
+        bool open = row == _historyOpenRow;
+        if (!open && Halo.Widgets.HistoryText.Full(item.Body).Length > 0)
+        {
+            _historyOpenExtra = Halo.Widgets.HistoryView.BodyExtra(item.Body);
+            _historyOpenT = 0f;
+            _historyOpenRow = row;
+            _historyScrollTo = Math.Min(_historyScrollTo,
+                Halo.Widgets.HistoryLayout.MaxScroll(_historyItems.Length, HistoryExtra, _historyDeckOpen));
+            _historyScroll = Math.Min(_historyScroll, _historyScrollTo);
+            return true;
+        }
+
+        if (row == _historyHover && Halo.Widgets.HistoryLayout.Dismiss(top).Contains(q.Value))
+        {
+            DismissRow(row, 0f);
+            return true;
+        }
+        try { item.Activate(); } catch { }
+        CloseHistory();
+        return true;
+    }
+
+    private void DismissRow(int row, float fromDX)
+    {
+        if (row < 0 || row >= _historyItems.Length) return;
+        FinishLeaving();
+
+        var item = _historyItems[row];
+        _notifSrc.Forget(item.Id);
+        var left = new System.Collections.Generic.List<Halo.Notifications.NotifItem>(_historyItems);
+        left.RemoveAt(row);
+        _historyItems = left.ToArray();
+
+        if (_historyOpenRow == row) { _historyOpenRow = -1; _historyOpenExtra = 0f; }
+        else if (_historyOpenRow > row) _historyOpenRow--;
+        _historyHover = -1;
+
+        _historyLeaving = item;
+        _historyLeaveAt = row;
+        _historyLeaveDX = fromDX;
+        _historyLeaveH = Halo.Widgets.HistoryLayout.RowH;
+    }
+
+    private void FinishLeaving()
+    {
+        _historyLeaving = null; _historyLeaveAt = -1; _historyLeaveH = 0f; _historyLeaveDX = 0f;
+        _historyScrollTo = Math.Min(_historyScrollTo,
+            Halo.Widgets.HistoryLayout.MaxScroll(_historyItems.Length, HistoryExtra, _historyDeckOpen));
+        _historyScroll = Math.Min(_historyScroll, _historyScrollTo);
+    }
+
+        private bool HistoryAnimate()
+    {
+        bool busy = false;
+
+        float openWant = _historyOpenRow >= 0 ? 1f : 0f;
+        if (Math.Abs(openWant - _historyOpenT) > 0.001f)
+        {
+            _historyOpenT += (openWant - _historyOpenT) * Math.Clamp(_dt / 0.19f, 0f, 1f);
+            busy = true;
+        }
+
+        float hoverWant = _historyHover >= 0 ? 1f : 0f;
+        if (Math.Abs(hoverWant - _historyHoverT) > 0.001f)
+        {
+            _historyHoverT += (hoverWant - _historyHoverT) * Math.Clamp(_dt / 0.12f, 0f, 1f);
+            busy = true;
+        }
+
+        if (Math.Abs(_historyScrollTo - _historyScroll) > 0.5f)
+        {
+            _historyScroll += (_historyScrollTo - _historyScroll) * Math.Clamp(_dt / 0.13f, 0f, 1f);
+            busy = true;
+        }
+        else _historyScroll = _historyScrollTo;
+
+        float W = Halo.Widgets.HistoryLayout.SwipeOut;
+
+        if (!_historySwiping && _historySwipeRow >= 0)
+        {
+            _historySwipeDX += (0f - _historySwipeDX) * Math.Min(1f, _dt / 0.07f);
+            if (_historySwipeDX > -0.5f) { _historySwipeDX = 0f; _historySwipeRow = -1; }
+            else busy = true;
+        }
+
+        if (_historyLeaving != null)
+        {
+            _historyLeaveDX = Math.Max(-W, _historyLeaveDX - _dt / 0.13f * W);
+
+            if (_historyLeaveDX <= -W * 0.45f)
+                _historyLeaveH = Math.Max(0f, _historyLeaveH - _dt / 0.16f * Halo.Widgets.HistoryLayout.RowH);
+            if (_historyLeaveDX <= -W && _historyLeaveH <= 0f)
+            {
+                FinishLeaving();
+                if (_historyItems.Length == 0) CloseHistory();
+            }
+            else busy = true;
+        }
+        return busy;
+    }
+
+        internal enum PullStep
+    {
+        Hold,
+        Open,
+        Keep,
+        Reanchor,
+    }
+
+    internal static PullStep PullDecide(int dx, int dy, int threshold, bool historyOpen)
+    {
+        if (dx <= 8 && Math.Abs(dy) <= 8) return PullStep.Hold;
+
+        if (dx >= dy || dy <= 0) return PullStep.Reanchor;
+        return !historyOpen && dy > threshold ? PullStep.Open : PullStep.Keep;
+    }
+
     private void UpdateMove(Win32.POINT p, bool down, bool hovered)
     {
         int centre = _notch.WorkLeft + _notch.WorkWidth / 2;
@@ -4570,17 +5450,57 @@ internal sealed partial class NotchController
             return;
         }
 
+        int strip = _stripT > 0.01f
+            ? Sc(LayeredNotch.CircleGap + LayeredNotch.CircleD + LayeredNotch.CircleD / 2) : 0;
+        int gx = Sc(28);
+        int gl = NotifLeft() - gx, gr = NotifLeft() + Sc(_curW) + strip + gx;
+        bool inPullGrab = !_passThrough && p.X >= gl && p.X <= gr
+                          && p.Y >= _notch.WorkTop && p.Y <= _ct + Sc(CollapsedH) + Sc(10)
+                          && !PressOnControl(p);
+
         bool holding = down && hovered && !_resizing && _notif == null
                     && !FileTray.DragActive && _trayPressPath == null && _trayMode < 1
                     && !PressOnControl(p);
-        bool still = Math.Abs(p.X - _holdAnchor.X) <= 8 && Math.Abs(p.Y - _holdAnchor.Y) <= 8;
-        if (holding && _holdStart != DateTime.MaxValue && still)
+        bool pullReady = down && inPullGrab && !_resizing && _notif == null
+                         && !FileTray.DragActive && _trayPressPath == null && _trayMode < 1;
+        if (pullReady && _holdStart == DateTime.MaxValue && !_historyOpen)
+        { _holdStart = DateTime.UtcNow; _holdAnchor = p; }
+
+        var step = PullDecide(Math.Abs(p.X - _holdAnchor.X), p.Y - _holdAnchor.Y, Sc(PullDown), historyOpen: false);
+        bool onPull = (holding || pullReady) && down && step is PullStep.Open or PullStep.Keep;
+
+        if (_historyDragging && down)
+        {
+
+            _historyTravel = p.Y - _holdAnchor.Y;
+            _historyPullT = Math.Clamp((p.Y - _holdAnchor.Y - Sc(PullDown)) / (float)Sc(PullOpen), 0f, 1f);
+            _holdStart = DateTime.UtcNow; _holdT = 0f;
+        }
+        else if (holding && _holdStart != DateTime.MaxValue && step == PullStep.Hold)
         {
             _holdT = Math.Clamp((float)((DateTime.UtcNow - _holdStart).TotalSeconds / HoldSeconds), 0f, 1f);
             if (_holdT >= 1f) { _moving = true; _moveGrabDX = p.X - (int)(centre + _offsetX); _holdStart = DateTime.MaxValue; }
         }
+
+        else if (onPull && !_historyOpen)
+        {
+            OpenHistory();
+            _historyDragging = true;
+            _historyPullT = 0f;
+
+            _historyTravel = p.Y - _holdAnchor.Y;
+            _holdStart = DateTime.UtcNow; _holdT = 0f;
+        }
         else if (holding) { _holdStart = DateTime.UtcNow; _holdAnchor = p; _holdT = 0f; }
-        else { _holdStart = DateTime.MaxValue; _holdT = 0f; }
+
+        if (_historyDragging && !down)
+        {
+            _historyDragging = false;
+            if (_historyPullT < PullCommit) CloseHistory();
+            _historyPullT = 0f;
+        }
+
+        else if (!pullReady) { _holdStart = DateTime.MaxValue; _holdT = 0f; }
     }
 
     private void DrawHoldCue(Graphics g, int w, int h)

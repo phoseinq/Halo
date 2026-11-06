@@ -21,7 +21,9 @@
         <SolidColorBrush x:Key="RailFill" Color="#3210151D" />
         <SolidColorBrush x:Key="Selected" Color="#2E7CB4FF" />
         <SolidColorBrush x:Key="SelectedEdge" Color="#557CB4FF" />
-        <SolidColorBrush x:Key="Obsidian" Color="#52151A22" />
+        <!-- 62%, was 32%: over Acrylic most of the backdrop came through and the panel was louder than its
+             own content. Asked for softer (2026-11-06); this and Mica in Glass.cs are that change. -->
+        <SolidColorBrush x:Key="Obsidian" Color="#9E151A22" />
 
         <!-- Every control is templated. The preview's five faults were all default chrome showing
              through - a ScrollViewer's inset, a Button's blue pressed state - so nothing here inherits

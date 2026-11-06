@@ -55,6 +55,8 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     public FaceProp ArrivingProp => FaceProp.Spark;
 
+    public bool QuietArrival => true;
+
     public bool IsActive => Live is not null;
     private CcStatus? Live => _store.SessionLive(_slot);
     public Color? Ring => Live is { } st ? RingColor(st) : null;
@@ -84,6 +86,7 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     public string? RevealHint => Halo.Shell.AppFront.PathLeaf(Live?.Cwd);
     public long RevealHwnd => Live?.HostHwnd ?? 0;
+    public string? RevealTitle => Live?.HostTitle;
 
     public string? RevealProcess => Live is { FromDesktopApp: true } ? "claude" : null;
 
@@ -301,6 +304,29 @@ internal sealed class ClaudeCodeWidget : IWidget
     internal static int ContextBand(float frac)
         => frac >= ContextWarnAt ? 2 : frac >= ContextWarnAt - 0.15f ? 1 : 0;
 
+    internal static string? ModelLabel(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        string s = id.Trim().ToLowerInvariant();
+        if (s.StartsWith("claude-", StringComparison.Ordinal)) s = s["claude-".Length..];
+
+        string? family = null;
+        var nums = new System.Collections.Generic.List<string>();
+        foreach (var part in s.Split('-', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part is "opus" or "sonnet" or "haiku" or "fable") { family = part; continue; }
+            if (part.Length is > 0 and <= 2 && AllDigits(part)) nums.Add(part);
+        }
+        if (family is null) return s.Length == 0 ? null : s;
+        return nums.Count == 0 ? family : family + " " + string.Join(".", nums);
+    }
+
+    private static bool AllDigits(string s)
+    {
+        foreach (char c in s) if (c is < '0' or > '9') return false;
+        return true;
+    }
+
     internal static Color ContextColour(double frac)
         => frac < 0 ? Blue : ContextBand((float)frac) switch { 2 => Red, 1 => Amber, _ => Blue };
 
@@ -509,9 +535,11 @@ internal sealed class ClaudeCodeWidget : IWidget
         {
             long maxK = sess.ContextMax / 1000, usedK = Math.Min(sess.ContextUsed / 1000, maxK);
             string maxLabel = maxK >= 1000 ? $"{maxK / 1000f:0.#}M" : $"{maxK}K";
+            string sub = Halo.Localization.Strings.Format("agent.contextOf", maxLabel, (ctxFrac * 100).ToString("0"));
+
+            if (ModelLabel(st.Model) is { Length: > 0 } model) sub += "  ·  " + model;
             Key(slot, ctxCol, Halo.Localization.Strings.Get("agent.row.context"), $"{usedK}K",
-                Halo.Localization.Strings.Format("agent.contextOf", maxLabel, (ctxFrac * 100).ToString("0")), ctxCol,
-                $"{ctxFrac * 100:0}%");
+                sub, ctxCol, $"{ctxFrac * 100:0}%");
         }
         else Key(slot, Dim, Halo.Localization.Strings.Get("agent.row.context"), "\u2014", Halo.Localization.Strings.Get("agent.noActiveSession"));
 

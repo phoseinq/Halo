@@ -70,6 +70,8 @@ internal sealed class CodexWidget : IWidget
 
     public FaceProp ArrivingProp => FaceProp.Brackets;
 
+    public bool QuietArrival => true;
+
     public bool IsActive => Current is not null;
     public Color? Ring => Current is { } st ? RingColor(st) : null;
 
@@ -92,6 +94,7 @@ internal sealed class CodexWidget : IWidget
 
     public string? RevealHint => Halo.Shell.AppFront.PathLeaf(Current?.Cwd);
     public long RevealHwnd => Current?.HostHwnd ?? 0;
+    public string? RevealTitle => Current?.HostTitle;
 
     public string? RevealProcess => Current?.Source == CodexSurface.Desktop ? "chatgpt" : null;
 

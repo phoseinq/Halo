@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "A memória está a acabar.",
   "notice.context.title": "Contexto a {0}%",
   "notice.context.body": "As respostas ficam mais vagas daqui — use /compact quando puder.",
+  "notice.question.title": "O Claude tem uma pergunta",
+  "notice.question.more": "{0} (+{1} mais)",
   "notice.battery.low": "baixa",
   "notice.battery.critical": "crítica",
   "notice.battery.title": "Bateria {0} — {1}%",
@@ -602,5 +604,12 @@
   "settings.launcher.enabled.label": "Lançador",
   "settings.launcher.enabled.desc": "Abre uma caixa de pesquisa sob o entalhe com um atalho",
   "settings.launcher.hotkey.label": "Atalho do lançador",
-  "settings.launcher.hotkey.desc": "A combinação que o abre. Outro aplicativo pode já estar a usar"
+  "settings.launcher.hotkey.desc": "A combinação que o abre. Outro aplicativo pode já estar a usar",
+  "history.title": "Recentes",
+  "history.empty": "Nada recente",
+  "history.clear": "Limpar tudo",
+  "history.now": "agora",
+  "history.readit": "ler",
+  "history.less": "menos",
+  "history.more": "mais {0}"
 }

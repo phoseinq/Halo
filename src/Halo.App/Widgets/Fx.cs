@@ -239,6 +239,48 @@ internal static class Fx
         return bmp;
     }
 
+    internal static void Supersampled(Graphics g, RectangleF area, int ss, Action<Graphics> draw)
+    {
+        float dev;
+        using (var m = g.Transform) dev = Math.Max(1f, m.Elements[0]);
+        int pw = Math.Max(1, (int)MathF.Ceiling(area.Width * dev)), ph = Math.Max(1, (int)MathF.Ceiling(area.Height * dev));
+        Bitmap? cur = null;
+        try
+        {
+            cur = new Bitmap(pw * ss, ph * ss, PixelFormat.Format32bppPArgb);
+            using (var bg = Graphics.FromImage(cur))
+            {
+                bg.Clear(Color.Transparent);
+                bg.ScaleTransform(ss * dev, ss * dev);
+                bg.TranslateTransform(-area.X, -area.Y);
+                draw(bg);
+            }
+            for (int k = ss; k > 1; k /= 2)
+            {
+                var next = new Bitmap(Math.Max(1, cur.Width / 2), Math.Max(1, cur.Height / 2), PixelFormat.Format32bppPArgb);
+                using (var hg = Graphics.FromImage(next))
+                {
+                    hg.CompositingMode = CompositingMode.SourceCopy;
+                    hg.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    hg.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    hg.DrawImage(cur, new Rectangle(0, 0, next.Width, next.Height));
+                }
+                cur.Dispose();
+                cur = next;
+            }
+            var keepI = g.InterpolationMode;
+            var keepP = g.PixelOffsetMode;
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            g.DrawImage(cur, new RectangleF(area.X, area.Y, pw / dev, ph / dev));
+            g.InterpolationMode = keepI;
+            g.PixelOffsetMode = keepP;
+        }
+        catch { draw(g); }
+        finally { cur?.Dispose(); }
+    }
+
     internal static float AmbientScale = 1f;
 
     public static void Glow(Graphics g, int w, int h, float fade, float cx, float cy,
@@ -247,11 +289,11 @@ internal static class Fx
         fade *= AmbientScale;
         if (accent == White || fade <= 0.01f) return;
         using var clip = PillClip(w, h);
-        var old = g.Clip;
 
-        g.SetClip(clip, CombineMode.Intersect);
         var oldInterp = g.InterpolationMode;
+        var oldSmooth = g.SmoothingMode;
         g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
 
         using var ia = new ImageAttributes();
         ia.SetColorMatrix(new ColorMatrix
@@ -263,10 +305,20 @@ internal static class Fx
         });
 
         ia.SetWrapMode(WrapMode.Clamp);
-        g.DrawImage(GlowTex, new Rectangle((int)(cx - rx), (int)(cy - ry), (int)(rx * 2), (int)(ry * 2)),
-            0, 0, GlowTex.Width, GlowTex.Height, GraphicsUnit.Pixel, ia);
+        using (var brush = new TextureBrush(GlowTex, new RectangleF(0, 0, GlowTex.Width, GlowTex.Height), ia))
+        {
+            brush.WrapMode = WrapMode.Clamp;
+
+            int dx = (int)(cx - rx), dy = (int)(cy - ry), dw = (int)(rx * 2), dh = (int)(ry * 2);
+            if (dw > 0 && dh > 0)
+            {
+                brush.TranslateTransform(dx, dy);
+                brush.ScaleTransform(dw / (float)GlowTex.Width, dh / (float)GlowTex.Height);
+                g.FillPath(brush, clip);
+            }
+        }
         g.InterpolationMode = oldInterp;
-        g.Clip = old;
+        g.SmoothingMode = oldSmooth;
     }
 
     public static void PillBar(Graphics g, int w, int h, float fade, float frac, Color accent, float strength,
@@ -473,9 +525,10 @@ internal static class Fx
         float x0 = inset, y0 = inset, x1 = w - inset, y1 = h - inset;
         float d = Math.Min(r, Math.Min(x1 - x0, y1 - y0) / 2f) * 2f;
         var p = new GraphicsPath();
-        p.AddLine(x0, y0, x1, y0);
+        p.AddArc(x1 - d, y0, d, d, 270, 90);
         p.AddArc(x1 - d, y1 - d, d, d, 0, 90);
         p.AddArc(x0, y1 - d, d, d, 90, 90);
+        p.AddArc(x0, y0, d, d, 180, 90);
         p.CloseFigure();
         return p;
     }
@@ -536,15 +589,19 @@ internal static class Fx
     {
         if (fade <= 0.01f) return;
         float i = weight / 2f, r = Math.Min(h / 2f, 30f) - i;
-        float l = i, t = 0f, b = h - i, rt = w - i, d = r * 2f;
 
-        if (r <= 0f || b - r <= t || rt - r <= l + r) return;
+        float l = i, t = i, b = h - i, rt = w - i, d = r * 2f;
+
+        if (r <= 0f || b - r <= t + r || rt - r <= l + r) return;
         using var path = new GraphicsPath();
-        path.AddLine(l, t, l, b - r);
-        path.AddArc(l, b - d, d, d, 180f, -90f);
-        path.AddLine(l + r, b, rt - r, b);
-        path.AddArc(rt - d, b - d, d, d, 90f, -90f);
-        path.AddLine(rt, b - r, rt, t);
+        path.AddArc(l, t, d, d, 180f, 90f);
+        path.AddLine(l + r, t, rt - r, t);
+        path.AddArc(rt - d, t, d, d, 270f, 90f);
+        path.AddLine(rt, t + r, rt, b - r);
+        path.AddArc(rt - d, b - d, d, d, 0f, 90f);
+        path.AddLine(rt - r, b, l + r, b);
+        path.AddArc(l, b - d, d, d, 90f, 90f);
+        path.CloseFigure();
 
         using var pen = new Pen(Alpha(lit, fade), weight)
         { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };

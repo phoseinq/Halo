@@ -20,6 +20,8 @@
   "notice.load.ramFallback": "内存快用完了。",
   "notice.context.title": "上下文已用 {0}%",
   "notice.context.body": "接下来回答会变模糊 — 方便时执行 /compact。",
+  "notice.question.title": "Claude 有个问题",
+  "notice.question.more": "{0}（还有 {1} 个）",
   "notice.battery.low": "电量低",
   "notice.battery.critical": "电量告急",
   "notice.battery.title": "电池{0} — {1}%",
@@ -602,5 +604,12 @@
   "settings.launcher.enabled.label": "启动器",
   "settings.launcher.enabled.desc": "用快捷键在刃海下方打开搜索框",
   "settings.launcher.hotkey.label": "启动器快捷键",
-  "settings.launcher.hotkey.desc": "打开它的组合键。其他应用可能已占用"
+  "settings.launcher.hotkey.desc": "打开它的组合键。其他应用可能已占用",
+  "history.title": "最近",
+  "history.empty": "暂无内容",
+  "history.clear": "全部清除",
+  "history.now": "刚刚",
+  "history.readit": "阅读",
+  "history.less": "收起",
+  "history.more": "还有{0}条"
 }

@@ -43,10 +43,10 @@ internal static class Glass
             var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
             DwmExtendFrameIntoClientArea(handle, ref margins);
 
-            int backdrop = Acrylic;
+            int backdrop = Mica;
             if (DwmSetWindowAttribute(handle, Backdrop, ref backdrop, sizeof(int)) != 0)
             {
-                backdrop = Mica;
+                backdrop = Acrylic;
                 DwmSetWindowAttribute(handle, Backdrop, ref backdrop, sizeof(int));
             }
         }

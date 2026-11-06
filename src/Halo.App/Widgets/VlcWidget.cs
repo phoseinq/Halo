@@ -131,6 +131,8 @@ internal sealed class VlcWidget : IWidget
 
     public bool IsActive => VlcMonitor.Name != null && !SmtcHasVlc();
 
+    public bool QuietArrival => true;
+
     public int Version => VlcMonitor.Version + (VlcHttp.Online
         ? (int)(VlcHttp.Rate * 100) + (VlcHttp.Playing ? 1 : 0) + (VlcHttp.SubsOn ? 2 : 0) : 0);
     public Color? Ring => IsActive ? Orange : null;

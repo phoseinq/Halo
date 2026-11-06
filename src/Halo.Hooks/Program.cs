@@ -229,7 +229,11 @@ internal static class Program
             if (agentPid != 0)
             {
                 status["pid"] = (int)agentPid;
+
                 if (background) status["background"] = true;
+                else status.Remove("background");
+                if (IsDesktopEntrypoint(Environment.GetEnvironmentVariable("CLAUDE_CODE_ENTRYPOINT")))
+                    status["source"] = "desktop";
             }
 
             if (cmd == "session-end" && !codex && path != ClaudeStatusPath)
@@ -408,9 +412,19 @@ internal static class Program
 
         background = pid != 0 && map.TryGetValue(pid, out var e)
             && map.TryGetValue(e.parent, out var par)
-            && (par.name.ToLowerInvariant().Contains("claude") || par.name.ToLowerInvariant() == "node.exe");
+            && IsDaemonHosted(par.name, Environment.GetEnvironmentVariable("CLAUDE_CODE_ENTRYPOINT"));
         return pid == 0 ? ClaudeStatusPath : Path.Combine(ClaudeDir, $"status-{pid}.json");
     }
+
+    internal static bool IsDaemonHosted(string parentName, string? entrypoint)
+    {
+        if (IsDesktopEntrypoint(entrypoint)) return false;
+        var n = parentName.ToLowerInvariant();
+        return n.Contains("claude") || n == "node.exe";
+    }
+
+    internal static bool IsDesktopEntrypoint(string? entrypoint) =>
+        string.Equals(entrypoint, "claude-desktop", StringComparison.OrdinalIgnoreCase);
 
     private static JsonObject LoadOrNew(string path)
     {
@@ -528,6 +542,9 @@ internal static class Program
                     System.Globalization.DateTimeStyles.RoundtripKind, out started);
 
             var read = TranscriptScan.Read(lines, started);
+
+            if (!string.IsNullOrEmpty(read.Model)) status["model"] = read.Model;
+
             if (read.Latest <= 0)
             {
 
@@ -573,7 +590,13 @@ internal static class Program
             status["hostPid"] = (int)host;
 
             long hwnd = ForegroundWindowOf(host);
-            if (hwnd != 0) status["hostHwnd"] = hwnd;
+            if (hwnd != 0)
+            {
+                status["hostHwnd"] = hwnd;
+
+                string title = WindowTitle((IntPtr)hwnd);
+                if (title.Length > 0) status["hostTitle"] = title;
+            }
         }
     }
 
@@ -674,8 +697,22 @@ internal static class Program
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")] private static extern int GetWindowTextLengthW(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetWindowTextW")]
+    private static extern int GetWindowTextW(IntPtr hwnd, System.Text.StringBuilder buf, int max);
     [DllImport("kernel32.dll")] private static extern IntPtr GetConsoleWindow();
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+
+    private static string WindowTitle(IntPtr hwnd)
+    {
+        try
+        {
+            int n = GetWindowTextLengthW(hwnd);
+            if (n <= 0) return "";
+            var sb = new System.Text.StringBuilder(Math.Min(n, 300) + 1);
+            return GetWindowTextW(hwnd, sb, sb.Capacity) > 0 ? sb.ToString().Trim() : "";
+        }
+        catch { return ""; }
+    }
 
     private static long ForegroundWindowOf(uint pid)
     {

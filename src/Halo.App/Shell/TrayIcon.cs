@@ -27,8 +27,9 @@ internal sealed class TrayIcon : IDisposable
             lpszClassName = "HaloTrayWindow",
         };
         Win32.RegisterClassEx(ref wc);
-        _hwnd = Win32.CreateWindowEx(0, "HaloTrayWindow", "Halo", 0, 0, 0, 0, 0,
-            Win32.HWND_MESSAGE, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+
+        _hwnd = Win32.CreateWindowEx(Win32.WS_EX_TOOLWINDOW, "HaloTrayWindow", "Halo", Win32.WS_POPUP, 0, 0, 0, 0,
+            IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
 
         _taskbarCreated = Win32.RegisterWindowMessage("TaskbarCreated");
         Add();

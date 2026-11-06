@@ -40,23 +40,27 @@ public class ToolTargetTests
     // the PROGRAM, not the command line: the verb is the news and the flags are noise the pill has no room
     // for. Paths, quoting and env prefixes all have to fall away for that to be true.
     [Theory]
-    [InlineData("git status", "git")]
-    [InlineData("dotnet build Halo.sln -c Release", "dotnet")]
+    [InlineData("git status", "git status")]
+    [InlineData("dotnet build Halo.sln -c Release", "dotnet build")]
     [InlineData("\"C:\\Program Files\\nodejs\\npm.cmd\" install", "npm.cmd")]
     [InlineData("/usr/bin/python3 -m pytest", "python3")]
     [InlineData("HALO_X=1 pwsh -File build.ps1", "pwsh")]
-    [InlineData("cargo.exe test", "cargo")]
+    [InlineData("cargo.exe test", "cargo test")]
     public void AShellCommandNamesItsProgram(string command, string expected)
         => Assert.Equal(expected, Target("Bash", $$"""{"command":{{JsonValue.Create(command)!.ToJsonString()}}}"""));
 
-    // a chain is more than one program, so it honestly names none of them - the voice is a better answer
-    // than picking the first of four
+    // a chain names the first segment doing real work; cd and friends are only the setup in front of it
     [Theory]
-    [InlineData("git add -A && git commit -m x")]
-    [InlineData("cat file | grep foo")]
-    [InlineData("build; test")]
-    public void AChainedCommandNamesNothing(string command)
-        => Assert.Null(Target("Bash", $$"""{"command":{{JsonValue.Create(command)!.ToJsonString()}}}"""));
+    [InlineData("git add -A && git commit -m x", "git add")]
+    [InlineData("cat file | grep foo", "cat")]
+    [InlineData("cd \"C:/repo\"; dotnet build Halo.sln | tail -3", "dotnet build")]
+    [InlineData("Set-Location x\npwsh -File b.ps1", "pwsh")]
+    public void AChainedCommandNamesItsWorkingProgram(string command, string expected)
+        => Assert.Equal(expected, Target("Bash", $$"""{"command":{{JsonValue.Create(command)!.ToJsonString()}}}"""));
+
+    [Fact]
+    public void AChainOfOnlySetupNamesNothing()
+        => Assert.Null(Target("Bash", """{"command":"cd x && echo hi"}"""));
 
     [Fact]
     public void AFetchNamesTheHostAndASearchItsQuery()
@@ -82,27 +86,24 @@ public class ToolTargetTests
     {
         var calm = new MoodContext(Hour: 14, Target: "Fx.cs");
         Assert.Equal("writing Fx.cs…", Moods.Line("writing", calm));
-        Assert.Equal("running git…", Moods.Line("running", new MoodContext(Hour: 14, Target: "git")));
+        Assert.Equal("using git…", Moods.Line("running", new MoodContext(Hour: 14, Target: "git")));
     }
 
-    // ...and the situation beats the fact, because a session about to run out of room is bigger news than
-    // which file is open
+    // ...and now beats the situation too: the bands are moods, the context has its own ring
     [Fact]
-    public void ASituationBeatsTheFact()
+    public void TheFactBeatsTheSituation()
     {
-        var tight = new MoodContext(ContextFrac: 0.97f, Hour: 14, Target: "Fx.cs");
-        var line = Moods.Line("writing", tight);
-        Assert.DoesNotContain("Fx.cs", line);
-        Assert.Contains(line, Moods.Set("writing" + "@tight"));
+        var tight = new MoodContext(ContextFrac: 0.97f, Running: TimeSpan.FromMinutes(5), Hour: 14, Target: "Fx.cs");
+        Assert.Equal("writing Fx.cs…", Moods.Line("writing", tight));
     }
 
     [Fact]
-    public void AFactTooLongForThePillGivesWayToTheVoice()
+    public void AFactTooLongForThePillIsCutNotDropped()
     {
-        var ctx = new MoodContext(Hour: 14, Target: "SomeVeryLongFileNameIndeed.cs");
-        var line = Moods.Line("writing", ctx);
+        var line = Moods.Line("writing", new MoodContext(Hour: 14, Target: "SomeVeryLongFileNameIndeed.cs"));
         Assert.True(line.Length <= Moods.MaxWidth);
-        Assert.Contains(line, Moods.Set("writing"));
+        Assert.StartsWith("writing SomeVery", line);
+        Assert.EndsWith("…", line);
     }
 
     // thinking is not doing anything TO something, so it has no verb and never takes a fact

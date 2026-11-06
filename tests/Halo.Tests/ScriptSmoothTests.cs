@@ -59,4 +59,16 @@ public class ScriptSmoothTests
         float[] one = [0, 0, 1, 2, 3, 4, 5, 6];
         Assert.Equal(one, Script.SmoothJoints(one));
     }
+
+    // the joins between letters: one cubic from where a letter lifts to where the next goes down, and into an
+    // ascender it climbs on the RIGHT, never back across the letter it leaves
+    [Fact]
+    public void A_join_runs_from_exit_to_entry_and_loops_right_into_an_ascender()
+    {
+        var j = Halo.Widgets.Script.Join(new System.Drawing.PointF(27, -6), new System.Drawing.PointF(41, -78));
+        Assert.Equal(8, j.Length);
+        Assert.Equal((27f, -6f), (j[0], j[1]));
+        Assert.Equal((41f, -78f), (j[6], j[7]));
+        Assert.True(j[2] > 27f && j[4] > 41f);
+    }
 }

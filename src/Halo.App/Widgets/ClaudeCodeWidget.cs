@@ -12,6 +12,7 @@ namespace Halo.Widgets;
 internal sealed class ClaudeCodeWidget : IWidget
 {
     private EasedBar _usageFrac;
+    private EasedBar _ctxFrac;
     private static readonly Color Blue = Color.FromArgb(91, 157, 255);
     private static readonly Color Green = Color.FromArgb(62, 207, 92);
     private static readonly Color Amber = Color.FromArgb(255, 176, 32);
@@ -62,8 +63,12 @@ internal sealed class ClaudeCodeWidget : IWidget
     public Color? Ring => Live is { } st ? RingColor(st) : null;
 
     public float RingProgress
-        => Live is null || (Limits.FiveHour < 0 && Limits.Week < 0) ? -1f : UsageFrac();
-    public int Version => _store.Version + NetMon.Version + CompactProgress.Version;
+        => Limits.FiveHour >= 0 ? Math.Clamp(Limits.FiveHour, 0f, 1f)
+         : Limits.Week >= 0 ? Math.Clamp(Limits.Week, 0f, 1f) : -1f;
+    public int Version => _store.Version + NetMon.Version + CompactProgress.Version + LiveContext.Version;
+    private DoneLinger _linger;
+    private readonly TurnRecap _recap = new();
+    public bool HoldsPill => _linger.Holds(Live is { } ls && Shown(ls) == "working", Environment.TickCount64);
     public AgentNotice AgentNotice => Live is { } status
         ? new AgentNotice(Shown(status), ParseTime(status.CompactedAt), status.Message)
         : AgentNotice.None;
@@ -133,10 +138,13 @@ internal sealed class ClaudeCodeWidget : IWidget
     public void DrawCollapsed(Graphics g, int w, int h, float fade)
     {
         var st = Live;
+        _recap.Observe(Shown(st), st?.StartedAt, DateTimeOffset.UtcNow, Environment.TickCount64, _cancelledTurnKey);
+        var recap = _recap.Line(Environment.TickCount64);
         float sz = (h - 16f) * 0.82f, x = 13, y = (h - sz) / 2f;
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        if (!Compacting(st)) Fx.PillBar(g, w, h, fade, _usageFrac.Step(UsageFrac()), Accent, 0.3f);
+        float ctxNow = ContextState() is { id: not null, frac: >= 0f } cs ? cs.frac : 0f;
+        if (!Compacting(st)) Fx.PillBar(g, w, h, fade, _ctxFrac.Step(ctxNow), Accent, 0.3f);
         Fx.Glow(g, w, h, fade, x + sz / 2f, h / 2f, w * 0.7f, h * 2.2f, 26, Accent);
         if (Compacting(st))
         {
@@ -146,8 +154,20 @@ internal sealed class ClaudeCodeWidget : IWidget
             g.FillPath(pb, pp);
         }
 
-        using (var pen = new Pen(Mul(RingColor(st), fade * 0.9f), 1.9f))
-            g.DrawEllipse(pen, x - 2.5f, y - 2.5f, sz + 5f, sz + 5f);
+        var ringRect = new RectangleF(x - 2.5f, y - 2.5f, sz + 5f, sz + 5f);
+        float budget = RingProgress >= 0f ? _usageFrac.Step(RingProgress) : -1f;
+        if (budget < 0f)
+            using (var pen = new Pen(Mul(RingColor(st), fade * 0.9f), 1.9f))
+                g.DrawEllipse(pen, ringRect);
+        else
+        {
+            using (var track = new Pen(Mul(RingColor(st), fade * 0.25f), 1.9f))
+                g.DrawEllipse(track, ringRect);
+            if (budget > 0.004f)
+                using (var arc = new Pen(Mul(RingColor(st), fade * 0.95f), 2.3f)
+                { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawArc(arc, ringRect, -90f, 360f * Math.Min(budget, 1f));
+        }
         if (ClaudeIcon != null) DrawIcon(g, ClaudeIcon, x, y, sz, fade, sz / 2f);
         else
             using (var db = new SolidBrush(Mul(RingColor(st), fade)))
@@ -158,6 +178,9 @@ internal sealed class ClaudeCodeWidget : IWidget
             el0 = el0.Length > 0 ? done + " · " + Coarse(el0) : done;
 
         if (Retrying(st) && !LimitHit && ApiRetry.Caption() is { Length: > 0 } wait) el0 = wait;
+
+        bool recapNow = recap is not null && el0.Length == 0 && !LimitHit && Shown(st) == "idle" && Trouble(st) is null;
+        if (recapNow) el0 = recap!.Value.Took;
         float textX0 = x + sz + 11;
         if (st?.State == "waiting_input") textX0 += 16;
         using var elFont = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
@@ -169,11 +192,18 @@ internal sealed class ClaudeCodeWidget : IWidget
         var mood = Mood(st) with { MaxChars = fit >= 8 ? fit : 0 };
         string verb = OutageText() ?? (LimitHit ? "outta juice :(" : Retrying(st) ? Moods.Line("retrying", mood) : Shown(st) switch
         {
-            "working" => ToolVerb(Glow(st).Tool, mood),
+            "working" => Glow(st).Tool is { Length: > 0 } tool ? ToolVerb(tool, mood)
+                : TurnRecap.Thinking(),
             "compacting" when Compacting(st) => Moods.Line("compacting", mood),
-            "waiting_input" => "your move ;)",
-            _ => IdleMood(st, mood),
+            "waiting_input" => TurnRecap.AskLine(st?.Message) ?? "your move ;)",
+            _ when recapNow => recap!.Value.Verb,
+            _ => Trouble(st) ?? TurnRecap.Idle(
+                    ContextState() is { id: not null, frac: >= 0f } ic ? ic.frac : -1f,
+                    Limits.FiveHour >= 0 ? Limits.FiveHour : Limits.Week,
+                    Limits.FiveHour >= 0 ? "5h" : "week", mood.MaxChars)
+                ?? IdleMood(st, mood),
         });
+        verb = PlainWords.NoDots(verb);
         string el = el0;
         if (verb != _shownKey) { _shownKey = verb; _appear = 0f; }
         else if (_appear < 1f) _appear = Math.Min(1f, _appear + 0.1f);
@@ -202,7 +232,7 @@ internal sealed class ClaudeCodeWidget : IWidget
             LineAlignment = StringAlignment.Center,
             FormatFlags = StringFormatFlags.NoWrap,
 
-            Trimming = StringTrimming.EllipsisCharacter,
+            Trimming = StringTrimming.Word,
         };
 
         float originX = textX - 16f * (1f - e);
@@ -333,10 +363,21 @@ internal sealed class ClaudeCodeWidget : IWidget
     internal static string? ContextKey(ClaudeCode.CcStatus? st)
         => st is null ? null : st.Pid + ":" + (st.SessionId ?? "");
 
+    internal string? ContextSession() => Live?.SessionId is { Length: > 0 } sid ? sid : null;
+
     internal (string? id, float frac) ContextState()
     {
         var st = Live;
-        if (st?.Session is not { ContextMax: > 0 } ses) return (null, -1f);
+        if (st is null) return (null, -1f);
+
+        var (live, isVoid) = LiveContext.Get(st.TranscriptPath);
+        if (isVoid) return (null, -1f);
+        if (live is { Max: > 0 } r)
+        {
+            long max = st.Session is { ContextMax: > 0 } hs ? Math.Max(hs.ContextMax, r.Max) : r.Max;
+            return (ContextKey(st), (float)Math.Clamp((double)r.Used / max, 0, 1));
+        }
+        if (st.Session is not { ContextMax: > 0 } ses) return (null, -1f);
         return (ContextKey(st), (float)Math.Clamp((double)ses.ContextUsed / ses.ContextMax, 0, 1));
     }
 

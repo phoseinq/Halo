@@ -92,7 +92,7 @@ internal sealed class NotifSource
     private readonly object _lock = new();
     private readonly Queue<NotifItem> _pending = new();
 
-    private readonly List<NotifItem> _history = HistoryStore.Load();
+    private readonly List<NotifItem> _history = HistoryStore.Load().FindAll(Keeps);
     private const int HistoryMax = HistoryStore.Max;
 
     private System.Threading.Timer? _saveTimer;
@@ -183,8 +183,17 @@ internal sealed class NotifSource
         lock (_lock) { _pending.Enqueue(item); Remember(item); _version++; }
     }
 
+    internal static bool Keeps(NotifItem n) => n.Kind switch
+    {
+        "" => true,
+        "api" => true,
+        var k when k.StartsWith("reminder-", StringComparison.Ordinal) && k != "reminder-help" => true,
+        _ => false,
+    };
+
     private void Remember(NotifItem item)
     {
+        if (!Keeps(item)) return;
         _history.Add(item);
         if (_history.Count > HistoryMax) _history.RemoveRange(0, _history.Count - HistoryMax);
         ScheduleSave();

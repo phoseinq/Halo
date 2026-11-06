@@ -13,6 +13,8 @@ internal struct MenuFrame
     public bool Show;
     public float Appear;
 
+    public int? Tint;
+
     public float Swallow;
     public string[] RowIcons;
     public Bitmap?[] RowImages;
@@ -564,7 +566,8 @@ internal sealed class LayeredNotch
                 g.DrawArc(hp, w - 2 * radius + m, h - 2 * radius + m, 2 * (radius - m), 2 * (radius - m), 25, 40);
             }
             float ca = menu.Swallow;
-            if (menu.Show && ca > 0.01f && !menu.Dropping) DrawMenu(g, menuX, w, tintAlpha, glass, menu, ca);
+            if (menu.Show && ca > 0.01f && !menu.Dropping)
+                DrawMenu(g, menuX, w, menu.Tint ?? tintAlpha, glass, menu, ca);
 
             if (menu.Dropping) DrawDrop(g, menu, w, h);
             if (privacy) DrawPrivacyDots(g, w);

@@ -14,8 +14,6 @@ internal static class HistoryView
     private static readonly Color Dim = Color.FromArgb(196, 255, 255, 255);
     private static readonly Color Faint = Color.FromArgb(182, 255, 255, 255);
 
-    private static readonly Color TitleShade = Color.FromArgb(120, 0, 0, 0);
-
     private static readonly Color CardTop = Color.FromArgb(34, 255, 255, 255);
     private static readonly Color CardBottom = Color.FromArgb(14, 255, 255, 255);
     private static readonly Color CardHotTop = Color.FromArgb(58, 255, 255, 255);
@@ -69,6 +67,7 @@ internal static class HistoryView
             string words = Localization.Strings.Get("history.clear");
             float tw = g.MeasureString(words, head).Width;
             var bub = new RectangleF(slot.Right - tw - 24f, slot.Y, tw + 24f, slot.Height);
+            var giveClear = Give(g, bub, Button.ClearAll);
             using (var bb = new SolidBrush(Mul(Color.FromArgb(overClear ? 40 : 22, 255, 255, 255), fade)))
             using (var bp = Fx.Rounded(bub, bub.Height / 2f))
             {
@@ -80,6 +79,21 @@ internal static class HistoryView
             using var cf = new StringFormat
             { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString(words, head, cb, bub, cf);
+            if (giveClear is { } gc) g.Restore(gc);
+        }
+
+        {
+            var mb = HistoryLayout.MuteAll();
+            var giveMute = Give(g, mb, Button.MuteAll);
+            using (var bb = new SolidBrush(Mul(Color.FromArgb(MuteAllHover ? 40 : MuteAll ? 34 : 22, 255, 255, 255), fade)))
+            using (var bp = Fx.Rounded(mb, mb.Height / 2f))
+            {
+                g.FillPath(bb, bp);
+                using var bpen = new Pen(Mul(Color.FromArgb(MuteAllHover ? 70 : 40, 255, 255, 255), fade), 1f);
+                g.DrawPath(bpen, bp);
+            }
+            DrawBell(g, mb, MuteAll ? BellOff : Bell, Mul(MuteAll ? Color.FromArgb(255, 255, 160, 140) : (MuteAllHover ? White : Dim), fade));
+            if (giveMute is { } gm) g.Restore(gm);
         }
 
         if (rows.Length == 0 && leaving is null)
@@ -143,6 +157,19 @@ internal static class HistoryView
                     appF, titleF, gistF);
         g.Restore(keep);
         g.TextContrast = prevContrast;
+        DrawEdges(g, w, h, fade);
+    }
+
+    private static void DrawEdges(Graphics g, int w, int h, float fade)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        if (EdgeRight > 0.01f)
+            using (var p = new Pen(Color.FromArgb((int)(170 * EdgeRight * fade), 255, 255, 255), 3f)
+            { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                float cy = HistoryLayout.BodyTop + (h - HistoryLayout.BodyTop) / 2f, len = Math.Min(44f, h * 0.2f);
+                g.DrawLine(p, w - 5f, cy - len / 2f, w - 5f, cy + len / 2f);
+            }
     }
 
     private static void DrawDeck(Graphics g, int count, float scroll, HistoryShift shift, float fade,
@@ -182,12 +209,23 @@ internal static class HistoryView
             {
                 if (!Chrome.TryGetValue(key, out chrome!))
                 {
+
+                    if (Chrome.Count >= 6)
+                    {
+                        foreach (var old in Chrome.Values) old.Dispose();
+                        Chrome.Clear();
+                    }
                     chrome = new Bitmap(cw + ShadowPad * 2, ch + ShadowPad * 2,
                                         System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
                     using (var cg = Graphics.FromImage(chrome))
                     {
                         cg.SmoothingMode = SmoothingMode.AntiAlias;
-                                    DrawCardGlass(cg, new RectangleF(ShadowPad, ShadowPad, cw, ch), hot ? 1f : 0f, 1f, 0f);
+
+                        Fx.Supersampled(cg, new RectangleF(0, 0, chrome.Width, chrome.Height), 4, sg =>
+                        {
+                            sg.SmoothingMode = SmoothingMode.AntiAlias;
+                            DrawCardGlass(sg, new RectangleF(ShadowPad, ShadowPad, cw, ch), hot ? 1f : 0f, 1f, 0f);
+                        });
                     }
                     if (Chrome.Count > 12) { foreach (var v in Chrome.Values) v.Dispose(); Chrome.Clear(); }
                     Chrome[key] = chrome;
@@ -201,25 +239,6 @@ internal static class HistoryView
                 0, 0, chrome.Width, chrome.Height, GraphicsUnit.Pixel, ia);
         }
 
-        if (accent.R != 255 || accent.G != 255 || accent.B != 255)
-        {
-            using var cp = Fx.Rounded(card, HistoryLayout.CardR);
-
-            var clear = Color.FromArgb(0, accent);
-            using var wash = new LinearGradientBrush(RectangleF.Inflate(card, 1f, 1f), clear, clear,
-                                                     LinearGradientMode.Horizontal);
-            wash.InterpolationColors = new ColorBlend
-            {
-                Colors = new[]
-                {
-                    Mul(Color.FromArgb((int)(22 + 10 * Math.Clamp(hotT, 0f, 1f)), accent), fade),
-                    Mul(Color.FromArgb((int)(12 + 6 * Math.Clamp(hotT, 0f, 1f)), accent), fade),
-                    clear, clear,
-                },
-                Positions = new[] { 0f, 0.28f, 0.62f, 1f },
-            };
-            g.FillPath(wash, cp);
-        }
     }
 
     private static void DrawCardGlass(Graphics g, RectangleF card, float hotT, float fade, float depth)
@@ -249,12 +268,13 @@ internal static class HistoryView
 
         const float d = HistoryLayout.IconD;
 
-        float ix = card.X + HistoryLayout.IconPad, iy = card.Y + (HistoryLayout.CardH - d) / 2f;
+        float ix = MathF.Round(card.X + HistoryLayout.IconPad), iy = MathF.Round(card.Y + (HistoryLayout.CardH - d) / 2f);
 
         if (n.Icon != null)
         {
             if (bloom)
-                Fx.Glow(g, w, h, fade, ix + d / 2f, iy + d / 2f, d * 1.3f, d * 1.3f, 22f, Fx.AccentOf(n.Icon));
+
+                Fx.Glow(g, w, h, fade, ix + d / 2f, iy + d / 2f, d * 1.3f, d * 1.3f, 9f, Fx.AccentOf(n.Icon));
             NotifBanner.DrawAppIcon(g, n.Icon, ix, iy, d, fade);
         }
         else
@@ -284,8 +304,7 @@ internal static class HistoryView
 
         using (var fmt = NotifBanner.LineFmt(n.Title))
         {
-            using (var sh = new SolidBrush(Mul(TitleShade, fade)))
-                Fx.Text(g, n.Title, titleF, sh, new RectangleF(tx, card.Y + 29f, tr - tx, 22f), fmt);
+
             using var b = new SolidBrush(Mul(White, fade));
             Fx.Text(g, n.Title, titleF, b, new RectangleF(tx, card.Y + 28f, tr - tx, 22f), fmt);
         }
@@ -304,7 +323,18 @@ internal static class HistoryView
             else
             {
                 string gist = HistoryText.Gist(n.Body);
-                if (gist.Length > 0)
+                int lines = HistoryLayout.GistLines;
+                if (gist.Length > 0 && lines > 1)
+                {
+
+                    string full = HistoryText.Full(n.Body);
+                    using var wf = new StringFormat(StringFormat.GenericTypographic)
+                    { Trimming = StringTrimming.EllipsisWord };
+                    if (Fx.IsRtl(full)) wf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
+                    Fx.Text(g, full, gistF, b, new RectangleF(tx, card.Y + HistoryLayout.GistY,
+                            Math.Max(10f, tr - tx), lines * HistoryLayout.GistLineH + 1f), wf);
+                }
+                else if (gist.Length > 0)
                 {
                     float right = tr;
                     using var gf = NotifBanner.LineFmt(gist);
@@ -314,16 +344,69 @@ internal static class HistoryView
             }
         }
 
+        bool appMuted = AppMuted?.Invoke(n) ?? false;
+        if (hotT > 0.01f || appMuted)
+        {
+            float a = Math.Max(hotT, appMuted ? 0.55f : 0f);
+            var mr = HistoryLayout.MuteApp(top);
+            var giveApp = Give(g, mr, Button.MuteApp, n);
+            DrawBell(g, mr, appMuted ? BellOff : Bell,
+                     Mul(appMuted ? Color.FromArgb(255, 255, 160, 140) : White, fade * 0.8f * a));
+            if (giveApp is { } ga) g.Restore(ga);
+        }
         if (hotT > 0.01f)
         {
             var x = HistoryLayout.Dismiss(top);
-            using var pen = new Pen(Mul(White, fade * 0.7f * hotT), 1.6f)
+            var giveX = Give(g, x, Button.Dismiss, n);
+
+            bool onX = HoverButton == Button.Dismiss;
+            if (onX)
+                using (var disc = new SolidBrush(Mul(Color.FromArgb(46, 255, 120, 110), fade * hotT)))
+                    g.FillEllipse(disc, x.X + 4f, x.Y + 4f, x.Width - 8f, x.Height - 8f);
+            using var pen = new Pen(Mul(onX ? Color.FromArgb(255, 255, 150, 140) : White,
+                                        fade * (onX ? 0.95f : 0.7f) * hotT), 1.6f)
             { StartCap = LineCap.Round, EndCap = LineCap.Round };
             const float m = 9f;
             g.DrawLine(pen, x.Left + m, x.Top + m, x.Right - m, x.Bottom - m);
             g.DrawLine(pen, x.Right - m, x.Top + m, x.Left + m, x.Bottom - m);
+            if (giveX is { } gx) g.Restore(gx);
         }
         g.Restore(keep);
+    }
+
+    internal static bool MuteAll, MuteAllHover;
+
+    internal static Button HoverButton;
+
+    internal static float EdgeRight;
+
+    internal enum Button { None, MuteAll, ClearAll, MuteApp, Dismiss }
+
+    internal static (Button Which, NotifItem? Item, float T) Pressed;
+    private const float PressDepth = 0.12f;
+
+        private static GraphicsState? Give(Graphics g, RectangleF r, Button which, NotifItem? item = null)
+    {
+        if (Pressed.Which != which || (item is not null && !ReferenceEquals(Pressed.Item, item))
+            || Pressed.T <= 0.001f) return null;
+        float t = Pressed.T * Pressed.T * (3f - 2f * Pressed.T);
+        float k = 1f - PressDepth * t;
+        var st = g.Save();
+        float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
+        g.TranslateTransform(cx, cy);
+        g.ScaleTransform(k, k);
+        g.TranslateTransform(-cx, -cy);
+        return st;
+    }
+    internal static Func<NotifItem, bool>? AppMuted;
+
+    private const string Bell = "\uEA8F", BellOff = "\uE7ED";
+
+    private static void DrawBell(Graphics g, RectangleF r, string glyph, Color ink)
+    {
+        using var f = new Font("Segoe Fluent Icons", 14f, GraphicsUnit.Pixel);
+        using var b = new SolidBrush(ink);
+        Fx.GlyphCentred(g, r, glyph, f, b);
     }
 
     private static Color Mul(Color c, float a) => Color.FromArgb((int)(c.A * Math.Clamp(a, 0f, 1f)), c);

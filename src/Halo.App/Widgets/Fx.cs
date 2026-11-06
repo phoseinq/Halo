@@ -314,7 +314,11 @@ internal static class Fx
             {
                 brush.TranslateTransform(dx, dy);
                 brush.ScaleTransform(dw / (float)GlowTex.Width, dh / (float)GlowTex.Height);
+
+                var keep = g.Save();
+                g.SetClip(new RectangleF(dx, dy, dw, dh), CombineMode.Intersect);
                 g.FillPath(brush, clip);
+                g.Restore(keep);
             }
         }
         g.InterpolationMode = oldInterp;

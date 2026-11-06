@@ -13,7 +13,7 @@ internal enum CodexCancelRoute { None, Cli, Desktop }
 
 internal sealed class CodexWidget : IWidget
 {
-    private EasedBar _usageFrac;
+    private EasedBar _usageFrac, _ctxFrac;
     private static readonly Color Blue = Color.FromArgb(91, 157, 255);
     private static readonly Color Green = Color.FromArgb(62, 207, 92);
     private static readonly Color Amber = Color.FromArgb(255, 176, 32);
@@ -79,6 +79,9 @@ internal sealed class CodexWidget : IWidget
         => Current is null || (CodexLimits.PrimaryFrac < 0 && CodexLimits.SecondaryFrac < 0) ? -1f : UsageFrac();
     public int Version => _store.Version + CodexNetMon.Version + CodexLimits.Version;
     public bool IsDesktop => _surface == CodexSurface.Desktop;
+    private DoneLinger _linger;
+    private readonly TurnRecap _recap = new();
+    public bool HoldsPill => _linger.Holds(Current is { } ls && Shown(ls) == "working", Environment.TickCount64);
     public AgentNotice AgentNotice => Current is { } status
         ? new AgentNotice(status.State, status.CompactedAt, status.Message)
         : AgentNotice.None;
@@ -162,10 +165,15 @@ internal sealed class CodexWidget : IWidget
     {
         var st = Current;
         _observeLimits(st);
+
+        _recap.Observe(Shown(st), st?.StartedAt?.ToString("o"), DateTimeOffset.UtcNow, Environment.TickCount64,
+            _cancelledTurnKey?.ToString("o"));
+        var recap = _recap.Line(Environment.TickCount64);
         float sz = (h - 16f) * 0.82f, x = 13, y = (h - sz) / 2f;
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        if (!Compacting(st)) Fx.PillBar(g, w, h, fade, _usageFrac.Step(UsageFrac()), Accent, 0.3f);
+        float ctxNow = st is not null && st.ContextMax > 0 ? (float)ContextFrac(st) : 0f;
+        if (!Compacting(st)) Fx.PillBar(g, w, h, fade, _ctxFrac.Step(ctxNow), Accent, 0.3f);
         Fx.Glow(g, w, h, fade, x + sz / 2f, h / 2f, w * 0.7f, h * 2.2f, 26, Accent);
         if (Compacting(st))
         {
@@ -175,14 +183,29 @@ internal sealed class CodexWidget : IWidget
             g.FillPath(pb, pp);
         }
 
-        using (var pen = new Pen(Mul(RingColor(st), fade * 0.9f), 1.9f))
-            g.DrawEllipse(pen, x - 2.5f, y - 2.5f, sz + 5f, sz + 5f);
+        var ringRect = new RectangleF(x - 2.5f, y - 2.5f, sz + 5f, sz + 5f);
+        float budget = RingProgress >= 0f ? _usageFrac.Step(RingProgress) : -1f;
+        if (budget < 0f)
+            using (var pen = new Pen(Mul(RingColor(st), fade * 0.9f), 1.9f))
+                g.DrawEllipse(pen, ringRect);
+        else
+        {
+            using (var track = new Pen(Mul(RingColor(st), fade * 0.25f), 1.9f))
+                g.DrawEllipse(track, ringRect);
+            if (budget > 0.004f)
+                using (var arc = new Pen(Mul(RingColor(st), fade * 0.95f), 2.3f)
+                { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawArc(arc, ringRect, -90f, 360f * Math.Min(budget, 1f));
+        }
         if (OpenAiIcon != null) DrawIcon(g, OpenAiIcon, x, y, sz, fade, sz / 2f);
         else
             using (var db = new SolidBrush(Mul(RingColor(st), fade)))
                 g.FillEllipse(db, x, y, sz, sz);
 
         string el0 = LimitHit ? LimitReset() : Elapsed(st);
+        bool recapNow = recap is not null && el0.Length == 0 && !LimitHit && Shown(st) == "idle"
+            && OutageText() is null;
+        if (recapNow) el0 = recap!.Value.Took;
 
         float textX0 = x + sz + 11;
         if (st?.State == "waiting_input") textX0 += 16;
@@ -195,11 +218,18 @@ internal sealed class CodexWidget : IWidget
         var mood = Mood(st) with { MaxChars = fit >= 8 ? fit : 0 };
         string verb = OutageText() ?? (LimitHit ? "outta juice :(" : Shown(st) switch
         {
-            "working" => ToolVerb(Glow(st), mood),
+            "working" => Glow(st) is { Length: > 0 } tool ? ToolVerb(tool, mood with { Target = _glowTarget })
+                : TurnRecap.Thinking(),
             "compacting" when Compacting(st) => Moods.Line("compacting", mood),
             "waiting_input" => "your move ;)",
+            _ when recapNow => recap!.Value.Verb,
+
+            _ when !CodexNetMon.NetDown && !CodexNetMon.ApiDown && !JustCompacted(st)
+                && TurnRecap.Idle(st is not null && st.ContextMax > 0 ? (float)ContextFrac(st) : -1f,
+                    RingProgress, "limit", mood.MaxChars) is { } facts => facts,
             _ => IdleMood(st, mood),
         });
+        verb = PlainWords.NoDots(verb);
         string el = el0;
         if (verb != _shownKey) { _shownKey = verb; _appear = 0f; }
         else if (_appear < 1f) _appear = Math.Min(1f, _appear + 0.1f);
@@ -227,7 +257,7 @@ internal sealed class CodexWidget : IWidget
             LineAlignment = StringAlignment.Center,
             FormatFlags = StringFormatFlags.NoWrap,
 
-            Trimming = StringTrimming.EllipsisCharacter,
+            Trimming = StringTrimming.Word,
         };
 
         float originX = textX - 16f * (1f - e);
@@ -854,21 +884,24 @@ internal sealed class CodexWidget : IWidget
         st?.StartedAt is { } t ? DateTimeOffset.UtcNow - t : null;
 
     private const int AfterglowMs = 9_000;
-    private string? _glowTool;
+    private string? _glowTool, _glowTarget;
     private DateTimeOffset? _glowTurn;
     private long _glowAt;
 
     private string? Glow(CodexSnapshot? st)
     {
-        if (st?.StartedAt != _glowTurn) { _glowTurn = st?.StartedAt; _glowTool = null; }
+        if (st?.StartedAt != _glowTurn) { _glowTurn = st?.StartedAt; _glowTool = _glowTarget = null; }
         if (st?.CurrentTool is { Length: > 0 } cur)
         {
             _glowTool = cur;
+            _glowTarget = st.ToolTarget;
             _glowAt = Environment.TickCount64;
             return cur;
         }
-        if (Shown(st) != "working") { _glowTool = null; return null; }
-        return Environment.TickCount64 - _glowAt <= AfterglowMs ? _glowTool : null;
+        if (Shown(st) != "working") { _glowTool = _glowTarget = null; return null; }
+        if (Environment.TickCount64 - _glowAt <= AfterglowMs) return _glowTool;
+        _glowTarget = null;
+        return null;
     }
 
     private MoodContext Mood(CodexSnapshot? st) => new(

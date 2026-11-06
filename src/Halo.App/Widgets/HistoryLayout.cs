@@ -18,28 +18,61 @@ internal readonly record struct HistoryShift(int OpenRow, float OpenExtra, int G
 internal static class HistoryLayout
 {
 
-    internal const int W = 510;
+    internal const int BaseW = 510;
+    internal static int W => BaseW + Grow;
 
-    internal const float CardW = 450f, CardH = 76f, CardGap = 8f, CardR = 22f;
+    internal const int MaxGrow = 300, GrowPerLine = 90;
+    internal static int Grow { get; private set; }
+    internal const int Visible = 5;
+
+        internal static int GistLines => 1 + Grow / GrowPerLine;
+
+    internal static void SetSize(int grow, int visible = Visible) => Grow = Math.Clamp(grow, 0, MaxGrow);
+
+    private static readonly string SizeFile = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Halo", "history-size.txt");
+
+    internal static void LoadSize()
+    {
+        try
+        {
+            var parts = System.IO.File.ReadAllText(SizeFile).Split(' ');
+            if (parts.Length == 2 && int.TryParse(parts[0], out var g) && int.TryParse(parts[1], out var v))
+                SetSize(g, v);
+        }
+        catch { }
+    }
+
+    internal static void SaveSize()
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(SizeFile)!);
+            System.IO.File.WriteAllText(SizeFile, Grow + " " + Visible);
+        }
+        catch { }
+    }
+
+    internal const float BaseCardW = 450f, BaseCardH = 76f, CardGap = 6f, CardR = 20f, GistLineH = 18f;
+    internal static float CardW => BaseCardW + Grow;
+    internal static float CardH => BaseCardH + (GistLines - 1) * GistLineH;
     internal static float CardX => (W - CardW) / 2f;
     internal static float RowH => CardH + CardGap;
 
     internal const float PillH = 40f, HeaderH = 10f, PadBottom = 12f;
     internal static float BodyTop => PillH + HeaderH;
 
-    internal const int Visible = 5;
-
     internal const float DeckH = 36f;
 
     internal const float OpenExtra = 96f;
 
-    internal const float IconPad = 14f, IconD = 34f;
+    internal const float IconPad = 14f, IconD = 36f;
     internal static float TextX => CardX + IconPad + IconD + 12f;
 
         internal const float GistY = 50f;
 
     internal static float MaxH => BodyTop + ExpandedRows * RowH + PadBottom;
-    private const int ExpandedRows = 6;
+    private const int ExpandedRows = Visible + 1;
 
         internal static int Fits => (int)((MaxH - BodyTop - PadBottom) / RowH);
 
@@ -90,6 +123,14 @@ internal static class HistoryLayout
         finalTop - (1f - Math.Clamp(p, 0f, 1f)) * RevealRise;
 
     internal static RectangleF ClearAll() => new(CardX + CardW - 130f, (PillH - 26f) / 2f, 130f, 26f);
+
+    internal static RectangleF MuteAll() => new(CardX, (PillH - 26f) / 2f, 34f, 26f);
+
+        internal static RectangleF MuteApp(float rowTop)
+    {
+        var x = Dismiss(rowTop);
+        return new RectangleF(x.X - 30f, x.Y, 26f, 26f);
+    }
 
     internal static float SwipeOut => CardX + CardW;
 

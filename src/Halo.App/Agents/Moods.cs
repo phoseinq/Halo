@@ -484,6 +484,8 @@ internal static class Moods
 
         internal static string Line(string slot, in MoodContext ctx, DateTime now)
     {
+
+        if (Fact(slot, ctx.Target, ctx.MaxChars) is { } fact) return fact;
         var key = slot;
         foreach (var (suffix, when) in Ladder)
         {
@@ -494,7 +496,6 @@ internal static class Moods
             break;
         }
 
-        if (key == slot && Fact(slot, ctx.Target, ctx.MaxChars) is { } f) return f;
         string? stale = null;
         lock (Gate)
         {
@@ -521,6 +522,7 @@ internal static class Moods
             "reading" => "reading ",
             "peeking" => "peeking at ",
             "running" => "running ",
+            "watching" => "watching ",
             "digging" => "digging ",
             "fetching" => "fetching ",
             "searching" => "searching ",
@@ -529,9 +531,16 @@ internal static class Moods
             _ => null,
         };
         if (verb is null) return null;
+
+        if (slot == "running" && PlainWords.ForCommand(target) is { } plainRun) return plainRun + "\u2026";
+        if (slot == "digging") return PlainWords.ForSearch(target) + "\u2026";
+        if (slot == "running") target = target.Split(' ')[0];
         var line = verb + target.Trim() + "…";
         int ceiling = maxChars > 0 ? Math.Min(maxChars, MaxWidth) : MaxWidth;
-        return line.Length <= ceiling ? line : null;
+        if (line.Length <= ceiling) return line;
+
+        int keep = ceiling - verb.Length - 1;
+        return keep >= 6 ? verb + target.Trim()[..keep].TrimEnd() + "…" : null;
     }
 
     internal static string PrettyTool(string? tool)

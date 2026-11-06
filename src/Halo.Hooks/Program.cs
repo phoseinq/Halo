@@ -245,6 +245,8 @@ internal static class Program
 
             string? Field(string name) => input?[name]?.GetValue<string>();
 
+            if (!codex && Field("transcript_path") is { Length: > 0 } tp) status["transcriptPath"] = tp;
+
             if (codex)
             {
                 status["source"] = surface == CodexSurface.Desktop ? "desktop" : "cli";
@@ -496,8 +498,47 @@ internal static class Program
     private static string? Program_(string? command)
     {
         if (string.IsNullOrWhiteSpace(command)) return null;
+        foreach (var part in command.Split(new[] { '|', ';', '&', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            if (Single(part) is { } name && !Setup.Contains(name)) return WithSub(name, part);
+        return null;
+    }
+
+    private static readonly HashSet<string> Toolboxes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "git", "dotnet", "npm", "pnpm", "yarn", "cargo", "pip", "pip3", "gh", "docker", "go", "uv",
+    };
+
+    private static string WithSub(string name, string segment)
+    {
+        if (!Toolboxes.Contains(name)) return name;
+        var words = segment.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.FindIndex(words, w =>
+        {
+            var t = w.Trim('"', '\'');
+            return t.EndsWith(name, StringComparison.OrdinalIgnoreCase)
+                || t.EndsWith(name + ".exe", StringComparison.OrdinalIgnoreCase)
+                || t.EndsWith(name + ".cmd", StringComparison.OrdinalIgnoreCase);
+        });
+        if (at < 0) return name;
+        for (int i = at + 1; i < words.Length; i++)
+        {
+            var w = words[i];
+            if (w is "-C" or "-c") { i++; continue; }
+            if (!w.StartsWith('-') && w.All(c => char.IsLetter(c) || c == '-')) return name + " " + w.ToLowerInvariant();
+        }
+        return name;
+    }
+
+    private static readonly HashSet<string> Setup = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cd", "pushd", "popd", "Set-Location", "sl", "echo", "export", "set", "sleep", "Start-Sleep", "source",
+        "true", "clear", "cls",
+    };
+
+    private static string? Single(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return null;
         var line = command.Trim();
-        if (line.IndexOfAny(new[] { '|', ';', '&' }) >= 0) return null;
 
         if (line[0] is '"' or '\'')
         {

@@ -57,6 +57,7 @@ internal sealed class CcStatus
     public bool Background { get; set; }
 
     public string? Source { get; set; }
+    public string? TranscriptPath { get; set; }
 }
 
 internal sealed class StatusStore
@@ -272,12 +273,13 @@ internal sealed class StatusStore
     internal static bool BackgroundHidden(CcStatus st) =>
         st.Background && st.State is not ("working" or "compacting" or "waiting_input");
 
-    internal static readonly TimeSpan DesktopIdleLinger = TimeSpan.FromMinutes(2);
+    internal static readonly TimeSpan DesktopIdleLinger = TimeSpan.FromMilliseconds(Halo.Widgets.DoneLinger.Ms);
     internal static bool DesktopIdleHidden(CcStatus st, DateTimeOffset now)
     {
         if (st.Source != "desktop" || st.State is "working" or "compacting" or "waiting_input")
             return false;
-        if (string.IsNullOrEmpty(st.StartedAt))
+
+        if (string.IsNullOrEmpty(st.StartedAt) && string.IsNullOrEmpty(st.LastPrompt) && st.Session is null)
             return true;
         if (!DateTimeOffset.TryParse(st.UpdatedAt, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,

@@ -28,6 +28,20 @@ internal static class AgentActivity
     }
 }
 
+internal struct DoneLinger
+{
+    internal const long Ms = 30_000;
+    private bool _was;
+    private long _doneAt;
+
+        internal bool Holds(bool working, long nowMs)
+    {
+        if (working) { _was = true; _doneAt = 0; return true; }
+        if (_was) { _was = false; _doneAt = nowMs; }
+        return _doneAt != 0 && nowMs - _doneAt < Ms;
+    }
+}
+
 internal interface IWidget
 {
     string Icon { get; }
@@ -54,6 +68,8 @@ internal interface IWidget
     float RingProgress => -1f;
 
     AgentNotice AgentNotice => AgentNotice.None;
+
+    bool HoldsPill => false;
 
     long ActivityRank => 0;
 

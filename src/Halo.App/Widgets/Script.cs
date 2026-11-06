@@ -13,6 +13,68 @@ internal static class Script
 
     private const float Space = 17f, Track = 9f;
 
+    internal const float Slant = 0.24f;
+    private const float Top = -80f, Rest = 6f;
+
+    private static readonly HashSet<char> Apart = ['\'', 'H'];
+
+    internal static float[] Join(PointF from, PointF to)
+    {
+        float dx = to.X - from.X;
+
+        if (to.Y < -50f)
+            return [from.X, from.Y, from.X + dx * 0.6f + 6f, from.Y - 14f, to.X + 9f, to.Y + 26f, to.X, to.Y];
+        if (to.Y < from.Y - 6f && dx > 14f)
+        {
+            float lift = MathF.Min(to.Y, from.Y) - 10f;
+            return [from.X, from.Y, from.X + dx * 0.25f, from.Y - 4f, to.X - dx * 0.45f, lift, to.X, to.Y];
+        }
+        return [from.X, from.Y, from.X + dx * 0.45f, from.Y - 2f, to.X - dx * 0.35f, to.Y + 4f, to.X, to.Y];
+    }
+
+    private static PointF First(Glyph g) => g.Strokes[0].PathPoints[0];
+    private static PointF Last(Glyph g)
+    {
+        var pts = g.Strokes[^1].PathPoints;
+        return pts[^1];
+    }
+
+    private static List<(GraphicsPath Path, float Len)> Ink(string text, Dictionary<char, Glyph> map)
+    {
+        var ink = new List<(GraphicsPath, float)>();
+        float x = 0f;
+        char prev = ' ';
+        float prevX = 0f;
+        foreach (char c in text)
+        {
+            if (c == ' ') { x += Space; prev = ' '; continue; }
+            if (!map.TryGetValue(c, out var gl)) continue;
+
+            if (prev != ' ' && !Apart.Contains(prev) && !Apart.Contains(c) && map.TryGetValue(prev, out var pg)
+                && First(gl).X <= 8f && Last(pg).Y > -20f)
+
+            {
+                var a = Last(pg); var b = First(gl);
+                var j = Join(new PointF(a.X + prevX, a.Y), new PointF(b.X + x, b.Y));
+                var jp = new GraphicsPath();
+                jp.AddBezier(j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7]);
+                ink.Add((jp, Measure(jp)));
+            }
+            using var m = new Matrix();
+            m.Translate(x, 0f);
+            for (int k = 0; k < gl.Strokes.Length; k++)
+            {
+                var sp = (GraphicsPath)gl.Strokes[k].Clone();
+                sp.Transform(m);
+                ink.Add((sp, gl.Lengths[k]));
+            }
+            prev = c;
+            prevX = x;
+            x += gl.Advance + Track;
+        }
+        return ink;
+    }
+
     private static readonly Dictionary<char, (float Advance, float[][] Strokes)> Hand = new()
     {
         ['h'] = (34f, [
@@ -191,14 +253,13 @@ internal static class Script
         if (alpha <= 0.004f || written <= 0f || string.IsNullOrEmpty(text)) return;
         var map = Built();
 
+        var strokes = Ink(text, map);
         float total = 0f;
-        foreach (char c in text)
-            if (c != ' ' && map.TryGetValue(c, out var gl)) total += gl.Length;
-        if (total <= 0f) return;
+        foreach (var (_, len) in strokes) total += len;
+        if (total <= 0f) { foreach (var (pth, _) in strokes) pth.Dispose(); return; }
 
-        float unitsW = Width(text);
+        float unitsW = Width(text) + Slant * -Top;
 
-        const float Top = -80f, Rest = 6f;
         float bottom = Rest;
         foreach (char c in text)
             if (map.TryGetValue(c, out var g2)) bottom = MathF.Max(bottom, g2.Depth + 3f);
@@ -210,6 +271,7 @@ internal static class Script
             g.TranslateTransform(box.X + box.Width / 2f, box.Y + box.Height / 2f);
             g.ScaleTransform(scale, scale);
             g.TranslateTransform(-unitsW / 2f, -(Top + bottom) / 2f);
+            using (var shear = new Matrix(1f, 0f, -Slant, 1f, 0f, 0f)) g.MultiplyTransform(shear);
 
             using var pen = new Pen(Color.FromArgb((int)(Math.Clamp(alpha, 0f, 1f) * ink.A), ink), weight)
             {
@@ -219,34 +281,25 @@ internal static class Script
                 DashCap = DashCap.Round,
             };
 
-            float want = total * written, done = 0f, x = 0f;
-            foreach (char c in text)
+            float want = total * written, done = 0f;
+            foreach (var (path, len) in strokes)
             {
-                if (c == ' ') { x += Space; continue; }
-                if (!map.TryGetValue(c, out var gl)) continue;
                 if (done >= want) break;
-
-                var st = g.Save();
-                g.TranslateTransform(x, 0f);
-
-                for (int k = 0; k < gl.Strokes.Length && done < want; k++)
+                float here = Math.Clamp((want - done) / len, 0f, 1f);
+                if (here < 1f)
                 {
-                    float len = gl.Lengths[k];
-                    float here = Math.Clamp((want - done) / len, 0f, 1f);
-                    if (here < 1f)
-                    {
 
-                        pen.DashPattern = [MathF.Max(0.001f, len * here / weight), len * 2f / weight];
-                    }
-                    else pen.DashStyle = DashStyle.Solid;
-                    g.DrawPath(pen, gl.Strokes[k]);
-                    done += len;
+                    pen.DashPattern = [MathF.Max(0.001f, len * here / weight), len * 2f / weight];
                 }
-                g.Restore(st);
-
-                x += gl.Advance + Track;
+                else pen.DashStyle = DashStyle.Solid;
+                g.DrawPath(pen, path);
+                done += len;
             }
         }
-        finally { g.Restore(save); }
+        finally
+        {
+            g.Restore(save);
+            foreach (var (pth, _) in strokes) pth.Dispose();
+        }
     }
 }

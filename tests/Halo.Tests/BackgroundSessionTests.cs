@@ -48,8 +48,17 @@ public class DesktopIdleSessionTests
     [Fact]
     public void Finished_desktop_session_lingers_then_hides()
     {
-        Assert.False(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromSeconds(90)), Now));
-        Assert.True(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromMinutes(3)), Now));
+        Assert.False(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromSeconds(20)), Now));
+        Assert.True(StatusStore.DesktopIdleHidden(St("idle", "x", TimeSpan.FromSeconds(40)), Now));
+    }
+
+    // the real shape after a stop: StartedAt cleared, the prompt still on record. It hid instantly.
+    [Fact]
+    public void Just_finished_desktop_session_lingers_though_stop_cleared_its_start()
+    {
+        var st = St("idle", null, TimeSpan.FromSeconds(5));
+        st.LastPrompt = "fix the pill";
+        Assert.False(StatusStore.DesktopIdleHidden(st, Now));
     }
 
     [Theory]

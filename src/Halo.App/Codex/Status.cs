@@ -33,6 +33,8 @@ internal sealed record CodexSnapshot(
 {
     internal CodexSnapshotFields PresentFields { get; init; }
 
+    internal string? ToolTarget { get; init; }
+
     internal int HostPid { get; init; }
 
     internal long HostHwnd { get; init; }
@@ -50,7 +52,7 @@ internal static class CodexRollout
         try
         {
             var state = "idle";
-            string? currentTool = null;
+            string? currentTool = null, toolTarget = null;
             DateTimeOffset? startedAt = null;
             DateTimeOffset? compactedAt = null;
             string? message = null;
@@ -102,9 +104,10 @@ internal static class CodexRollout
                         case "function_call":
                             state = "working";
                             currentTool = ShortTool(String(payload, "name") ?? String(payload, "tool_name") ?? String(payload, "tool"));
+                            toolTarget = Halo.Agents.ToolFacts.CodexTarget(String(payload, "arguments"), String(payload, "input"));
                             break;
                         case "function_call_output":
-                            if (state == "working") currentTool = null;
+                            if (state == "working") { currentTool = null; toolTarget = null; }
                             break;
                         case "request_user_input":
                         case "request_user_approval":
@@ -186,6 +189,7 @@ internal static class CodexRollout
                 contextUsed, contextMax, promptTokens, primaryLimit, secondaryLimit, updatedAt, false)
             {
                 PresentFields = presentFields,
+                ToolTarget = currentTool is null ? null : toolTarget,
             };
         }
         catch (IOException)
@@ -646,6 +650,8 @@ internal sealed class CodexStatusStore : IDisposable
             UpdatedAt = hook.UpdatedAt > rollout.UpdatedAt ? hook.UpdatedAt : rollout.UpdatedAt,
             ProcessAlive = hook.ProcessAlive,
             PresentFields = hook.PresentFields | rollout.PresentFields,
+
+            ToolTarget = lifecycle.CurrentTool is { } t && t == rollout.CurrentTool ? rollout.ToolTarget : null,
         };
     }
 

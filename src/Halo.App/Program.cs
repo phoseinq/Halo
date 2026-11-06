@@ -389,6 +389,14 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-history")
         {
+
+            if (Environment.GetEnvironmentVariable("HALO_HISTORY_SIZE")?.Split(' ') is [var hg, var hv]
+                && int.TryParse(hg, out int hgi) && int.TryParse(hv, out int hvi))
+                Halo.Widgets.HistoryLayout.SetSize(hgi, hvi);
+            if (Environment.GetEnvironmentVariable("HALO_HISTORY_EDGES") == "1")
+                Halo.Widgets.HistoryView.EdgeRight = 1f;
+            if (Environment.GetEnvironmentVariable("HALO_HISTORY_HOVERX") == "1")
+                Halo.Widgets.HistoryView.HoverButton = Halo.Widgets.HistoryView.Button.Dismiss;
             RenderHistory(args[1], args.Length >= 3 && int.TryParse(args[2], out int hn) ? hn : -1,
                           args.Length >= 4 && float.TryParse(args[3], System.Globalization.NumberStyles.Float,
                                                              System.Globalization.CultureInfo.InvariantCulture,
@@ -2607,6 +2615,15 @@ internal static class Program
 
             float cx = tile.X + tile.Width / 2f, cy = tile.Y + tile.Height / 2f;
             float ringR = side * 0.28f, stroke = MathF.Max(2f, side * 0.085f);
+
+            if (s <= 32)
+            {
+                float strokePx = s <= 24 ? 2f : 3f;
+                float outer = MathF.Round(s * 0.34f);
+                cx = cy = s / 2f;
+                stroke = strokePx;
+                ringR = outer - strokePx / 2f;
+            }
             var ringBox = new System.Drawing.RectangleF(cx - ringR, cy - ringR, ringR * 2f, ringR * 2f);
             var lightBox = System.Drawing.RectangleF.Inflate(ringBox, stroke, stroke);
             System.Drawing.Color left = System.Drawing.Color.FromArgb(255, 0x7C, 0xB4, 0xFF);
@@ -5429,7 +5446,7 @@ internal static class Program
                   ("dealing a card out", Halo.Widgets.HistoryLayout.Visible + 4, -1, -1, false, -1),
                   ("deck opened, scrolled a row", HistoryLayoutFits + 3, -1, -1, true, 1),
                   ("swiping", 4, -1, -1, false, 0) };
-            const int W = Halo.Widgets.HistoryLayout.W, Pad = 14;
+            int W = Halo.Widgets.HistoryLayout.W, Pad = 14;
             int across = Math.Min(4, cases.Length);
             int cellH = (int)Halo.Widgets.HistoryLayout.MaxH + 26;
             int down = (cases.Length + 3) / 4;

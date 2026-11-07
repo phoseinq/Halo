@@ -200,9 +200,9 @@ internal sealed partial class NotchController
 
     internal const int TintAskDesk = 150, TintAskApp = 34;
 
-    internal const int TintHistoryDesk = 228, TintHistoryApp = 222;
+    internal const int TintHistoryDesk = 240, TintHistoryApp = 236;
 
-    internal const int TintNotifDesk = 228, TintNotifApp = 222;
+    internal const int TintNotifDesk = 240, TintNotifApp = 236;
 
     private const int AskSwipeStrip = 26, AskSwipeDist = 30;
 
@@ -3586,7 +3586,7 @@ internal sealed partial class NotchController
             h = (int)Lerp(h, Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra,
                                                                _historyDeckOpen), eh);
             r = (int)Lerp(r, 26, eh);
-            tint = (int)Lerp(cT, glass ? TintHistoryApp : TintHistoryDesk, _historyT);
+            tint = (int)Lerp(cT, TintFor(glass ? TintHistoryApp : TintHistoryDesk, GlassScale), _historyT);
             fade = ContentFade(_historyT);
 
             mini *= Math.Clamp(1f - _historyT / ContentIn, 0f, 1f);
@@ -3785,7 +3785,7 @@ internal sealed partial class NotchController
         bool pin = _notif == null && _ask == null && _askGhost == null && _panelGhost == null
             && _greet == GreetingKind.None && !TrayFront && !faceOnly && _historyT <= 0f;
 
-        _notch.SkipShape = floating;
+        _notch.SkipShape = floating && _historyT <= 0f;
 
         _notch.OffsetY = PillFloatTop;
 
@@ -5255,6 +5255,15 @@ internal sealed partial class NotchController
     private int _sheetResize;
     private Win32.POINT _sheetFrom;
     private int _sheetGrow0;
+    private bool _sheetPrevDown;
+
+    private float SheetH => Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra, _historyDeckOpen);
+
+    private bool OnSheetEdge(System.Drawing.PointF q)
+    {
+        float sw = Halo.Widgets.HistoryLayout.W, sh = SheetH;
+        return q.X >= sw - 40f && q.X <= sw + 2f && q.Y >= sh - 40f && q.Y <= sh + 2f;
+    }
 
     private bool SheetEdges(Win32.POINT p, bool down)
     {
@@ -5267,23 +5276,26 @@ internal sealed partial class NotchController
             var q = HistoryLocal(p);
             float sw = Halo.Widgets.HistoryLayout.W;
             float sh = Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra, _historyDeckOpen);
-            onRight = q.X >= sw - 14f && q.X <= sw && q.Y >= Halo.Widgets.HistoryLayout.BodyTop && q.Y <= sh - 14f;
+            onRight = OnSheetEdge(q);
         }
         if (_sheetResize != 0)
         {
             if (down && up)
             {
 
-                Halo.Widgets.HistoryLayout.SetSize(_sheetGrow0 + (int)MathF.Round(2f * (p.X - _sheetFrom.X) / S));
+                float dx = (p.X - _sheetFrom.X) / S, dy = (p.Y - _sheetFrom.Y) / S;
+                Halo.Widgets.HistoryLayout.SetSize(_sheetGrow0 + (int)MathF.Round(2f * dx + dy));
             }
             else { _sheetResize = 0; Halo.Widgets.HistoryLayout.SaveSize(); }
         }
-        else if (down && !_lastMouseDown && onRight && !_moving && !_resizing)
+
+        else if (down && !_sheetPrevDown && onRight && !_moving && !_resizing)
         {
             _sheetResize = 1;
             _sheetFrom = p;
             _sheetGrow0 = g0;
         }
+        _sheetPrevDown = down;
         float k = _dt / 0.12f;
         Halo.Widgets.HistoryView.EdgeRight = Math.Clamp(r0 + (onRight || _sheetResize == 1 ? k : -k), 0f, 1f);
         return r0 != Halo.Widgets.HistoryView.EdgeRight || g0 != Halo.Widgets.HistoryLayout.Grow;
@@ -5335,6 +5347,8 @@ internal sealed partial class NotchController
         var q = HistoryPoint(p);
         if (q is null) { CloseHistory(); return; }
         _historyPressAt = q.Value;
+
+        if (OnSheetEdge(q.Value)) { _historyPressRow = NoPress; _historySwiping = false; return; }
         _historyPressRow = HistoryRowAt(q.Value.Y);
         _historySwiping = false;
         _historyBtn = HistoryButtonAt(q.Value);
@@ -5441,9 +5455,11 @@ internal sealed partial class NotchController
         }
 
         bool open = row == _historyOpenRow;
-        if (!open && Halo.Widgets.HistoryText.Full(item.Body).Length > 0)
+
+        float openExtra = open ? 0f : Halo.Widgets.HistoryView.BodyExtra(item.Body, item.Title);
+        if (!open && openExtra > 0f)
         {
-            _historyOpenExtra = Halo.Widgets.HistoryView.BodyExtra(item.Body);
+            _historyOpenExtra = openExtra;
             _historyOpenT = 0f;
             _historyOpenRow = row;
             _historyScrollTo = Math.Min(_historyScrollTo,

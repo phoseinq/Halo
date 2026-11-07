@@ -43,15 +43,15 @@ internal static class HistoryText
         return Clip(s, maxChars);
     }
 
-    public static string Full(string? body) => string.IsNullOrWhiteSpace(body) ? "" : Strip(body);
+    public static string Full(string? body) => string.IsNullOrWhiteSpace(body) ? "" : Strip(body, keepLines: true);
 
     public static bool HasMore(string? body, int maxChars = 96)
     {
-        string full = Full(body);
+        string full = string.IsNullOrWhiteSpace(body) ? "" : Strip(body);
         return full.Length > 0 && full != Gist(body, maxChars);
     }
 
-    private static string Strip(string body)
+    private static string Strip(string body, bool keepLines = false)
     {
         var sb = new StringBuilder(body.Length);
         foreach (var raw in body.Split('\n'))
@@ -61,16 +61,18 @@ internal static class HistoryText
             if (line.StartsWith('>')) continue;
             if (line == "--" || line == "—") break;
             if (line.StartsWith("On ") && line.EndsWith("wrote:")) break;
-            if (sb.Length > 0) sb.Append(' ');
+            if (sb.Length > 0) sb.Append(keepLines ? '\n' : ' ');
             sb.Append(line);
-            if (sb.Length > 400) break;
+
+            if (!keepLines && sb.Length > 400) break;
         }
 
         var outp = new StringBuilder(sb.Length);
         bool gap = false;
         foreach (char c in sb.ToString())
         {
-            if (char.IsWhiteSpace(c)) { gap = outp.Length > 0; continue; }
+            if (c == '\n') { outp.Append('\n'); gap = false; continue; }
+            if (char.IsWhiteSpace(c)) { gap = outp.Length > 0 && outp[^1] != '\n'; continue; }
             if (gap) outp.Append(' ');
             gap = false;
             outp.Append(c);

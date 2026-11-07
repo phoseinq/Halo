@@ -11,8 +11,9 @@ internal static class HistoryView
 {
 
     private static readonly Color White = Color.FromArgb(252, 255, 255, 255);
-    private static readonly Color Dim = Color.FromArgb(196, 255, 255, 255);
-    private static readonly Color Faint = Color.FromArgb(182, 255, 255, 255);
+
+    private static readonly Color Dim = Color.FromArgb(218, 255, 255, 255);
+    private static readonly Color Faint = Color.FromArgb(210, 255, 255, 255);
 
     private static readonly Color CardTop = Color.FromArgb(34, 255, 255, 255);
     private static readonly Color CardBottom = Color.FromArgb(14, 255, 255, 255);
@@ -23,20 +24,60 @@ internal static class HistoryView
 
     private static Font GistFont() => new("Segoe UI", 13.5f, GraphicsUnit.Pixel);
 
-    internal static float BodyExtra(string? body)
+    internal static float BodyExtra(string? body, string? title = null)
     {
         string full = HistoryText.Full(body);
-        if (full.Length == 0) return 0f;
         try
         {
             using var bmp = new Bitmap(1, 1, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             using var g = Graphics.FromImage(bmp);
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             using var f = GistFont();
+            using var tf = TitleFont();
             float wide = HistoryLayout.Body(0f, HistoryLayout.OpenExtra).Width;
-            return HistoryLayout.ExtraFor(g.MeasureString(full, f, (int)wide).Height);
+            float titleMore = TitleMore(g, title, tf, wide);
+            if (full.Length == 0 && titleMore <= 0f) return 0f;
+            float bodyH = full.Length == 0 ? 0f : Paragraphs(g, full, f, null, new RectangleF(0, 0, wide, 10_000f));
+
+            return HistoryLayout.ExtraFor(bodyH + titleMore + f.GetHeight(g));
         }
         catch { return HistoryLayout.OpenExtra; }
+    }
+
+    private static Font TitleFont() => new("Segoe UI Semibold", 16f, GraphicsUnit.Pixel);
+    private const float TitleLineH = 22f;
+
+    private static float TitleMore(Graphics g, string? title, Font tf, float wide)
+    {
+        if (string.IsNullOrEmpty(title)) return 0f;
+        using var sf = ParaFmt(title);
+        return MathF.Max(0f, g.MeasureString(title, tf, (int)wide, sf).Height - TitleLineH);
+    }
+
+    private static StringFormat ParaFmt(string para, StringTrimming trim = StringTrimming.None)
+    {
+        var sf = new StringFormat(StringFormat.GenericTypographic) { Trimming = trim };
+        if (NotifBanner.IsRtl(para)) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
+        return sf;
+    }
+
+        private static float Paragraphs(Graphics g, string text, Font f, Brush? b, RectangleF box)
+    {
+        float y = box.Y, line = f.GetHeight(g);
+        foreach (var raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string para = raw.TrimEnd();
+            if (para.Length == 0) { y += line * 0.6f; continue; }
+            using var sf = ParaFmt(para, StringTrimming.EllipsisWord);
+            float h = g.MeasureString(para, f, (int)box.Width, sf).Height;
+            float room = box.Bottom - y;
+            if (room < line * 0.9f) break;
+            if (h > room) h = MathF.Floor(room / line) * line;
+            if (b is not null) Fx.Text(g, para, f, b, new RectangleF(box.X, y, box.Width, h + 1f), sf);
+            y += h;
+            if (y >= box.Bottom - 0.5f) break;
+        }
+        return y - box.Y;
     }
 
         internal static void Draw(Graphics g, int w, int h, float fade, HistoryRow[] rows,
@@ -55,7 +96,7 @@ internal static class HistoryView
         using var head = new Font("Segoe UI Semibold", 13f, GraphicsUnit.Pixel);
 
         using var appF = new Font("Segoe UI", 11f, GraphicsUnit.Pixel);
-        using var titleF = new Font("Segoe UI Semibold", 16f, GraphicsUnit.Pixel);
+        using var titleF = TitleFont();
         using var gistF = GistFont();
 
         float headX = HistoryLayout.CardX + HistoryLayout.IconPad;
@@ -163,12 +204,13 @@ internal static class HistoryView
     private static void DrawEdges(Graphics g, int w, int h, float fade)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
+
         if (EdgeRight > 0.01f)
-            using (var p = new Pen(Color.FromArgb((int)(170 * EdgeRight * fade), 255, 255, 255), 3f)
+            using (var p = new Pen(Color.FromArgb((int)(160 * EdgeRight * fade), 255, 255, 255), 3f)
             { StartCap = LineCap.Round, EndCap = LineCap.Round })
             {
-                float cy = HistoryLayout.BodyTop + (h - HistoryLayout.BodyTop) / 2f, len = Math.Min(44f, h * 0.2f);
-                g.DrawLine(p, w - 5f, cy - len / 2f, w - 5f, cy + len / 2f);
+                const float r = 26f, m = 3f;
+                g.DrawArc(p, w - 2 * r + m, h - 2 * r + m, 2 * (r - m), 2 * (r - m), 25f, 40f);
             }
     }
 
@@ -302,11 +344,24 @@ internal static class HistoryView
                     new RectangleF(tx, card.Y + 11f, Math.Max(10f, tr - tx - whenW - 10f), 16f), af);
         }
 
-        using (var fmt = NotifBanner.LineFmt(n.Title))
+        float titleMore = row.Open ? TitleMore(g, n.Title, titleF, tr - tx) : 0f;
+        using (var fmt = row.Open ? ParaFmt(n.Title, StringTrimming.EllipsisWord) : NotifBanner.LineFmt(n.Title))
         {
 
             using var b = new SolidBrush(Mul(White, fade));
-            Fx.Text(g, n.Title, titleF, b, new RectangleF(tx, card.Y + 28f, tr - tx, 22f), fmt);
+
+            Font? small = null;
+            if (!row.Open && !string.IsNullOrEmpty(n.Title))
+            {
+                float need = g.MeasureString(n.Title, titleF, int.MaxValue, StringFormat.GenericTypographic).Width;
+                float room = tr - tx;
+                if (need > room)
+                    small = new Font(titleF.FontFamily, Math.Max(13f, titleF.Size * room / need), titleF.Style,
+                                     GraphicsUnit.Pixel);
+            }
+            Fx.Text(g, n.Title, small ?? titleF, b,
+                    new RectangleF(tx, card.Y + 28f, tr - tx, TitleLineH + titleMore + 1f), fmt);
+            small?.Dispose();
         }
 
         using (var b = new SolidBrush(Mul(Faint, fade)))
@@ -315,10 +370,9 @@ internal static class HistoryView
             {
 
                 string full = HistoryText.Full(n.Body);
-                using var wf = new StringFormat(StringFormat.GenericTypographic)
-                { Trimming = StringTrimming.EllipsisCharacter };
-                if (Fx.IsRtl(full)) wf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
-                Fx.Text(g, full, gistF, b, HistoryLayout.Body(top, extra), wf);
+                var body = HistoryLayout.Body(top, extra);
+                body = new RectangleF(body.X, body.Y + titleMore, body.Width, Math.Max(0f, body.Height - titleMore));
+                Paragraphs(g, full, gistF, b, body);
             }
             else
             {
@@ -328,11 +382,8 @@ internal static class HistoryView
                 {
 
                     string full = HistoryText.Full(n.Body);
-                    using var wf = new StringFormat(StringFormat.GenericTypographic)
-                    { Trimming = StringTrimming.EllipsisWord };
-                    if (Fx.IsRtl(full)) wf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
-                    Fx.Text(g, full, gistF, b, new RectangleF(tx, card.Y + HistoryLayout.GistY,
-                            Math.Max(10f, tr - tx), lines * HistoryLayout.GistLineH + 1f), wf);
+                    Paragraphs(g, full, gistF, b, new RectangleF(tx, card.Y + HistoryLayout.GistY,
+                               Math.Max(10f, tr - tx), lines * HistoryLayout.GistLineH + 1f));
                 }
                 else if (gist.Length > 0)
                 {

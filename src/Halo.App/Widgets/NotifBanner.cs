@@ -11,7 +11,7 @@ internal static class NotifBanner
     public const int W = 470, SummaryH = 128;
     private const float IconD = 52, IconX = 20;
     private static readonly Color White = Color.FromArgb(238, 255, 255, 255);
-    private static readonly Color Dim = Color.FromArgb(150, 255, 255, 255);
+    private static readonly Color Dim = Color.FromArgb(200, 255, 255, 255);
 
     private static readonly Color BodyInk = Color.FromArgb(205, 255, 255, 255);
     private static readonly Color EyebrowInk = Color.FromArgb(175, 255, 255, 255);

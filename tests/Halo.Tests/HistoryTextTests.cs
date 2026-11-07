@@ -117,7 +117,8 @@ public class HistoryTextTests
     {
         // opening a row must not contradict its own summary by producing the quoted reply the gist dropped
         var body = "Sounds good to me.\nSee you at eight.\n> On Tuesday you wrote:\n> the original";
-        Assert.Equal("Sounds good to me. See you at eight.", HistoryText.Full(body));
+        // ...and its lines stay lines, so each paragraph can be set in its own direction
+        Assert.Equal("Sounds good to me.\nSee you at eight.", HistoryText.Full(body));
     }
 }
 

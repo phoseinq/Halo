@@ -2621,8 +2621,9 @@ internal static class Program
 
             if (small)
             {
-                float strokePx = s <= 20 ? 2f : 3f;
-                float outer = MathF.Round(s * 0.44f);
+                float strokePx = s <= 24 ? 3f : 4f;
+
+                float outer = MathF.Floor(s / 2f) - 1f;
                 cx = cy = s / 2f;
                 stroke = strokePx;
                 ringR = outer - strokePx / 2f;
@@ -5411,6 +5412,14 @@ internal static class Program
                 "",
             };
 
+            if (Environment.GetEnvironmentVariable("HALO_HISTORY_BIDI") == "1")
+            {
+                titles[0] = "Sara: are you coming tonight? The table is booked for eight at the riverside place";
+                bodies[0] = "\u0633\u0644\u0627\u0645\u060C \u0641\u0631\u062F\u0627 \u062C\u0644\u0633\u0647 \u0633\u0627\u0639\u062A \u062F\u0647 \u0628\u0631\u06AF\u0632\u0627\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0644\u0637\u0641\u0627\u064B \u06AF\u0632\u0627\u0631\u0634 \u0647\u0641\u062A\u0647 \u0631\u0627 \u0628\u06CC\u0627\u0648\u0631\u06CC\u062F\nSee you there, and bring the weekly report please.";
+                titles[1] = "\u067E\u06CC\u0627\u0645 \u062C\u062F\u06CC\u062F \u0627\u0632 \u0633\u0627\u0631\u0627";
+                bodies[1] = "Thanks for the invoice, \u0645\u0645\u0646\u0648\u0646 - paid this morning.";
+            }
+
             var hues = new[] { (41, 171, 226), (232, 74, 95), (120, 200, 130), (140, 110, 235),
                                (240, 170, 60), (90, 200, 200) };
             var icons = new System.Drawing.Bitmap[apps.Length];
@@ -5488,7 +5497,7 @@ internal static class Program
                 var items = Make(n);
                 var rows = new Halo.Widgets.HistoryRow[n];
                 for (int k = 0; k < n; k++) rows[k] = new Halo.Widgets.HistoryRow(items[k], 0f, k == open);
-                float extra = open >= 0 ? Halo.Widgets.HistoryView.BodyExtra(items[open].Body) : 0f;
+                float extra = open >= 0 ? Halo.Widgets.HistoryView.BodyExtra(items[open].Body, items[open].Title) : 0f;
                 var shift = new Halo.Widgets.HistoryShift(open, extra, -1, 0f);
 
                 Halo.Widgets.HistoryRow? gone = null;

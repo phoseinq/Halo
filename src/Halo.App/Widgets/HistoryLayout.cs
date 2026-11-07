@@ -64,7 +64,7 @@ internal static class HistoryLayout
 
     internal const float DeckH = 36f;
 
-    internal const float OpenExtra = 96f;
+    internal const float OpenExtra = 300f;
 
     internal const float IconPad = 14f, IconD = 36f;
     internal static float TextX => CardX + IconPad + IconD + 12f;

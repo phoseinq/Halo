@@ -2388,6 +2388,9 @@ internal sealed partial class NotchController
                 if (_widgets[i] is BtWidget) { _primary = i; _agentNotices.SetPrimary(i); break; }
 
         if (_prevDragActive && !FileTray.DragActive) _trayShowUntil = Environment.TickCount64 + 2500;
+
+        if (_handT >= 0f && _handProp == Halo.Widgets.FaceProp.Tray)
+            _trayShowUntil = Math.Max(_trayShowUntil, Environment.TickCount64 + 3000);
         _prevDragActive = FileTray.DragActive;
         if (_drop < 0f && (FileTray.DragActive || Environment.TickCount64 < _trayShowUntil)
             && _settings.Enabled(Halo.Settings.FeatureId.FileTray))
@@ -3826,7 +3829,16 @@ internal sealed partial class NotchController
             ? (g, cw, _, f) => Halo.Panels.PanelPaint.Draw(g, cw, sheet.Spec, f, _panelHover, _panelCloseHover)
 
             : faceOnly
-            ? (g, cw, ch, _) => DrawFace(g, cw, ch)
+
+            ? (HandMorph && !_empty && _progress > 0.02f
+                ? (g, cw, ch, f) =>
+                {
+                    float keep = f * (1f - SmoothStep(Math.Min(1f, _faceT * 1.6f)));
+                    if (keep > 0.01f)
+                        try { _widgets[_primary].DrawContent(g, cw, ch, keep); } catch { }
+                    DrawFace(g, cw, ch);
+                }
+                : (g, cw, ch, _) => DrawFace(g, cw, ch))
             : _empty ? static (_, _, _, _) => { } : _widgets[_primary].DrawContent;
 
         bool pin = _notif == null && _ask == null && _askGhost == null && _panelGhost == null
@@ -3869,6 +3881,7 @@ internal sealed partial class NotchController
             _historyBtnRow >= 0 && _historyBtnRow < _historyItems.Length ? _historyItems[_historyBtnRow] : null,
             _historyBtnT);
         float mgW = (int)side, mgH = (int)drop;
+        Halo.Widgets.Fx.SurfaceRadius = r;
         _notch.Render(w, h, r, tint, fade, mini, glass, frame,
             (g, cw0, ch0, f) =>
             {

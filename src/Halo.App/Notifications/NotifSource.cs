@@ -348,18 +348,7 @@ internal sealed class NotifSource
         return new NotifItem { Id = n.Id, App = app, Title = title, Body = body, Aumid = aumid, Icon = icon, Code = DetectCode(title, body) };
     }
 
-    private static readonly System.Text.RegularExpressions.Regex CodeRx =
-        new(@"(?<![\d])(\d{6}|\d{8})(?![\d])", System.Text.RegularExpressions.RegexOptions.Compiled);
-    private static string DetectCode(string title, string body)
-    {
-        foreach (var text in new[] { title, body })
-        {
-            if (string.IsNullOrEmpty(text)) continue;
-            var m = CodeRx.Match(text);
-            if (m.Success) return m.Groups[1].Value;
-        }
-        return "";
-    }
+    private static string DetectCode(string title, string body) => OtpCode.Find(title, body);
     private static System.Drawing.Bitmap? Logo(UserNotification n)
     {
         try

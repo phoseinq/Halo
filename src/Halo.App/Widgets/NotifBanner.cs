@@ -28,7 +28,8 @@ internal static class NotifBanner
     public static RectangleF CopyRect(NotifItem n, int w)
     {
         if (string.IsNullOrEmpty(n.Code)) return RectangleF.Empty;
-        float bw = 34 + Math.Max(n.Code.Length, 6) * 8.5f;
+
+        float bw = 30 + Math.Max(n.Code.Length, 6) * 7.6f;
         return new RectangleF(w - bw - 20,
             TitleTop + TextShift(n.Body.Length > 0) + (TitleH - CopyH) / 2f, bw, CopyH);
     }
@@ -69,8 +70,12 @@ internal static class NotifBanner
         float cy = r.Y + r.Height / 2f;
         string glyph = n.Copied ? "" : "";
         string label = n.Copied ? Halo.Localization.Strings.Get("pill.copied") : n.Code;
-        Fx.Text(g, glyph, gf, b, new PointF(r.X + 15f, cy + Fx.InkCentreOffset(gf, glyph)), sf);
-        Fx.Text(g, label, cf, b, new PointF(r.X + 24f + (r.Width - 30f) / 2f, cy + Fx.CapCentreOffset(cf)), sf);
+
+        const float glyphW = 11f, gap = 4f;
+        float lw = g.MeasureString(label, cf, int.MaxValue, StringFormat.GenericTypographic).Width;
+        float x0 = r.X + (r.Width - (glyphW + gap + lw)) / 2f;
+        Fx.Text(g, glyph, gf, b, new PointF(x0 + glyphW / 2f, cy + Fx.InkCentreOffset(gf, glyph)), sf);
+        Fx.Text(g, label, cf, b, new PointF(x0 + glyphW + gap + lw / 2f, cy + Fx.CapCentreOffset(cf)), sf);
     }
 
     private static string _fitBody = "\0";

@@ -553,7 +553,10 @@ internal static class Fx
     public static Color Alpha(Color c, float a)
         => Color.FromArgb((int)Math.Clamp(c.A * a, 0, 255), c.R, c.G, c.B);
 
-    private static GraphicsPath PillClip(int w, int h) => PillPath(w, h, Math.Min(h / 2f, 30f));
+    public static float SurfaceRadius = -1f;
+
+    private static GraphicsPath PillClip(int w, int h) =>
+        PillPath(w, h, Math.Min(h / 2f, SurfaceRadius > 0f ? SurfaceRadius : 30f));
 
     public static GraphicsPath PillPath(int w, int h, float r) => PillPath(w, h, r, 0f);
 

@@ -214,11 +214,40 @@ internal static class Fx
 
     private static readonly Bitmap[] GlowTexes = [BuildGlowTex(64), BuildGlowTex(128), BuildGlowTex(256), BuildGlowTex(512)];
 
-    private static Bitmap GlowTexFor(float drawn)
+    private static (Bitmap Lo, Bitmap Hi, float T) GlowLevels(float drawn)
     {
-        foreach (var t in GlowTexes)
-            if (t.Width >= drawn * 0.75f) return t;
-        return GlowTexes[^1];
+        float want = Math.Max(1f, drawn * 0.75f);
+        float level = MathF.Log2(want / GlowTexes[0].Width);
+        if (level <= 0f) return (GlowTexes[0], GlowTexes[0], 0f);
+        int last = GlowTexes.Length - 1;
+        if (level >= last) return (GlowTexes[last], GlowTexes[last], 0f);
+        int k = (int)MathF.Floor(level);
+        return (GlowTexes[k], GlowTexes[k + 1], level - k);
+    }
+
+    private static void FillGlow(Graphics g, GraphicsPath clip, Bitmap tex, Color accent, float a,
+                                 int dx, int dy, int dw, int dh)
+    {
+
+        using var ia = new ImageAttributes();
+        ia.SetColorMatrix(new ColorMatrix
+        {
+            Matrix00 = accent.R / 255f,
+            Matrix11 = accent.G / 255f,
+            Matrix22 = accent.B / 255f,
+            Matrix33 = a / 255f,
+        });
+
+        ia.SetWrapMode(WrapMode.Clamp);
+        using var brush = new TextureBrush(tex, new RectangleF(0, 0, tex.Width, tex.Height), ia);
+        brush.WrapMode = WrapMode.Clamp;
+        brush.TranslateTransform(dx, dy);
+        brush.ScaleTransform(dw / (float)tex.Width, dh / (float)tex.Height);
+
+        var keep = g.Save();
+        g.SetClip(new RectangleF(dx, dy, dw, dh), CombineMode.Intersect);
+        g.FillPath(brush, clip);
+        g.Restore(keep);
     }
 
     private static Bitmap BuildGlowTex(int n)
@@ -302,32 +331,13 @@ internal static class Fx
         g.InterpolationMode = InterpolationMode.HighQualityBilinear;
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        using var ia = new ImageAttributes();
-        ia.SetColorMatrix(new ColorMatrix
+        int dx = (int)(cx - rx), dy = (int)(cy - ry), dw = (int)(rx * 2), dh = (int)(ry * 2);
+        if (dw > 0 && dh > 0)
         {
-            Matrix00 = accent.R / 255f,
-            Matrix11 = accent.G / 255f,
-            Matrix22 = accent.B / 255f,
-            Matrix33 = alpha * fade / 255f,
-        });
 
-        ia.SetWrapMode(WrapMode.Clamp);
-        var tex = GlowTexFor(Math.Max(rx, ry) * 2f);
-        using (var brush = new TextureBrush(tex, new RectangleF(0, 0, tex.Width, tex.Height), ia))
-        {
-            brush.WrapMode = WrapMode.Clamp;
-
-            int dx = (int)(cx - rx), dy = (int)(cy - ry), dw = (int)(rx * 2), dh = (int)(ry * 2);
-            if (dw > 0 && dh > 0)
-            {
-                brush.TranslateTransform(dx, dy);
-                brush.ScaleTransform(dw / (float)tex.Width, dh / (float)tex.Height);
-
-                var keep = g.Save();
-                g.SetClip(new RectangleF(dx, dy, dw, dh), CombineMode.Intersect);
-                g.FillPath(brush, clip);
-                g.Restore(keep);
-            }
+            var (lo, hi, t) = GlowLevels(Math.Max(rx, ry) * 2f);
+            if (t < 0.999f) FillGlow(g, clip, lo, accent, alpha * fade * (1f - t), dx, dy, dw, dh);
+            if (t > 0.001f) FillGlow(g, clip, hi, accent, alpha * fade * t, dx, dy, dw, dh);
         }
         g.InterpolationMode = oldInterp;
         g.SmoothingMode = oldSmooth;

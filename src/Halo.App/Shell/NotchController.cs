@@ -2205,7 +2205,9 @@ internal sealed partial class NotchController
         bool repeat = dressed >= 0 && _widgets[dressed].ArrivingProp == _actProp
                       && _actProp != Halo.Widgets.FaceProp.None
                       && _lastFrameAt - _actPropAt < RepeatActMs;
-        bool wantsBeat = (dressed >= 0 || ontoEmpty) && _handT < 0f && FaceMayShow && cooled && !repeat;
+
+        bool wantsBeat = (dressed >= 0 || ontoEmpty) && _handT < 0f && FaceMayShow && cooled && !repeat
+                         && !FileTray.DragActive;
 
         if (fg != _lastLaunchFg) { _lastLaunchFg = fg; AppLaunchBeat(fg); }
 

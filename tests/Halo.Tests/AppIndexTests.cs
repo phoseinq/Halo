@@ -96,7 +96,12 @@ public sealed class AppIndexTests
             }, debounceMs: 20);
 
             for (int i = 0; i < 8; i++) idx.RefreshSoon();
-            Thread.Sleep(800);
+            // Waits for the first scan instead of assuming one lands inside a fixed 800ms: on a loaded CI
+            // runner the debounce timer had not fired yet and the count read 0 (v5.2.2 CI, 2026-11-08). Then
+            // a fixed settle, long enough for any stacked scan (150ms each) to have started and counted.
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (Volatile.Read(ref scans) == 0 && DateTime.UtcNow < until) Thread.Sleep(20);
+            Thread.Sleep(600);
 
             // an installer touches the Start Menu many times in a row; eight signals must not become
             // eight shell walks

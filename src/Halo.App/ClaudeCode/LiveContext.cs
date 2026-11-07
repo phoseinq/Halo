@@ -22,6 +22,7 @@ internal static class LiveContext
         public long Length = -1, CheckedAt;
         public Reading? Value;
         public bool Void;
+        public End? EndInfo;
     }
 
     private static readonly Dictionary<string, Entry> Cache = new(StringComparer.OrdinalIgnoreCase);
@@ -47,10 +48,12 @@ internal static class LiveContext
                     if (len != e.Length)
                     {
                         e.Length = len;
-                        var (val, isVoid) = Scan(Tail(path, len));
-                        if (val != e.Value || isVoid != e.Void)
+                        var tail = Tail(path, len);
+                        var (val, isVoid) = Scan(tail);
+                        var ended = Finish(tail);
+                        if (val != e.Value || isVoid != e.Void || ended != e.EndInfo)
                         {
-                            e.Value = val; e.Void = isVoid;
+                            e.Value = val; e.Void = isVoid; e.EndInfo = ended;
                             Interlocked.Increment(ref Version);
                         }
                     }
@@ -72,6 +75,50 @@ internal static class LiveContext
         var lines = new List<string>(Encoding.UTF8.GetString(buf, 0, got).Split('\n'));
         if (start > 0 && lines.Count > 0) lines.RemoveAt(0);
         return lines;
+    }
+
+    internal static DateTimeOffset? EndedAt(string? path) => EndOf(path)?.At;
+
+        internal readonly record struct End(DateTimeOffset At, string? Error, string? Text);
+
+    internal static End? EndOf(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        Get(path);
+        lock (Gate) return Cache.TryGetValue(path, out var e) ? e.EndInfo : null;
+    }
+
+    internal static DateTimeOffset? Ended(IReadOnlyList<string> lines) => Finish(lines)?.At;
+
+    internal static End? Finish(IReadOnlyList<string> lines)
+    {
+        for (int i = lines.Count - 1; i >= 0; i--)
+        {
+            var line = lines[i];
+            if (!line.Contains("\"stop_reason\":\"", StringComparison.Ordinal)) continue;
+            JsonNode? node;
+            try { node = JsonNode.Parse(line); } catch { continue; }
+            var reason = (node?["message"]?["stop_reason"] ?? node?["stop_reason"])?.GetValue<string>();
+            if (reason is null) continue;
+            if (reason == "tool_use") return null;
+            var ts = node?["timestamp"]?.GetValue<string>();
+            if (!DateTimeOffset.TryParse(ts, null, System.Globalization.DateTimeStyles.RoundtripKind, out var t))
+                return null;
+            string? error = null, text = null;
+            try
+            {
+                if (node?["isApiErrorMessage"] is JsonValue api && api.TryGetValue<bool>(out var isErr) && isErr)
+                {
+                    error = node?["error"]?.GetValue<string>();
+                    if (node?["message"]?["content"] is JsonArray parts)
+                        foreach (var part in parts)
+                            if (part?["text"]?.GetValue<string>() is { Length: > 0 } tx) { text = tx; break; }
+                }
+            }
+            catch { }
+            return new End(t, error, text);
+        }
+        return null;
     }
 
         internal static (Reading? Value, bool Void) Scan(IReadOnlyList<string> lines)

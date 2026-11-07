@@ -1252,7 +1252,12 @@ internal static class Program
                     using (var path = Halo.Widgets.Fx.PillPath(W, H, H / 2f))
                     using (var back = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(235, 26, 27, 32)))
                         g.FillPath(back, path);
-                    Halo.Widgets.Fx.PillBar(g, W, H, 1f, fracs[i], accent, 0.5f, alive: false, track: col == 0, decorated: col == 0);
+
+                    System.Drawing.Color[]? spec = col == 1 && Environment.GetEnvironmentVariable("HALO_BAR_SPECTRUM") == "1"
+                        ? [System.Drawing.Color.FromArgb(255, 232, 96, 120), System.Drawing.Color.FromArgb(255, 245, 180, 70),
+                           System.Drawing.Color.FromArgb(255, 90, 140, 240)] : null;
+                    Halo.Widgets.Fx.PillBar(g, W, H, 1f, fracs[i], accent, 0.5f, alive: false, track: col == 0, decorated: col == 0,
+                                            spectrum: spec);
                     g.Restore(st);
                 }
             }
@@ -4147,6 +4152,9 @@ internal static class Program
                         thumbState = thumb is { Length: > 0 }
                             ? thumb.Length + "B"
                             : "REF-BUT-EMPTY (we opened it and got 0 bytes)";
+
+                        if (thumb is { Length: > 0 } && Environment.GetEnvironmentVariable("HALO_ART_SAVE") is { Length: > 0 } save)
+                            System.IO.File.WriteAllBytes(save, thumb);
                     }
                     catch (Exception ex) { thumbState = "READ-THREW " + ex.GetType().Name + ": " + ex.Message; }
                 }

@@ -253,6 +253,7 @@ internal static class Program
                 if (Field("cwd") is { } cwd) status["cwd"] = cwd;
             }
 
+            LogEvent(cmd, path);
             switch (cmd)
             {
                 case "session-start":
@@ -565,6 +566,18 @@ internal static class Program
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
         try { return new Uri(url).Host is { Length: > 0 } h ? h : null; } catch { return null; }
+    }
+
+    private static void LogEvent(string cmd, string path)
+    {
+        try
+        {
+            var log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                   "Halo", "hook-events.txt");
+            if (File.Exists(log) && new FileInfo(log).Length > 256 * 1024) File.Delete(log);
+            File.AppendAllText(log, $"{DateTime.Now:HH:mm:ss} {cmd} {Path.GetFileName(path)}{Environment.NewLine}");
+        }
+        catch { }
     }
 
     private static string? Truncate(string? s, int max)

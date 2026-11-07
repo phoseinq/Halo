@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -326,7 +327,7 @@ internal static class Fx
     }
 
     public static void PillBar(Graphics g, int w, int h, float fade, float frac, Color accent, float strength,
-                               bool alive = false, bool track = true, bool decorated = true)
+                               bool alive = false, bool track = true, bool decorated = true, Color[]? spectrum = null)
     {
         fade *= AmbientScale;
         if (accent == White || fade <= 0.01f || strength <= 0f) return;
@@ -366,7 +367,31 @@ internal static class Fx
 
         float soft = Math.Clamp(3f / w, 0.0008f, 0.02f);
 
-        if (frac >= 0.999f) { using (var fb = new SolidBrush(solid)) g.FillPath(fb, pp); }
+        if (spectrum is { Length: >= 2 } && fill > 24f)
+        {
+            var cols = spectrum.Select(c =>
+            {
+                RgbToHsv(c, out float ch, out float cs, out float cv);
+                var lifted = cv < 0.62f ? HsvToRgb(ch, cs < 0.12f ? cs : Math.Max(cs, 0.42f), 0.62f) : c;
+                return Alpha(lifted, fade * 0.52f * strength * lit);
+            }).ToArray();
+            float end = frac >= 0.999f ? 1f : Math.Clamp(fill / w, soft + 0.0005f, 0.9985f);
+            float body = Math.Max(0.001f, end - (frac >= 0.999f ? 0f : soft));
+            var pos = new List<float>(); var colsAt = new List<Color>();
+            for (int i = 0; i < cols.Length; i++) { pos.Add(body * i / (cols.Length - 1)); colsAt.Add(cols[i]); }
+            if (frac < 0.999f)
+            {
+                var tail = Color.FromArgb(0, cols[^1]);
+                pos.Add(end); colsAt.Add(tail);
+                pos.Add(1f); colsAt.Add(tail);
+            }
+            else { pos[^1] = 1f; }
+            using var sb = new LinearGradientBrush(new RectangleF(0, 0, w, h), cols[0], cols[^1],
+                       LinearGradientMode.Horizontal) { InterpolationColors = new ColorBlend(pos.Count)
+                       { Positions = pos.ToArray(), Colors = colsAt.ToArray() } };
+            g.FillPath(sb, pp);
+        }
+        else if (frac >= 0.999f) { using (var fb = new SolidBrush(solid)) g.FillPath(fb, pp); }
         else
         {
 
@@ -563,6 +588,60 @@ internal static class Fx
             return HsvToRgb(ph, Math.Min(1f, ps * 1.1f), Math.Max(pv, 0.85f));
         }
         catch { return White; }
+    }
+
+    public static Color[] Palette(Bitmap? art, int max = 3)
+    {
+        if (art is null) return [];
+        if (PaletteCache.TryGetValue(art, out var cached)) return (Color[])cached;
+        Color[] result;
+        try { result = BuildPalette(art, max); }
+        catch { result = []; }
+        PaletteCache.AddOrUpdate(art, result);
+        return result;
+    }
+
+    private static readonly ConditionalWeakTable<Bitmap, object> PaletteCache = new();
+
+    private static Color[] BuildPalette(Bitmap art, int max)
+    {
+        const int n = 20, bins = 12;
+        using var small = new Bitmap(n, n, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(small))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.DrawImage(art, 0, 0, n, n);
+        }
+        var weight = new float[bins];
+        var r = new float[bins]; var gr = new float[bins]; var b = new float[bins];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                var p = small.GetPixel(x, y);
+                if (p.A < 128) continue;
+                RgbToHsv(p, out float h, out float s, out float v);
+
+                if (s < 0.22f || v < 0.2f) continue;
+                int k = (int)(h / 360f * bins) % bins;
+                float wgt = s * v;
+                weight[k] += wgt; r[k] += p.R * wgt; gr[k] += p.G * wgt; b[k] += p.B * wgt;
+            }
+        float top = weight.Max();
+        if (top <= 0.5f) return [];
+        var picked = new List<(int Bin, float W)>();
+        foreach (int k in Enumerable.Range(0, bins).OrderByDescending(i => weight[i]))
+        {
+            if (picked.Count >= max || weight[k] < top * 0.12f) break;
+
+            if (picked.Any(q => Math.Min((q.Bin - k + bins) % bins, (k - q.Bin + bins) % bins) < 2)) continue;
+            picked.Add((k, weight[k]));
+        }
+        return picked.Select(q =>
+        {
+            var c = Color.FromArgb(255, (int)(r[q.Bin] / q.W), (int)(gr[q.Bin] / q.W), (int)(b[q.Bin] / q.W));
+            RgbToHsv(c, out float h, out float s, out float v);
+            return HsvToRgb(h, Math.Min(1f, s * 1.1f), Math.Max(v, 0.85f));
+        }).ToArray();
     }
 
     public static Bitmap Badge(Bitmap icon, char ch)

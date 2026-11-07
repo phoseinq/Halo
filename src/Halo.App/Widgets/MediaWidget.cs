@@ -1531,7 +1531,8 @@ internal sealed class MediaWidget : IWidget
         _barIn = Ease(_barIn, prog >= 0f ? 1f : 0f, dt, 0.20f);
         if (_barIn > 0.01f && _lastProg >= 0f)
 
-        Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f, track: false, decorated: false);
+        Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f, track: false, decorated: false,
+                   spectrum: _art != null ? Fx.Palette(_art) : null);
         else if (playing && RingProgress < 0f && Halo.Settings.SettingsStore.On("media.progress"))
         {
 

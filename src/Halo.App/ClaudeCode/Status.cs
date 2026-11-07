@@ -276,7 +276,13 @@ internal sealed class StatusStore
     internal static readonly TimeSpan DesktopIdleLinger = TimeSpan.FromMilliseconds(Halo.Widgets.DoneLinger.Ms);
     internal static bool DesktopIdleHidden(CcStatus st, DateTimeOffset now)
     {
-        if (st.Source != "desktop" || st.State is "working" or "compacting" or "waiting_input")
+        if (st.Source != "desktop") return false;
+
+        if (st.State == "working" && LiveContext.EndedAt(st.TranscriptPath) is { } ended
+            && (!DateTimeOffset.TryParse(st.StartedAt, null, System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var began) || ended >= began))
+            return now - ended > DesktopIdleLinger;
+        if (st.State is "working" or "compacting" or "waiting_input")
             return false;
 
         if (string.IsNullOrEmpty(st.StartedAt) && string.IsNullOrEmpty(st.LastPrompt) && st.Session is null)

@@ -180,7 +180,7 @@ internal sealed class ClaudeCodeWidget : IWidget
         if (Retrying(st) && !LimitHit && ApiRetry.Caption() is { Length: > 0 } wait) el0 = wait;
 
         bool recapNow = recap is not null && el0.Length == 0 && !LimitHit && Shown(st) == "idle" && Trouble(st) is null;
-        if (recapNow) el0 = recap!.Value.Took;
+        if (recapNow) el0 = TurnLimit(st) is { Reset.Length: > 0 } lr ? lr.Reset : recap!.Value.Took;
         float textX0 = x + sz + 11;
         if (st?.State == "waiting_input") textX0 += 16;
         using var elFont = new Font("Segoe UI", 13f, GraphicsUnit.Pixel);
@@ -196,6 +196,8 @@ internal sealed class ClaudeCodeWidget : IWidget
                 : TurnRecap.Thinking(),
             "compacting" when Compacting(st) => Moods.Line("compacting", mood),
             "waiting_input" => TurnRecap.AskLine(st?.Message) ?? "your move ;)",
+
+            _ when recapNow && TurnLimit(st) is { } lim => lim.Verb,
             _ when recapNow => recap!.Value.Verb,
             _ => Trouble(st) ?? TurnRecap.Idle(
                     ContextState() is { id: not null, frac: >= 0f } ic ? ic.frac : -1f,
@@ -257,6 +259,23 @@ internal sealed class ClaudeCodeWidget : IWidget
 
     public static void MarkCompactCancelled(string? startedAt) => _cancelledCompactKey = startedAt;
 
+    internal static (string Verb, string Reset)? TurnLimit(CcStatus? st)
+    {
+        if (LiveContext.EndOf(st?.TranscriptPath) is not { Error: "rate_limit" } end) return null;
+        if (DateTimeOffset.UtcNow - end.At > TimeSpan.FromHours(6)) return null;
+        return ("limit hit", LimitResetText(end.Text));
+    }
+
+    internal static string LimitResetText(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        int i = text.IndexOf("resets ", StringComparison.OrdinalIgnoreCase);
+        if (i < 0) return "";
+        var r = text[i..];
+        int paren = r.IndexOf(" (", StringComparison.Ordinal);
+        return (paren > 0 ? r[..paren] : r).Trim();
+    }
+
     private static string? _cancelledTurnKey;
 
     public static void MarkTurnCancelled(string? startedAt) => _cancelledTurnKey = startedAt;
@@ -267,6 +286,9 @@ internal sealed class ClaudeCodeWidget : IWidget
     {
         if (st is not { State: "working" }) return false;
         if (st.StartedAt is { Length: > 0 } && st.StartedAt == _cancelledTurnKey) return true;
+
+        if (LiveContext.EndedAt(st.TranscriptPath) is { } ended
+            && (ParseTime(st.StartedAt) is not { } began || ended >= began)) return true;
         if (!string.IsNullOrEmpty(st.CurrentTool)) return false;
 
         if (retrying) return false;

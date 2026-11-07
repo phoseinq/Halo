@@ -2286,7 +2286,7 @@ internal sealed partial class NotchController
                 _handFor = arriving;
             }
 
-            if (_handT >= 0f && _faceT <= 0.5f) { _faceT = 1f; _faceAge = 0f; }
+            if (_handT >= 0f && _faceT <= 0.5f) BeginFaceArrival();
 
             if (_handT >= 0f) _handDone = false;
         }
@@ -2403,6 +2403,10 @@ internal sealed partial class NotchController
             _agentNotices.SetPrimary(_primary);
         }
         _lockedPrimary = reading ? _primary : -1;
+
+        if (_faceArriving && _handFrom >= 0 && _handFrom < _widgets.Length && _handFrom != _primary
+            && _userPicked < 0 && Live(_handFrom))
+            _primary = _handFrom;
 
         for (int i = 0; i < _widgets.Length; i++)
         {
@@ -2778,6 +2782,7 @@ internal sealed partial class NotchController
         }
 
         float prevStrip = _stripT;
+
         _stripT = Math.Clamp(_stripT + (AltIndices().Length >= 1 ? 1 : -1) * _dt / 0.22f, 0f, 1f);
 
         float prevHandT = _handT;
@@ -2786,6 +2791,22 @@ internal sealed partial class NotchController
         bool melting = _handT >= beat;
         if (_handT >= 0f)
         {
+
+            if (_faceArriving)
+            {
+                if (_handSwallow < 1f && AltIndices().Length >= 1)
+                    _handSwallow = Math.Min(1f, _handSwallow + _dt / StripSwallowSeconds);
+                else
+                {
+                    _handSwallow = 1f;
+                    _faceT = Math.Min(1f, _faceT + _dt / FaceArriveSeconds);
+                    if (_faceT >= 1f) _faceArriving = false;
+                }
+            }
+
+            else if (_handT >= Halo.Widgets.FaceDirector.HandSeconds(_handProp) && _faceT < 0.35f)
+                _handSwallow = Math.Max(0f, _handSwallow - _dt / StripSwallowSeconds);
+            else
             _handT += _dt;
 
             if (_handSolo && _handProp == Halo.Widgets.FaceProp.AppIcon && _handIcon is null)
@@ -2802,6 +2823,8 @@ internal sealed partial class NotchController
             if (_handT >= beat + Halo.Widgets.FaceDirector.MeltSeconds || (_liveEmpty && !_handSolo))
             {
                 _handT = -1f;
+                _faceArriving = false;
+                _handSwallow = 0f;
                 _faceT = 0f;
                 _handDone = true;
                 _handSolo = false;
@@ -2815,7 +2838,10 @@ internal sealed partial class NotchController
         }
 
         float prevShrink = _shrink;
-        if (_handT >= 0f && !melting) _shrink = 1f;
+
+        if (_handT >= 0f && !melting) { if (!_faceArriving) _shrink = 1f; }
+
+        else if (_handT >= 0f && melting) _shrink = 0f;
         else _shrink = Math.Clamp(_shrink + (_empty ? 1 : -1) * _dt / 0.28f, 0f, 1f);
 
         if (_notif != null && _faceT > 0.4f) _notifFloat = true;
@@ -3530,6 +3556,7 @@ internal sealed partial class NotchController
 
     private void Apply(float t)
     {
+        _drawnPrimary = _empty ? -1 : _primary;
         float e = EaseOutBack(t);
         int w = (int)Lerp(CollapsedW, ExpandedW, e);
         int h = (int)Lerp(CollapsedH, ExpandedH, e);
@@ -3550,9 +3577,22 @@ internal sealed partial class NotchController
         if (faceOnly)
         {
 
-            w = (int)Lerp(w, Halo.Widgets.Face.PlateW, faceIn);
-            h = (int)Lerp(h, Halo.Widgets.Face.PlateH, faceIn);
-            r = (int)Lerp(r, 0, faceIn);
+            if (HandMorph)
+            {
+
+                float wk = EaseOutBack(_faceT);
+                float swell = 7f * MathF.Sin(MathF.PI * Math.Clamp(_faceT, 0f, 1f));
+                w = (int)Lerp(w, Halo.Widgets.Face.PlateW, wk);
+                h = (int)(Lerp(h, Halo.Widgets.Face.PlateH, faceIn) + swell);
+
+                r = _faceT < 0.65f ? h / 2 : (int)Lerp(h / 2f, 0, (_faceT - 0.65f) / 0.35f);
+            }
+            else
+            {
+                w = (int)Lerp(w, Halo.Widgets.Face.PlateW, faceIn);
+                h = (int)Lerp(h, Halo.Widgets.Face.PlateH, faceIn);
+                r = (int)Lerp(r, 0, faceIn);
+            }
         }
 
         bool glass = !_lastDesktop;
@@ -3564,9 +3604,12 @@ internal sealed partial class NotchController
         if (_empty && !Privacy.Active)
             tint = (int)Lerp(tint, EmptyCatchAlpha, SmoothStep(_shrink));
 
-        if (faceOnly) tint = (int)Lerp(tint, 0, faceIn);
+        if (faceOnly) tint = (int)Lerp(tint, 0, HandMorph
+            ? SmoothStep(Math.Clamp((_faceT - 0.35f) / 0.65f, 0f, 1f)) : faceIn);
         float fade = ContentFade(t);
         float mini = MiniFade(t);
+
+        if (HandMorph && !_empty) mini *= 1f - SmoothStep(Math.Min(1f, _faceT * 1.3f));
 
         if (_notif == null && _ask == null && _panelGhost != null && _panelT > 0f)
         {
@@ -3665,11 +3708,12 @@ internal sealed partial class NotchController
             CarryDX = _carryDX,
             SessShift = _sessShift,
 
-            Show = _greet == GreetingKind.None && !floating
+            Show = _greet == GreetingKind.None && (!floating || HandMorph)
                    && (groups.Count >= 1 || _stripT > 0.01f),
             Appear = SmoothStep(_stripT),
 
-            Swallow = Math.Min(1f - fade, 1f - Math.Clamp(t / StripSwallowOut, 0f, 1f)),
+            Swallow = Math.Min(Math.Min(1f - fade, 1f - Math.Clamp(t / StripSwallowOut, 0f, 1f)),
+                               _handT >= 0f ? 1f - SmoothStep(_handSwallow) : 1f),
 
             RowIcons = groups.ConvertAll(gr => _widgets[gr[0]].Icon).ToArray(),
             RowImages = groups.ConvertAll(gr => MenuRowImage(_widgets, gr)).ToArray(),
@@ -3785,7 +3829,7 @@ internal sealed partial class NotchController
         bool pin = _notif == null && _ask == null && _askGhost == null && _panelGhost == null
             && _greet == GreetingKind.None && !TrayFront && !faceOnly && _historyT <= 0f;
 
-        _notch.SkipShape = floating && _historyT <= 0f;
+        _notch.SkipShape = floating && _historyT <= 0f && !(HandMorph && _faceT < 0.65f);
 
         _notch.OffsetY = PillFloatTop;
 
@@ -3811,7 +3855,8 @@ internal sealed partial class NotchController
 
         bool banner = _notif != null || ((_ask ?? _askGhost) != null && _askT > 0f);
 
-        float glassFade = faceOnly ? 1f - faceIn
+        float glassFade = faceOnly && HandMorph ? 1f - SmoothStep(Math.Clamp((_faceT - 0.35f) / 0.65f, 0f, 1f))
+            : faceOnly ? 1f - faceIn
             : _empty && !Privacy.Active && !banner ? 1f - SmoothStep(_shrink) : 1f;
 
         Halo.Widgets.HistoryView.MuteAll = _mute.All;
@@ -3841,7 +3886,7 @@ internal sealed partial class NotchController
                 g.Restore(margin);
             },
 
-            _empty || faceOnly
+            _empty || (faceOnly && !HandMorph)
                 ? static (_, _, _, _) => { }
                 : (g, cw0, ch0, f) =>
                 {
@@ -4101,7 +4146,7 @@ internal sealed partial class NotchController
             _handFor = -1;
             _handT = 0f;
             MarkAct();
-            if (_faceT <= 0.5f) { _faceT = 1f; _faceAge = 0f; }
+            if (_faceT <= 0.5f) BeginFaceArrival();
             _handDone = false;
         }
         catch { }
@@ -4209,13 +4254,24 @@ internal sealed partial class NotchController
         if (_handT >= 0f)
         {
             beat = Halo.Widgets.FaceDirector.Hand(_handT, _handProp, _faceAge, FaceLevel());
-            alpha *= beat.Alpha;
+
         }
         using (var outline = Halo.Widgets.Face.SheetPath(Halo.Widgets.Face.SheetRect(w, h), h / 2f))
             _notch.FrostInto(g, outline, w, h, alpha * FrostMix, BannerClarity);
 
         var (poke, squeeze) = _handT >= 0f ? (0f, 0f) : _faceReaction.Body(Environment.TickCount64);
         var box = Halo.Widgets.Face.BeatBox(w, h, beat.Bob + poke, beat.Sway, beat.Scale, beat.Squash + squeeze);
+
+        if (HandMorph)
+        {
+            float em = SmoothStep(Math.Clamp(_faceT, 0f, 1f));
+            var sheet = Halo.Widgets.Face.SheetRect(w, h);
+            float iconD = Math.Max(14f, (sheet.Height - 16f) * 0.82f);
+            float ix = sheet.X + 13f + iconD / 2f, iy = sheet.Y + sheet.Height / 2f;
+            float k = Lerp(iconD / Math.Max(1f, box.Height), 1f, em);
+            float cx = Lerp(ix, box.X + box.Width / 2f, em), cy = Lerp(iy, box.Y + box.Height / 2f, em);
+            box = new RectangleF(cx - box.Width * k / 2f, cy - box.Height * k / 2f, box.Width * k, box.Height * k);
+        }
 
         Halo.Widgets.Face.FilmTint = null;
         foreach (var fw in _widgets)
@@ -5249,6 +5305,23 @@ internal sealed partial class NotchController
         : _historyOpen ? EaseOutBack(_historyT)
         : 1f - EaseOutCubic(1f - _historyT);
     private bool[] _holdPrev = Array.Empty<bool>();
+
+    private const float FaceArriveSeconds = 0.42f, StripSwallowSeconds = 0.24f;
+    private float _handSwallow;
+    private bool _faceArriving;
+
+    private bool HandMorph => _handT >= 0f
+        && (_faceArriving || _handT >= Halo.Widgets.FaceDirector.HandSeconds(_handProp));
+
+    private int _handFrom = -1, _drawnPrimary = -1;
+
+    private void BeginFaceArrival()
+    {
+        _faceArriving = true;
+        _handFrom = _drawnPrimary;
+        _handSwallow = 0f;
+        _faceAge = 0f;
+    }
     private int _lockedPrimary = -1;
     private readonly GrabShield _grabShield = new();
 

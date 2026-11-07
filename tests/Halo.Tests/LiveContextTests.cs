@@ -36,4 +36,29 @@ public class LiveContextTests
     [Fact]
     public void No_usage_and_no_boundary_is_no_reading()
         => Assert.Equal((null, false), LiveContext.Scan(["{\"type\":\"user\"}", "garbage {"]));
+
+    // the end of a turn, read from the transcript rather than waiting on the Stop hook
+    [Fact]
+    public void The_newest_reply_says_whether_the_turn_ended()
+    {
+        const string Tool = "{\"type\":\"assistant\",\"timestamp\":\"2026-11-07T10:00:00Z\",\"message\":{\"stop_reason\":\"tool_use\"}}";
+        const string End = "{\"type\":\"assistant\",\"timestamp\":\"2026-11-07T10:01:00Z\",\"message\":{\"stop_reason\":\"end_turn\"}}";
+        const string Result = "{\"type\":\"user\",\"toolUseResult\":{}}";
+        Assert.Null(LiveContext.Ended([End, Tool, Result]));                       // still going
+        Assert.Equal(new DateTimeOffset(2026, 11, 7, 10, 1, 0, TimeSpan.Zero), LiveContext.Ended([Tool, Result, End]));
+        Assert.Null(LiveContext.Ended(["{\"type\":\"user\"}"]));
+    }
+
+    // the account limit ends a turn too, with no Stop hook after it: a synthetic error reply
+    [Fact]
+    public void A_limit_error_reply_ends_the_turn_and_says_when_it_resets()
+    {
+        const string Limit = "{\"type\":\"assistant\",\"timestamp\":\"2026-11-07T10:02:00Z\",\"isApiErrorMessage\":true,"
+            + "\"error\":\"rate_limit\",\"message\":{\"stop_reason\":\"stop_sequence\",\"content\":[{\"type\":\"text\","
+            + "\"text\":\"You've hit your 5-hour limit \u00B7 resets 11:30pm (Asia/Tehran)\"}]}}";
+        var end = LiveContext.Finish([Limit]);
+        Assert.NotNull(end);
+        Assert.Equal("rate_limit", end!.Value.Error);
+        Assert.Equal("resets 11:30pm", Halo.Widgets.ClaudeCodeWidget.LimitResetText(end.Value.Text));
+    }
 }

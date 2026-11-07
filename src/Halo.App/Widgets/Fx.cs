@@ -212,11 +212,17 @@ internal static class Fx
         return accent;
     }
 
-    private static readonly Bitmap GlowTex = BuildGlowTex();
+    private static readonly Bitmap[] GlowTexes = [BuildGlowTex(64), BuildGlowTex(128), BuildGlowTex(256), BuildGlowTex(512)];
 
-    private static Bitmap BuildGlowTex()
+    private static Bitmap GlowTexFor(float drawn)
     {
-        const int n = 128;
+        foreach (var t in GlowTexes)
+            if (t.Width >= drawn * 0.75f) return t;
+        return GlowTexes[^1];
+    }
+
+    private static Bitmap BuildGlowTex(int n)
+    {
 
         var bmp = new Bitmap(n, n, PixelFormat.Format32bppPArgb);
         var data = bmp.LockBits(new Rectangle(0, 0, n, n), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
@@ -229,7 +235,7 @@ internal static class Fx
                 float t = MathF.Min(1f, MathF.Sqrt(dx * dx + dy * dy));
 
                 float f = MathF.Pow(1f - t, 1.8f);
-                float a = f * (255f + rnd.Next(-11, 12));
+                float a = f * (255f + rnd.Next(-9, 10));
                 int i = y * data.Stride + x * 4;
                 byte av = (byte)Math.Clamp((int)a, 0, 255);
                 bytes[i] = bytes[i + 1] = bytes[i + 2] = av;
@@ -306,7 +312,8 @@ internal static class Fx
         });
 
         ia.SetWrapMode(WrapMode.Clamp);
-        using (var brush = new TextureBrush(GlowTex, new RectangleF(0, 0, GlowTex.Width, GlowTex.Height), ia))
+        var tex = GlowTexFor(Math.Max(rx, ry) * 2f);
+        using (var brush = new TextureBrush(tex, new RectangleF(0, 0, tex.Width, tex.Height), ia))
         {
             brush.WrapMode = WrapMode.Clamp;
 
@@ -314,7 +321,7 @@ internal static class Fx
             if (dw > 0 && dh > 0)
             {
                 brush.TranslateTransform(dx, dy);
-                brush.ScaleTransform(dw / (float)GlowTex.Width, dh / (float)GlowTex.Height);
+                brush.ScaleTransform(dw / (float)tex.Width, dh / (float)tex.Height);
 
                 var keep = g.Save();
                 g.SetClip(new RectangleF(dx, dy, dw, dh), CombineMode.Intersect);
@@ -369,11 +376,12 @@ internal static class Fx
 
         if (spectrum is { Length: >= 2 } && fill > 24f)
         {
+
             var cols = spectrum.Select(c =>
             {
                 RgbToHsv(c, out float ch, out float cs, out float cv);
-                var lifted = cv < 0.62f ? HsvToRgb(ch, cs < 0.12f ? cs : Math.Max(cs, 0.42f), 0.62f) : c;
-                return Alpha(lifted, fade * 0.52f * strength * lit);
+                var lifted = HsvToRgb(ch, Math.Clamp(cs, 0.55f, 0.88f), Math.Max(cv, 0.95f));
+                return Alpha(lifted, fade * 0.62f * strength * lit);
             }).ToArray();
             float end = frac >= 0.999f ? 1f : Math.Clamp(fill / w, soft + 0.0005f, 0.9985f);
             float body = Math.Max(0.001f, end - (frac >= 0.999f ? 0f : soft));
@@ -602,6 +610,20 @@ internal static class Fx
     }
 
     private static readonly ConditionalWeakTable<Bitmap, object> PaletteCache = new();
+
+    public static Color[] Spectrum(Bitmap? art)
+    {
+        var p = Palette(art);
+        if (p.Length != 1) return p;
+        RgbToHsv(p[0], out float h, out float s, out float v);
+        return
+        [
+
+            HsvToRgb((h + 340f) % 360f, Math.Min(1f, s * 1.05f), Math.Max(0.55f, v * 0.92f)),
+            p[0],
+            HsvToRgb((h + 20f) % 360f, s * 0.95f, Math.Min(1f, v * 1.06f)),
+        ];
+    }
 
     private static Color[] BuildPalette(Bitmap art, int max)
     {

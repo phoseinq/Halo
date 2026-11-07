@@ -37,4 +37,16 @@ public class PaletteTests
         using var art = Split(Color.Red, Color.Yellow, Color.Lime, Color.Blue, Color.Magenta);
         Assert.Equal(3, Fx.Palette(art).Length);
     }
+
+    // a one-colour cover still gets a run for the bar and the glow: its hue, turned a little each way
+    [Fact]
+    public void A_single_hue_cover_is_widened_to_three_and_grey_stays_empty()
+    {
+        using var red = Split(Color.FromArgb(220, 40, 40), Color.FromArgb(20, 20, 20));
+        var sp = Fx.Spectrum(red);
+        Assert.Equal(3, sp.Length);
+        Assert.Equal(Fx.Palette(red)[0], sp[1]);
+        using var grey = Split(Color.FromArgb(120, 120, 120), Color.FromArgb(30, 30, 30));
+        Assert.Empty(Fx.Spectrum(grey));
+    }
 }

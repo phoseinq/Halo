@@ -973,6 +973,11 @@ internal sealed class MediaWidget : IWidget
         var art = ArtRect(h);
         float artX = art.X, artY = art.Y, artSize = art.Width;
 
+        var spec = _art != null ? Fx.Spectrum(_art) : null;
+        if (spec is { Length: >= 2 })
+            Fx.Glow(g, w, h, fade, artX + artSize * 0.85f, artY + artSize * 0.7f, w * 1.2f, h * 1.8f, 18, spec[^1]);
+        if (spec is { Length: >= 3 })
+            Fx.Glow(g, w, h, fade, artX + artSize * 0.2f, artY + artSize * 0.25f, w * 1.1f, h * 1.7f, 16, spec[0]);
         Fx.Glow(g, w, h, fade, artX + artSize / 2f, artY + artSize / 2f, w * 1.35f, h * 1.9f, 30, _accent);
         DrawArt(g, artX, artY, artSize, fade, ArtRadius(h));
 
@@ -1284,9 +1289,14 @@ internal sealed class MediaWidget : IWidget
 
     internal static float MorphT(float h) => Math.Clamp((h - MorphFromH) / (MorphToH - MorphFromH), 0f, 1f);
 
-    internal static void ArtGlow(Graphics g, int w, int h, float fade, Color accent)
+    internal static void ArtGlow(Graphics g, int w, int h, float fade, Color accent, Color[]? spectrum = null)
     {
         var a = ArtRect(h);
+
+        if (spectrum is { Length: >= 2 })
+            Fx.Glow(g, w, h, fade, a.X + a.Width * 0.66f, h * 0.58f, a.Width * 2.4f, h * 1.9f, 15, spectrum[^1]);
+        if (spectrum is { Length: >= 3 })
+            Fx.Glow(g, w, h, fade, a.X + a.Width * 0.34f, h * 0.42f, a.Width * 2.2f, h * 1.8f, 13, spectrum[0]);
 
         Fx.Glow(g, w, h, fade, a.X + a.Width / 2f, h / 2f, a.Width * 2.1f, h * 1.7f, 27, accent);
     }
@@ -1532,7 +1542,7 @@ internal sealed class MediaWidget : IWidget
         if (_barIn > 0.01f && _lastProg >= 0f)
 
         Fx.PillBar(g, w, h, fade * _barIn, _lastProg, _accentShown, 0.5f, track: false, decorated: false,
-                   spectrum: _art != null ? Fx.Palette(_art) : null);
+                   spectrum: _art != null ? Fx.Spectrum(_art) : null);
         else if (playing && RingProgress < 0f && Halo.Settings.SettingsStore.On("media.progress"))
         {
 
@@ -1554,7 +1564,7 @@ internal sealed class MediaWidget : IWidget
             }
             g.Restore(sst);
         }
-        ArtGlow(g, w, h, fade, _accent);
+        ArtGlow(g, w, h, fade, _accent, _art != null ? Fx.Spectrum(_art) : null);
         DrawArt(g, x, y, sz, fade, ArtRadius(h));
 
         DrawEqualizer(g, w - 14f, h / 2f, fade, playing);

@@ -2803,11 +2803,14 @@ internal sealed partial class NotchController
                     if (_faceT >= 1f) _faceArriving = false;
                 }
             }
-
-            else if (_handT >= Halo.Widgets.FaceDirector.HandSeconds(_handProp) && _faceT < 0.35f)
-                _handSwallow = Math.Max(0f, _handSwallow - _dt / StripSwallowSeconds);
             else
-            _handT += _dt;
+            {
+
+                _handT += _dt;
+
+                if (_handT >= Halo.Widgets.FaceDirector.HandSeconds(_handProp) && _faceT < 0.35f)
+                    _handSwallow = Math.Max(0f, _handSwallow - _dt / StripSwallowSeconds);
+            }
 
             if (_handSolo && _handProp == Halo.Widgets.FaceProp.AppIcon && _handIcon is null)
             {

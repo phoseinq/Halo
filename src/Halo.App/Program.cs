@@ -58,6 +58,33 @@ internal static class Program
 
         if (args.Length >= 2 && args[0] == "--render-bar") { RenderBar(args[1]); return; }
 
+        if (args.Length >= 2 && args[0] == "--probe-palette")
+        {
+            using var art = new System.Drawing.Bitmap(args[1]);
+            Console.WriteLine("accent  " + Halo.Widgets.Fx.Accent(art));
+            foreach (var c in Halo.Widgets.Fx.Palette(art, 3)) Console.WriteLine("palette " + c);
+            foreach (var c in Halo.Widgets.Fx.Spectrum(art)) Console.WriteLine("spectrum " + c);
+            return;
+        }
+        if (args.Length >= 2 && args[0] == "--render-artglow")
+        {
+            using var bmp = new System.Drawing.Bitmap(560, 220, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.FromArgb(255, 22, 24, 30));
+                var spec = new[] { System.Drawing.Color.FromArgb(255, 240, 120, 60), System.Drawing.Color.FromArgb(255, 80, 120, 240) };
+                Halo.Widgets.MediaWidget.ArtGlow(g, 560, 220, 1f, spec[0], spec);
+            }
+            using var big = new System.Drawing.Bitmap(560 * 3, 220 * 3);
+            using (var g = System.Drawing.Graphics.FromImage(big))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                g.DrawImage(bmp, 0, 0, 560 * 3, 220 * 3);
+            }
+            big.Save(args[1]);
+            return;
+        }
+
         if (args.Length >= 2 && args[0] == "--render-morph")
         { RenderMorph(args[1], args.Length >= 3 ? args[2] : "media"); return; }
 

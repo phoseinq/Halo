@@ -3636,8 +3636,10 @@ internal sealed partial class NotchController
             w = (int)Lerp(w, Halo.Widgets.HistoryLayout.W, eh);
             h = (int)Lerp(h, Halo.Widgets.HistoryLayout.Height(_historyItems.Length, HistoryExtra,
                                                                _historyDeckOpen), eh);
-            r = (int)Lerp(r, 26, eh);
-            tint = (int)Lerp(cT, TintFor(glass ? TintHistoryApp : TintHistoryDesk, GlassScale), _historyT);
+
+            r = (int)Lerp(faceOnly ? Halo.Widgets.Face.PlateH / 2f : r, 26, eh);
+
+            tint = (int)Lerp(tint, TintFor(glass ? TintHistoryApp : TintHistoryDesk, GlassScale), _historyT);
             fade = ContentFade(_historyT);
 
             mini *= Math.Clamp(1f - _historyT / ContentIn, 0f, 1f);
@@ -3774,14 +3776,32 @@ internal sealed partial class NotchController
         }
 
         Action<Graphics, int, int, float> content = _historyT > 0f
-            ? (g, cw, ch, f) => Halo.Widgets.HistoryView.Draw(g, cw, ch, f, HistoryRows(),
-                                                              _historyScroll, _historyDeckOpen,
-                                                              _historyHover, _historyHoverT, _historyClearHover,
-                                                              Halo.Widgets.Face.RingTone
-                                                              ?? (Halo.Widgets.Face.HaloLeft, Halo.Widgets.Face.HaloRight),
-                                                              HistoryShift, HistoryLeaving,
+            ? (g, cw, ch, f) =>
+            {
 
-                                                              HistoryEase())
+                float s = Math.Min(1f, cw / (float)Halo.Widgets.HistoryLayout.W);
+                var keepSheet = g.Save();
+                if (s < 0.999f) g.ScaleTransform(s, s);
+                Halo.Widgets.HistoryView.Draw(g, s < 0.999f ? Halo.Widgets.HistoryLayout.W : cw, (int)(ch / s), f, HistoryRows(),
+                                              _historyScroll, _historyDeckOpen,
+                                              _historyHover, _historyHoverT, _historyClearHover,
+                                              Halo.Widgets.Face.RingTone
+                                              ?? (Halo.Widgets.Face.HaloLeft, Halo.Widgets.Face.HaloRight),
+                                              HistoryShift, HistoryLeaving,
+
+                                              HistoryEase());
+                g.Restore(keepSheet);
+
+                _faceUnderSheet = faceOnly ? 1f - SmoothStep(Math.Min(1f, _historyT / FaceSheetCross)) : 0f;
+                if (_faceUnderSheet > 0.01f)
+                {
+                    var keepFace = g.Save();
+                    g.TranslateTransform((cw - Halo.Widgets.Face.PlateW) / 2f, 0f);
+                    DrawFace(g, Halo.Widgets.Face.PlateW, Halo.Widgets.Face.PlateH);
+                    g.Restore(keepFace);
+                }
+                _faceUnderSheet = 1f;
+            }
             : _greet != GreetingKind.None
             ? (g, cw, ch, f) => DrawGreeting(g, cw, ch)
             : _notif == null && (_ask ?? _askGhost) is { } q && _askT > 0f
@@ -4267,7 +4287,7 @@ internal sealed partial class NotchController
 
     private void DrawFace(Graphics g, int w, int h)
     {
-        float alpha = Halo.Widgets.FaceDirector.Alpha(_faceT);
+        float alpha = Halo.Widgets.FaceDirector.Alpha(_faceT) * _faceUnderSheet;
         var beat = new Halo.Widgets.FaceDirector.Beat(FaceLook(), 0f, 1f, 0f);
         if (_handT >= 0f)
         {
@@ -5309,7 +5329,7 @@ internal sealed partial class NotchController
         _historyLeaving is { } gone ? new Halo.Widgets.HistoryRow(gone, _historyLeaveDX, false) : null;
 
         private Halo.Widgets.HistoryShift HistoryShift =>
-        new(_historyOpenRow, _historyOpenExtra * EaseOutCubic(_historyOpenT), _historyLeaveAt, _historyLeaveH);
+        new(_historyOpenRow, _historyOpenExtra * Halo.Widgets.HistoryLayout.OpenEase(_historyOpenT), _historyLeaveAt, _historyLeaveH);
 
     private static float EaseOutCubic(float t)
     {
@@ -5321,8 +5341,10 @@ internal sealed partial class NotchController
 
     private float HistoryEase() => _historyDragging ? _historyT
         : _historyOpen ? EaseOutBack(_historyT)
-        : 1f - EaseOutCubic(1f - _historyT);
+        : SmoothStep(_historyT);
     private bool[] _holdPrev = Array.Empty<bool>();
+    private const float FaceSheetCross = 0.45f;
+    private float _faceUnderSheet = 1f;
 
     private const float FaceArriveSeconds = 0.42f, StripSwallowSeconds = 0.24f;
     private float _handSwallow;
@@ -5605,7 +5627,9 @@ internal sealed partial class NotchController
         float openWant = _historyOpenRow >= 0 ? 1f : 0f;
         if (Math.Abs(openWant - _historyOpenT) > 0.001f)
         {
-            _historyOpenT += (openWant - _historyOpenT) * Math.Clamp(_dt / 0.19f, 0f, 1f);
+            float openStep = _dt / Halo.Widgets.HistoryLayout.OpenSeconds;
+            _historyOpenT = openWant > _historyOpenT ? Math.Min(openWant, _historyOpenT + openStep)
+                                                     : Math.Max(openWant, _historyOpenT - openStep);
             busy = true;
         }
 

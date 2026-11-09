@@ -104,7 +104,9 @@ internal static class HistoryLayout
         float front = Visible - 1;
         if (q <= front) return (BodyTop + q * RowH, 0f);
         float k = Math.Min(q - front, MaxBack);
-        return (BodyTop + front * RowH + k * PeekH, k * PeekInset);
+
+        float u = k / MaxBack;
+        return (BodyTop + front * RowH + k * PeekH, MaxBack * PeekInset * u * u * (3f - 2f * u));
     }
 
     internal static float BandTop(float q) => Pose(Math.Max(q - 1f, 0f)).Top + CardH;
@@ -114,7 +116,14 @@ internal static class HistoryLayout
 
     private const float RevealLead = 0.075f, RevealMaxStart = 0.30f;
 
-        internal static float Reveal(int index, float t) =>
+    internal const float OpenSeconds = 0.26f;
+    internal static float OpenEase(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
+
+    internal static float Reveal(int index, float t) =>
         Math.Clamp((t - Math.Min(index * RevealLead, RevealMaxStart)) / (1f - RevealMaxStart), 0f, 1f);
 
     internal const float RevealRise = 22f;

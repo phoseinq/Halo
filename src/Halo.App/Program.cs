@@ -5546,6 +5546,11 @@ internal static class Program
                 float scroll = Math.Min(Math.Abs(scrollRows == -1 ? 0.5f : scrollRows) *
                                               Halo.Widgets.HistoryLayout.RowH,
                                         Halo.Widgets.HistoryLayout.MaxScroll(n, shift.Total, deckOpen));
+
+                if (float.TryParse(Environment.GetEnvironmentVariable("HALO_HISTORY_SCROLL"),
+                                   System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture, out float exact))
+                    scroll = exact;
                 int h = (int)Halo.Widgets.HistoryLayout.Height(n, shift.Total, deckOpen);
                 int cx = i % 4, cy = i / 4;
                 var st = g.Save();

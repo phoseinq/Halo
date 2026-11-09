@@ -213,4 +213,34 @@ public class HistoryLayoutTests
         var x = HistoryLayout.Dismiss(0f);
         Assert.True(HistoryLayout.Card(0f).Contains(x));
     }
+
+    // an opened card spreads its growth over the frames instead of spending it on the first few
+    [Fact]
+    public void An_opening_card_never_jumps_in_one_frame()
+    {
+        const float dt = 1f / 120f;
+        float t = 0f, was = 0f, largest = 0f;
+        while (t < 1f)
+        {
+            t = Math.Min(1f, t + dt / HistoryLayout.OpenSeconds);
+            float now = HistoryLayout.OpenEase(t);
+            largest = Math.Max(largest, now - was);
+            was = now;
+        }
+        Assert.Equal(1f, was, 3);
+        Assert.True(largest < 0.06f, $"largest single-frame step {largest}");
+        Assert.True(HistoryLayout.OpenEase(dt / HistoryLayout.OpenSeconds) < 0.01f);   // it eases in
+    }
+
+    // a card leaving the stack reaches its full width with no corner in the curve
+    [Fact]
+    public void The_stack_width_eases_and_keeps_its_resting_layers()
+    {
+        float front = HistoryLayout.Visible - 1;
+        Assert.Equal(0f, HistoryLayout.Pose(front).Inset, 3);
+        Assert.Equal(HistoryLayout.PeekInset, HistoryLayout.Pose(front + 1f).Inset, 3);
+        Assert.Equal(HistoryLayout.MaxBack * HistoryLayout.PeekInset, HistoryLayout.Pose(front + HistoryLayout.MaxBack).Inset, 3);
+        // near full width it is barely moving, where a straight line would still be at full speed
+        Assert.True(HistoryLayout.Pose(front + 0.05f).Inset < HistoryLayout.PeekInset * 0.05f * 0.25f);
+    }
 }

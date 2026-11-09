@@ -44,6 +44,15 @@ internal static class HistoryView
         catch { return HistoryLayout.OpenExtra; }
     }
 
+    private static (NotifItem? Item, int Grow, float Extra) _finalExtra;
+
+    private static float FinalExtra(NotifItem n)
+    {
+        if (!ReferenceEquals(_finalExtra.Item, n) || _finalExtra.Grow != HistoryLayout.Grow)
+            _finalExtra = (n, HistoryLayout.Grow, BodyExtra(n.Body, n.Title));
+        return _finalExtra.Extra;
+    }
+
     private static Font TitleFont() => new("Segoe UI Semibold", 16f, GraphicsUnit.Pixel);
     private const float TitleLineH = 22f;
 
@@ -161,7 +170,8 @@ internal static class HistoryView
 
         if (!deckOpen)
         {
-            for (int d = HistoryLayout.MaxBack; d >= 1; d--)
+
+            for (int d = HistoryLayout.MaxBack + 1; d >= 1; d--)
             {
                 int i = first + HistoryLayout.Visible - 1 + d;
                 if (i >= rows.Length) continue;
@@ -169,7 +179,9 @@ internal static class HistoryView
                 var (top, inset) = HistoryLayout.Pose(q);
 
                 var keepBack = g.Save();
-                g.SetClip(new RectangleF(0, HistoryLayout.BandTop(q), w, HistoryLayout.RowH),
+
+                g.SetClip(new RectangleF(0, MathF.Round(HistoryLayout.BandTop(q) - HistoryLayout.CardH) + HistoryLayout.CardH,
+                                         w, HistoryLayout.RowH),
                           CombineMode.Intersect);
                 DrawRow(g, w, h, rows[i], top, 0f, fade, 0f, false, accent,
                         appF, titleF, gistF, inset);
@@ -297,6 +309,8 @@ internal static class HistoryView
     {
         var n = row.Item;
 
+        top = MathF.Round(top);
+
         var keep = g.Save();
         if (row.Slide != 0f)
         {
@@ -370,9 +384,13 @@ internal static class HistoryView
             {
 
                 string full = HistoryText.Full(n.Body);
-                var body = HistoryLayout.Body(top, extra);
+
+                var body = HistoryLayout.Body(top, FinalExtra(n));
                 body = new RectangleF(body.X, body.Y + titleMore, body.Width, Math.Max(0f, body.Height - titleMore));
+                var keepBody = g.Save();
+                g.SetClip(card, CombineMode.Intersect);
                 Paragraphs(g, full, gistF, b, body);
+                g.Restore(keepBody);
             }
             else
             {

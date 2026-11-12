@@ -220,9 +220,9 @@ public sealed class LauncherStateTests
     {
         // a search field is not a text editor - the same reason the ask banner caps at 400
         var s = Make();
-        TypeAll(s, new string('a', 200));
+        TypeAll(s, new string('a', 500));
 
-        Assert.True(s.Query.Length <= 64);
+        Assert.Equal(LauncherState.MaxQuery, s.Query.Length);
     }
 
     // ---- Tab -----------------------------------------------------------------------------------------

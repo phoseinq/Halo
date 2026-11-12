@@ -50,6 +50,8 @@ internal static class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--render-hero") { RenderHero(args[1]); return; }
+
         if (args.Length >= 3 && args[0] == "--render-storelogos")
         {
             RenderStoreLogos(args[1], args[2]);
@@ -157,6 +159,95 @@ internal static class Program
         }
 
         if (args.Length >= 1 && args[0] == "--probe-launcher") { ProbeLauncher(); return; }
+
+        if (args.Length >= 1 && args[0] == "--probe-clipboard")
+        {
+            string pinnedDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                @"Microsoft\Windows\Clipboard\Pinned");
+            var pinned = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var board in System.IO.Directory.Exists(pinnedDir) ? System.IO.Directory.GetDirectories(pinnedDir) : [])
+                foreach (var item in System.IO.Directory.GetDirectories(board))
+                    pinned.Add(System.IO.Path.GetFileName(item).Trim('{', '}'));
+            var got = System.Threading.Tasks.Task.Run(async () =>
+                await Windows.ApplicationModel.DataTransfer.Clipboard.GetHistoryItemsAsync()).Result;
+            int all = 0, hit = 0;
+            foreach (var it in got.Items)
+            {
+                all++;
+                if (pinned.Contains(it.Id.Trim('{', '}'))) hit++;
+            }
+            Console.WriteLine($"status={got.Status} history={all} pinnedOnDisk={pinned.Count} pinnedAlsoInHistory={hit}");
+            if (args.Length >= 2)
+            {
+                var read = Halo.Launcher.ClipboardHistory.Read() ?? [];
+                int at = -1;
+                for (int i = 0; i < read.Count && at < 0; i++) if (read[i].Preview == args[1]) at = i;
+                Console.WriteLine($"markerAt={at} of {read.Count}");
+            }
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] == "--probe-clip-pins")
+        {
+            var held = Halo.Launcher.ClipPins.Load();
+            int found = held.IndexOf(args[1]);
+            Console.WriteLine($"pins={held.Count} found={found >= 0}");
+            if (found >= 0 && args.Length >= 3 && args[2] == "remove") Halo.Launcher.ClipPins.RemoveAt(found);
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] == "--probe-clip-delete")
+        {
+            var entries = Halo.Launcher.ClipboardHistory.Read() ?? [];
+            string? hit = null;
+            foreach (var entry in entries) if (entry.Preview == args[1]) hit = entry.Id;
+            Console.WriteLine($"found={hit is not null} deleted={hit is not null && Halo.Launcher.ClipboardHistory.Delete(hit)}");
+            return;
+        }
+
+        if (args.Length >= 1 && args[0] == "--probe-vault")
+        {
+            Console.WriteLine(Halo.Launcher.LauncherVault.ProbeAsync().GetAwaiter().GetResult());
+            return;
+        }
+
+        if (args.Length >= 2 && args[0] == "--probe-files")
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var hits = Halo.Launcher.FileSearch.Search(args[1], 5);
+            Console.WriteLine($"{hits.Count} hits in {sw.ElapsedMilliseconds}ms (connecting)");
+            foreach (string again in new[] { args[1], args[1] + "s", "report" })
+            {
+                sw.Restart();
+                int n = Halo.Launcher.FileSearch.Search(again, 5).Count;
+                Console.WriteLine($"{n} hits in {sw.ElapsedMilliseconds}ms (connected)");
+            }
+            foreach (var hit in hits) Console.WriteLine("  " + hit);
+            return;
+        }
+
+        if (args.Length >= 1 && args[0] == "--probe-pages")
+        {
+            var mon = new System.Drawing.Rectangle(0, 0, 2560, 1440);
+            for (int round = 0; round < 3; round++)
+            {
+                var line = new System.Text.StringBuilder($"round {round}:");
+                foreach (var p in new[] { "quick", "sysinfo", "clipboard", "reminders", "translate" })
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    Halo.Launcher.LauncherPages.For(p, "", () => false);
+                    line.Append($" {p}={sw.Elapsed.TotalMilliseconds:0.0}");
+                }
+                var gs = System.Diagnostics.Stopwatch.StartNew();
+                Halo.Launcher.LauncherPages.SystemGauges();
+                line.Append($" gauges={gs.Elapsed.TotalMilliseconds:0.0}");
+                var sn = System.Diagnostics.Stopwatch.StartNew();
+                using (var glass = new Halo.Launcher.LauncherGlass()) glass.Snap(mon, 130);
+                line.Append($" glass={sn.Elapsed.TotalMilliseconds:0.0}");
+                Console.WriteLine(line);
+            }
+            return;
+        }
         if (args.Length >= 1 && args[0] == "--probe-apps")
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -726,7 +817,7 @@ internal static class Program
             var sb = new System.Text.StringBuilder();
 
             var pill = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
-            pill.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+            pill.Seed(SampleTitle, SampleArtist, SampleCover(), 0.42);
 
             using var plate = new System.Drawing.Bitmap(560, 220, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
             using (var pg = System.Drawing.Graphics.FromImage(plate))
@@ -1657,7 +1748,7 @@ internal static class Program
             {
 
                 var media = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
-                media.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+                media.Seed(SampleTitle, SampleArtist, SampleCover(), 0.42);
                 widget = media;
             }
             using var plate = new System.Drawing.Bitmap(560, 420, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
@@ -1985,21 +2076,89 @@ internal static class Program
         th.Join();
     }
 
-    private static byte[] SampleCover()
+    internal const string SampleTitle = "Harbor Lights";
+    internal const string SampleArtist = "Aster Vale";
+
+    internal static byte[] SampleCover()
     {
-        using var art = new System.Drawing.Bitmap(320, 320);
-        using (var ag = System.Drawing.Graphics.FromImage(art))
+        const int S = 640;
+        using var art = new System.Drawing.Bitmap(S, S, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(art))
         {
-            using var lg = new System.Drawing.Drawing2D.LinearGradientBrush(
-                new System.Drawing.Rectangle(0, 0, 320, 320),
-                System.Drawing.Color.FromArgb(255, 236, 84, 60),
-                System.Drawing.Color.FromArgb(255, 42, 30, 120), 35f);
-            ag.FillRectangle(lg, 0, 0, 320, 320);
-            ag.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var ring = new System.Drawing.Pen(System.Drawing.Color.FromArgb(210, 255, 236, 180), 16f);
-            ag.DrawEllipse(ring, 70, 70, 180, 180);
-            using var dot = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 20, 18, 26));
-            ag.FillEllipse(dot, 145, 145, 30, 30);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var sky = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, S, S),
+                       System.Drawing.Color.Black, System.Drawing.Color.Black, 90f))
+            {
+                sky.InterpolationColors = new System.Drawing.Drawing2D.ColorBlend
+                {
+                    Colors =
+                    [
+                        System.Drawing.Color.FromArgb(18, 16, 62), System.Drawing.Color.FromArgb(74, 30, 128),
+                        System.Drawing.Color.FromArgb(214, 62, 124), System.Drawing.Color.FromArgb(255, 150, 84),
+                        System.Drawing.Color.FromArgb(255, 150, 84),
+                    ],
+                    Positions = [0f, 0.32f, 0.58f, 0.74f, 1f],
+                };
+                g.FillRectangle(sky, 0, 0, S, S);
+            }
+
+            var rng = new Random(11);
+            for (int i = 0; i < 90; i++)
+            {
+                float x = rng.Next(S), y = rng.Next(S / 2), d = 1f + (float)rng.NextDouble() * 2.2f;
+                using var star = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(
+                    (int)(230 * (1f - y / (S / 2f))), 255, 244, 226));
+                g.FillEllipse(star, x, y, d, d);
+            }
+
+            const float R = 150f, Cx = S * 0.5f, Cy = S * 0.56f;
+            using (var glow = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                glow.AddEllipse(Cx - R * 2f, Cy - R * 2f, R * 4f, R * 4f);
+                using var halo = new System.Drawing.Drawing2D.PathGradientBrush(glow)
+                {
+                    CenterColor = System.Drawing.Color.FromArgb(130, 255, 196, 120),
+                    SurroundColors = [System.Drawing.Color.FromArgb(0, 255, 120, 120)],
+                };
+                g.FillPath(halo, glow);
+            }
+
+            var state = g.Save();
+            using (var disc = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                disc.AddEllipse(Cx - R, Cy - R, R * 2f, R * 2f);
+                using var cut = new System.Drawing.Region(disc);
+                float y = Cy + 6f, gap = 5f, bar = 16f;
+                while (y < Cy + R)
+                {
+                    cut.Exclude(new System.Drawing.RectangleF(0, y, S, gap));
+                    y += gap + bar;
+                    gap += 3f;
+                    bar = Math.Max(6f, bar - 2f);
+                }
+                g.SetClip(cut, System.Drawing.Drawing2D.CombineMode.Replace);
+                using var sun = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new System.Drawing.RectangleF(Cx - R, Cy - R - 1f, R * 2f, R * 2f + 2f),
+                    System.Drawing.Color.FromArgb(255, 238, 150), System.Drawing.Color.FromArgb(255, 74, 128), 90f);
+                g.FillEllipse(sun, Cx - R, Cy - R, R * 2f, R * 2f);
+            }
+            g.Restore(state);
+
+            (float baseY, float amp, float freq, float phase, System.Drawing.Color c)[] ridges =
+            [
+                (S * 0.70f, 34f, 0.011f, 0.4f, System.Drawing.Color.FromArgb(92, 34, 112)),
+                (S * 0.79f, 44f, 0.008f, 2.1f, System.Drawing.Color.FromArgb(50, 24, 86)),
+                (S * 0.90f, 38f, 0.013f, 4.0f, System.Drawing.Color.FromArgb(20, 14, 48)),
+            ];
+            foreach (var (baseY, amp, freq, phase, c) in ridges)
+            {
+                var pts = new System.Collections.Generic.List<System.Drawing.PointF> { new(0, S) };
+                for (int x = 0; x <= S; x += 6)
+                    pts.Add(new(x, baseY + amp * MathF.Sin(x * freq + phase) + amp * 0.35f * MathF.Sin(x * freq * 2.7f + phase)));
+                pts.Add(new(S, S));
+                using var ridge = new System.Drawing.SolidBrush(c);
+                g.FillPolygon(ridge, pts.ToArray());
+            }
         }
         using var ms = new System.IO.MemoryStream();
         art.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
@@ -2023,7 +2182,7 @@ internal static class Program
             else
             {
                 var media = new Halo.Widgets.MediaWidget(new Halo.Widgets.MediaSessions(), 0);
-                media.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+                media.Seed(SampleTitle, SampleArtist, SampleCover(), 0.42);
                 widget = media;
             }
 
@@ -2690,6 +2849,12 @@ internal static class Program
             img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
             pngs.Add((s, ms.ToArray()));
             System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"icon-{s}.png"), ms.ToArray());
+        }
+
+        foreach (int s in new[] { 30, 36, 60, 72, 80, 300 })
+        {
+            using var img = IconImage(s);
+            img.Save(System.IO.Path.Combine(dir, $"icon-{s}.png"), System.Drawing.Imaging.ImageFormat.Png);
         }
 
         using (var fs = System.IO.File.Create(System.IO.Path.Combine(dir, "halo.ico")))
@@ -4541,7 +4706,7 @@ internal static class Program
         }
 
         float bandH = Halo.Launcher.LauncherView.BandHeight(state);
-        var (from, swapBox, to) = Halo.Launcher.LauncherView.LangBoxes(Halo.Launcher.LauncherView.W, bandH);
+        var (from, swapBox, to) = Halo.Launcher.LauncherView.LangBoxes(Halo.Launcher.LauncherView.W);
         Say("");
 
         foreach (var (name, box) in new[] { ("from", from), ("swap", swapBox), ("to", to) })
@@ -4569,6 +4734,9 @@ internal static class Program
             new("TeamViewer", "teamviewer"),
             new("Tesseract OCR", "tesseract"),
             new("Termius", "termius"),
+            new("Spotify", "spotify"),
+            new("Visual Studio Code", "code"),
+            new("Figma", "figma"),
         ];
         var state = new Halo.Launcher.LauncherState(
             () => apps, () => true, new Halo.Launcher.LaunchStats(), () => DateTimeOffset.Now);
@@ -4599,14 +4767,36 @@ internal static class Program
         }
         else foreach (char c in query) state.Type(c);
 
-        int h = Halo.Launcher.LauncherView.Height(state.Rows.Count, Halo.Launcher.LauncherView.BandHeight(state));
+        state.PageBadge = id => id == Halo.Launcher.LauncherState.PageReminders ? 2 : 0;
+        state.Extras = Halo.Launcher.LauncherExtras.For;
+
+        if (state.Page == Halo.Launcher.LauncherState.PageClipboard)
+            state.PageRows = (_, q) => Halo.Launcher.LauncherPages.ClipRows(
+            [
+                new("c", "git status"), new("b", "https://example.com/docs"), new("p", "a pinned line", true), new("a", "an older line of text"),
+            ], ["a line pinned in Halo"], q);
+        state.Refresh();
+        if (int.TryParse(Environment.GetEnvironmentVariable("HALO_LAUNCHER_GAUGE"), out int hotGauge)) state.SetHotGauge(hotGauge);
+
+        int h = (int)Halo.Launcher.LauncherLayout.Of(state).Height;
         using var bmp = new System.Drawing.Bitmap(Halo.Launcher.LauncherView.W, h,
             System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
         using (var g = System.Drawing.Graphics.FromImage(bmp))
         {
 
             g.Clear(System.Drawing.Color.FromArgb(255, 92, 98, 112));
-            Halo.Launcher.LauncherView.Draw(g, bmp.Width, bmp.Height, state, 1f, null);
+            using var glass = new Halo.Launcher.LauncherGlass();
+            using (var scene = new System.Drawing.Bitmap(640, 360, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+            {
+                using (var sg = System.Drawing.Graphics.FromImage(scene))
+                using (var wash = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, 640, 360),
+                           System.Drawing.Color.FromArgb(30, 90, 200), System.Drawing.Color.FromArgb(190, 60, 130), 35f))
+                    sg.FillRectangle(wash, 0, 0, 640, 360);
+                glass.Use(Halo.Launcher.LauncherGlass.Compose(scene, Halo.Shell.NotchController.TintLauncher),
+                          new System.Drawing.Rectangle(0, 0, 2560, 1440));
+            }
+            Halo.Launcher.LauncherView.Draw(g, bmp.Width, bmp.Height, state, 1f, null, true, glass,
+                                            new System.Drawing.Point(1000, 300));
         }
         bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
         Console.WriteLine($"wrote {outPath}  {bmp.Width}x{bmp.Height}  {state.Rows.Count} rows"
@@ -4918,6 +5108,249 @@ internal static class Program
         Console.WriteLine($"wrote {outPath}");
     }
 
+    private static Halo.Launcher.LauncherState StoreLauncherState(System.Collections.Generic.IReadOnlyList<Halo.Launcher.LauncherRow> files)
+    {
+        System.Collections.Generic.IReadOnlyList<Halo.Launcher.AppEntry> apps = [new("Report Builder", "report")];
+        return new Halo.Launcher.LauncherState(() => apps, () => true, new Halo.Launcher.LaunchStats(), () => DateTimeOffset.Now)
+        {
+            Extras = Halo.Launcher.LauncherExtras.For,
+            FileHits = _ => files,
+        };
+    }
+
+    private static void RenderHero(string outDir)
+    {
+        System.IO.Directory.CreateDirectory(outDir);
+        foreach (var (w, h, name) in new[] { (3840, 2160, "super-hero-3840x2160.png"), (1920, 1080, "trailer-thumbnail-1920x1080.png"), (2560, 1440, "stage-2560x1440.png") })
+        {
+            using var art = HeroArt(w, h);
+            art.Save(System.IO.Path.Combine(outDir, name), System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine("wrote " + name);
+        }
+        foreach (var (w, h, name) in new[] { (2560, 1440, "minimal-stage-2560x1440.png"), (1920, 1080, "minimal-thumbnail-1920x1080.png") })
+        {
+            using var art = MinimalArt(w, h);
+            art.Save(System.IO.Path.Combine(outDir, name), System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine("wrote " + name);
+        }
+    }
+
+    private static System.Drawing.Bitmap MinimalArt(int w, int h)
+    {
+        var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var sky = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, w, h),
+                       System.Drawing.Color.FromArgb(18, 20, 34), System.Drawing.Color.FromArgb(28, 24, 46), 75f))
+                g.FillRectangle(sky, 0, 0, w, h);
+            (float x, float y, float r, int red, int green, int blue, int alpha)[] washes =
+            [
+                (0.18f, 0.08f, 0.60f, 92, 130, 255, 70),
+                (0.86f, 0.95f, 0.65f, 190, 140, 255, 60),
+                (0.55f, 0.55f, 0.45f, 110, 210, 190, 22),
+            ];
+            foreach (var (x, y, r, red, green, blue, alpha) in washes)
+            {
+                float cx = x * w, cy = y * h, rad = r * w;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddEllipse(cx - rad, cy - rad, rad * 2f, rad * 2f);
+                using var pg = new System.Drawing.Drawing2D.PathGradientBrush(path)
+                {
+                    CenterColor = System.Drawing.Color.FromArgb(alpha, red, green, blue),
+                    SurroundColors = [System.Drawing.Color.FromArgb(0, red, green, blue)],
+                };
+                g.FillPath(pg, path);
+            }
+        }
+
+        var locked = bmp.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadWrite, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        unsafe
+        {
+            var noise = new Random(9);
+            byte* row = (byte*)locked.Scan0;
+            for (int y = 0; y < h; y++, row += locked.Stride)
+                for (int x = 0; x < w; x++)
+                {
+                    int n = noise.Next(-2, 3);
+                    for (int c = 0; c < 3; c++) row[x * 4 + c] = (byte)Math.Clamp(row[x * 4 + c] + n, 0, 255);
+                    row[x * 4 + 3] = 255;
+                }
+        }
+        bmp.UnlockBits(locked);
+        return bmp;
+    }
+
+    private static System.Drawing.Bitmap HeroArt(int w, int h)
+    {
+        var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            using (var sky = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, w, h),
+                       System.Drawing.Color.FromArgb(7, 9, 24), System.Drawing.Color.FromArgb(24, 14, 52), 90f))
+                g.FillRectangle(sky, 0, 0, w, h);
+
+            (float x, float y, float r, int red, int green, int blue, int alpha)[] glows =
+            [
+                (0.16f, 0.82f, 0.55f, 40, 96, 255, 170), (0.84f, 0.80f, 0.55f, 176, 72, 240, 170),
+                (0.50f, 1.05f, 0.62f, 40, 214, 180, 150), (0.50f, 0.42f, 0.34f, 92, 110, 255, 90),
+            ];
+            foreach (var (x, y, r, red, green, blue, alpha) in glows)
+            {
+                float cx = x * w, cy = y * h, rad = r * w;
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddEllipse(cx - rad, cy - rad, rad * 2f, rad * 2f);
+                using var pg = new System.Drawing.Drawing2D.PathGradientBrush(path)
+                {
+                    CenterColor = System.Drawing.Color.FromArgb(alpha, red, green, blue),
+                    SurroundColors = [System.Drawing.Color.FromArgb(0, red, green, blue)],
+                };
+                g.FillPath(pg, path);
+            }
+
+            float ringR = h * 0.27f, ringX = w * 0.5f, ringY = h * 0.47f, stroke = h * 0.024f;
+            void Ring(System.Drawing.Graphics to, float scale, float width, int alpha)
+            {
+                var box = new System.Drawing.RectangleF((ringX - ringR) * scale, (ringY - ringR) * scale, ringR * 2f * scale, ringR * 2f * scale);
+                using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(System.Drawing.RectangleF.Inflate(box, width, width),
+                    System.Drawing.Color.FromArgb(alpha, 96, 150, 255), System.Drawing.Color.FromArgb(alpha, 120, 226, 190), 20f);
+                brush.InterpolationColors = new System.Drawing.Drawing2D.ColorBlend
+                {
+                    Colors = [System.Drawing.Color.FromArgb(alpha, 92, 146, 255), System.Drawing.Color.FromArgb(alpha, 190, 150, 255), System.Drawing.Color.FromArgb(alpha, 112, 226, 190)],
+                    Positions = [0f, 0.5f, 1f],
+                };
+                using var pen = new System.Drawing.Pen(brush, width);
+                to.DrawEllipse(pen, box);
+            }
+
+            for (int k = 34; k >= 1; k--) Ring(g, 1f, stroke * (1f + k * 0.62f), 6);
+            Ring(g, 1f, stroke, 255);
+            using (var core = new System.Drawing.Pen(System.Drawing.Color.FromArgb(120, 255, 255, 255), stroke * 0.22f))
+                g.DrawEllipse(core, ringX - ringR, ringY - ringR, ringR * 2f, ringR * 2f);
+
+            var rng = new Random(23);
+            for (int i = 0; i < 260; i++)
+            {
+                float x = rng.Next(w), y = (float)rng.NextDouble() * h * 0.6f, d = (1f + (float)rng.NextDouble() * 2f) * h / 1080f;
+                using var star = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(rng.Next(50, 190), 225, 232, 255));
+                g.FillEllipse(star, x, y, d, d);
+            }
+        }
+
+        var locked = bmp.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadWrite, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        unsafe
+        {
+            var noise = new Random(5);
+            byte* row = (byte*)locked.Scan0;
+            for (int y = 0; y < h; y++, row += locked.Stride)
+                for (int x = 0; x < w; x++)
+                {
+                    int n = noise.Next(-2, 3);
+                    for (int c = 0; c < 3; c++) row[x * 4 + c] = (byte)Math.Clamp(row[x * 4 + c] + n, 0, 255);
+                    row[x * 4 + 3] = 255;
+                }
+        }
+        bmp.UnlockBits(locked);
+        return bmp;
+    }
+
+    private static void StoreLauncherShot(string outPath, Halo.Launcher.LauncherState state, string headline, string sub, int variant)
+    {
+        const int W = 1920, H = 1080;
+        const float Scale = 1.5f;
+        int boxW = Halo.Launcher.LauncherView.W, boxH = (int)Halo.Launcher.LauncherLayout.Of(state).Height;
+        float x = (W - boxW * Scale) / 2f, y = Math.Max(90f, (680f - boxH * Scale) / 2f);
+
+        using var bmp = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        using (var wall = StoreWallpaper(W, H, variant)) g.DrawImage(wall, 0, 0, W, H);
+
+        using var glass = new Halo.Launcher.LauncherGlass();
+        int plateW = (int)(W / Scale / Halo.Launcher.LauncherGlass.Scale), plateH = (int)(H / Scale / Halo.Launcher.LauncherGlass.Scale);
+        using (var small = new System.Drawing.Bitmap(plateW, plateH, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+        {
+            using (var sg = System.Drawing.Graphics.FromImage(small))
+            {
+                sg.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                sg.DrawImage(bmp, 0, 0, plateW, plateH);
+            }
+            glass.Use(Halo.Launcher.LauncherGlass.Compose(small, Halo.Shell.NotchController.TintLauncher),
+                      new System.Drawing.Rectangle(0, 0, (int)(W / Scale), (int)(H / Scale)));
+        }
+
+        var st = g.Save();
+        g.TranslateTransform(x, y);
+        g.ScaleTransform(Scale, Scale);
+        using var sampleIcon = new System.Drawing.Bitmap(64, 64, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var ig = System.Drawing.Graphics.FromImage(sampleIcon))
+        using (var ib = new System.Drawing.Drawing2D.LinearGradientBrush(new System.Drawing.Rectangle(0, 0, 64, 64),
+                   System.Drawing.Color.FromArgb(70, 150, 255), System.Drawing.Color.FromArgb(150, 90, 240), 45f))
+        {
+            ig.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            ig.FillEllipse(ib, 3, 3, 58, 58);
+        }
+        Halo.Launcher.LauncherView.Draw(g, boxW, boxH, state, 1f, _ => sampleIcon, true, glass,
+                                        new System.Drawing.Point((int)(x / Scale), (int)(y / Scale)));
+        g.Restore(st);
+        StoreCaption(g, headline, sub);
+        bmp.Save(outPath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"wrote {outPath}");
+    }
+
+    private static void StoreCaption(System.Drawing.Graphics g, string headline, string sub)
+    {
+        const int W = 1920;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+        using var hf = new System.Drawing.Font("Segoe UI Semibold", 56f, System.Drawing.GraphicsUnit.Pixel);
+        using var sf = new System.Drawing.Font("Segoe UI", 30f, System.Drawing.GraphicsUnit.Pixel);
+        using var hb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(248, 255, 255, 255));
+        using var sb = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(175, 255, 255, 255));
+        var centre = new System.Drawing.StringFormat { Alignment = System.Drawing.StringAlignment.Center };
+        g.DrawString(headline, hf, hb, W / 2f, 800f, centre);
+        g.DrawString(sub, sf, sb, W / 2f, 882f, centre);
+    }
+
+    private static void StoreRecent(string outPath, System.Drawing.Image icon)
+    {
+        var hues = new[] { (41, 171, 226), (232, 74, 95), (120, 200, 130), (140, 110, 235), (240, 170, 60) };
+        (string App, string Title, string Body)[] seed =
+        [
+            ("Messages", "Sara: are you coming tonight?", "I booked a table for eight at the place by the river, and Ali can pick you up on the way."),
+            ("Mail", "Your invoice for August is ready", "Invoice #4821 is attached."),
+            ("Calendar", "Design review in 15 minutes", "Room 4, and the deck is in the shared folder."),
+            ("Music", "New album from a band you follow", ""),
+            ("System", "Updates are ready to install", "One of them needs a restart to finish."),
+        ];
+        var rows = new Halo.Widgets.HistoryRow[seed.Length];
+        for (int i = 0; i < seed.Length; i++)
+        {
+            var (r, gr, b) = hues[i];
+            var dot = new System.Drawing.Bitmap(64, 64, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var ig = System.Drawing.Graphics.FromImage(dot))
+            using (var ib = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, r, gr, b)))
+            {
+                ig.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                ig.FillEllipse(ib, 2, 2, 60, 60);
+            }
+            rows[i] = new Halo.Widgets.HistoryRow(new Halo.Notifications.NotifItem
+            {
+                Id = (uint)(100 + i), App = seed[i].App, Title = seed[i].Title, Body = seed[i].Body, Icon = dot,
+                Time = DateTime.Now.AddMinutes(-4 * (i + 1)),
+            }, 0f, i == 0);
+        }
+        float extra = Halo.Widgets.HistoryView.BodyExtra(rows[0].Item.Body, rows[0].Item.Title);
+        var shift = new Halo.Widgets.HistoryShift(0, extra, -1, 0f);
+        int w = Halo.Widgets.HistoryLayout.W, h = (int)Halo.Widgets.HistoryLayout.Height(rows.Length, shift.Total, false);
+        StoreShot(outPath, w, h, 26, g => Halo.Widgets.HistoryView.Draw(g, w, h, 1f, rows, 0f, false, -1, 0f, false,
+                (Halo.Widgets.Face.HaloLeft, Halo.Widgets.Face.HaloRight), shift),
+            "Missed something? It is all still there",
+            "Pull the pill down for Recent. Every notification, opened in place, with the full message",
+            scale: 1.3f, variant: 2);
+    }
+
     private static void StoreWarm(Action<System.Drawing.Graphics> draw)
     {
         using var warm = new System.Drawing.Bitmap(560, 220,
@@ -4950,7 +5383,7 @@ internal static class Program
                 if (!media.IsActive)
                     Console.WriteLine("no media session found - play something, or drop the 'live' argument");
             }
-            else media.Seed("Bohemian Rhapsody", "Queen", SampleCover(), 0.42);
+            else media.Seed(SampleTitle, SampleArtist, SampleCover(), 0.42);
             if (Want("media"))
             {
                 StoreWarm(g => media.DrawContent(g, 560, 220, 1f));
@@ -5064,6 +5497,69 @@ internal static class Program
                     "The rest of the time, it stays out of the way",
                     "A small glass pill at the top of the screen. Hover to open it, drag it anywhere, pin it above fullscreen apps",
                     scale: 3.4f, variant: 4);
+            }
+
+            if (Want("recent")) StoreRecent(P("06-recent.png"), icon);
+
+            if (Want("launcher"))
+            {
+                var home = StoreLauncherState([]);
+                home.PageBadge = id => id == Halo.Launcher.LauncherState.PageReminders ? 2 : 0;
+                home.Refresh();
+                StoreLauncherShot(P("07-launcher.png"), home,
+                    "Press Alt+Space and everything is one line away",
+                    "Apps, quick actions, your clipboard, translation and reminders in one small box", 5);
+            }
+            if (Want("search"))
+            {
+                var find = StoreLauncherState(
+                [
+                    Halo.Launcher.FileSearch.RowFor(@"C:\Users\you\Documents\quarterly-report.pdf"),
+                    Halo.Launcher.FileSearch.RowFor(@"C:\Users\you\Documents\report-notes.txt"),
+                ]);
+                foreach (char c in "report") find.Type(c);
+                StoreLauncherShot(P("08-search.png"), find,
+                    "Find it, or just work it out",
+                    "Files from the Windows index, sums and unit conversions, the web, and a command line after >", 6);
+            }
+            if (Want("system"))
+            {
+                var sys = StoreLauncherState([]);
+                sys.PageRows = (_, _) =>
+                [
+                    new Halo.Launcher.LauncherRow("System", null, false, Halo.Launcher.LauncherRowKind.Info, null, "Windows 11 Pro 24H2", "\uE770", Halo.Widgets.Fx.VitalOs),
+                    new Halo.Launcher.LauncherRow("Processor", null, false, Halo.Launcher.LauncherRowKind.Info, null, "14 cores  -  20 threads", "\uE950", Halo.Widgets.Fx.VitalCpu),
+                    new Halo.Launcher.LauncherRow("Graphics", null, false, Halo.Launcher.LauncherRowKind.Info, null, "8 GB discrete", "\uF211", Halo.Widgets.Fx.VitalGpu),
+                    new Halo.Launcher.LauncherRow("Uptime", null, false, Halo.Launcher.LauncherRowKind.Info, null, "2d 4h 18m", "\uE917", Halo.Widgets.Fx.VitalStorage),
+                ];
+                sys.PageGauges = () =>
+                [
+                    new Halo.Launcher.LauncherPages.Gauge("CPU", 0.24f, "24% busy - 20 threads", Tint: Halo.Widgets.Fx.VitalCpu),
+                    new Halo.Launcher.LauncherPages.Gauge("GPU", 0.38f, "38% on the busiest engine", Tint: Halo.Widgets.Fx.VitalGpu),
+                    new Halo.Launcher.LauncherPages.Gauge("Memory", 0.56f, "17.9 of 32.0 GB used, 14.1 free", Tint: Halo.Widgets.Fx.VitalMemory),
+                    new Halo.Launcher.LauncherPages.Gauge("Storage", 0.62f, "c: 186 GB free of 512",
+                        Parts: [new(0.64f, "c: 186 GB free of 512"), new(0.42f, "d: 580 GB free of 1000")], Tint: Halo.Widgets.Fx.VitalStorage),
+                    new Halo.Launcher.LauncherPages.Gauge("Battery", 0.81f, "81% - about 5h 20m left", Inverted: true, Tint: Halo.Widgets.Fx.VitalBattery),
+                ];
+                sys.GoTo(Halo.Launcher.LauncherState.PageSystem);
+                sys.SetHotGauge(2);
+                StoreLauncherShot(P("09-system.png"), sys,
+                    "Your machine at a glance",
+                    "Live load, memory, every drive and the battery. Point at a figure for the details", 7);
+            }
+            if (Want("translate"))
+            {
+                var tr = StoreLauncherState([]);
+                tr.PageRows = (_, _) =>
+                [
+                    new Halo.Launcher.LauncherRow("\u0641\u0631\u062F\u0627 \u0633\u0627\u0639\u062A \u062F\u0647 \u0645\u06CC\u200C\u0628\u06CC\u0646\u0645\u062A", null, true,
+                        Halo.Launcher.LauncherRowKind.Action, Halo.Launcher.LauncherPages.ActCopyTranslation, "copy", "\uE8C8"),
+                ];
+                tr.GoTo(Halo.Launcher.LauncherState.PageTranslate);
+                foreach (char c in "See you tomorrow at ten") tr.Type(c);
+                StoreLauncherShot(P("10-translate.png"), tr,
+                    "Translate without leaving what you are doing",
+                    "Type a line, pick a language, copy the result. Reminders work the same way", 8);
             }
         });
         t.SetApartmentState(System.Threading.ApartmentState.MTA);

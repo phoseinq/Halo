@@ -16,24 +16,37 @@ internal static class LauncherPages
 
     private const string GlyphCopy = "\uE8C8";
     private const string GlyphWindows = "\uE770";
-    private const string GlyphCpu = "\uE9D9";
-    private const string GlyphClock = "\uE823";
-    private const string GlyphNet = "\uE839";
-    private const string GlyphPc = "\uE977";
+    private const string GlyphCpu = "\uE950";
+    private const string GlyphClock = "\uE917";
+    private const string GlyphNet = "\uE968";
+    private const string GlyphPc = "\uE77B";
     private const string GlyphGpu = "\uF211";
     private const string GlyphBolt = "\uE945";
 
     private const string GpuClassKey =
         @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\";
 
-    internal static IReadOnlyList<LauncherRow> For(string page, string query, Func<bool>? muted = null)
+    internal const string ActSaveReminder = "act:remsave";
+    internal const string WhenPrefix = "remwhen:";
+
+    internal static IReadOnlyList<LauncherRow> For(string page, string query, Func<bool>? muted = null, string? reminderId = null)
+    {
+        if (page != LauncherState.PageClipPins) CommitUnpins();
+        return Build(page, query, muted, reminderId);
+    }
+
+    private static IReadOnlyList<LauncherRow> Build(string page, string query, Func<bool>? muted, string? reminderId)
         => page switch
         {
             LauncherState.PageSystem => System(),
             LauncherState.PageQuick => Quick(muted),
-            LauncherState.PageClipboard => Clipboard(),
+            LauncherState.PageClipboard => Clipboard(query),
+            LauncherState.PageClipPins => Pinned(),
+            LauncherState.PageVault => Vault(),
             LauncherState.PageReminders => Reminders(query),
             LauncherState.PageTranslate => Translate(),
+            LauncherState.PageAddAction => AddAction(query),
+            LauncherState.PageReminderEdit => ReminderEdit(query, reminderId),
             _ => [],
         };
 
@@ -55,13 +68,13 @@ internal static class LauncherPages
 
         float cpu = Halo.Interop.CpuLoad.Last;
         if (cpu >= 0f)
-            g.Add(new Gauge("cpu", cpu, (int)Math.Round(cpu * 100) + "% busy - "
+            g.Add(new Gauge("CPU", cpu, (int)Math.Round(cpu * 100) + "% busy - "
                 + Environment.ProcessorCount + " threads", Tint: Halo.Widgets.Fx.VitalCpu));
 
         Halo.Interop.GpuLoad.Refresh();
         float gpu = Halo.Interop.GpuLoad.Last;
         if (gpu >= 0f)
-            g.Add(new Gauge("gpu", gpu, (int)Math.Round(gpu * 100) + "% on the busiest engine",
+            g.Add(new Gauge("GPU", gpu, (int)Math.Round(gpu * 100) + "% on the busiest engine",
                             Tint: Halo.Widgets.Fx.VitalGpu));
 
         try
@@ -71,7 +84,7 @@ internal static class LauncherPages
             {
                 double totalGb = m.ullTotalPhys / 1024d / 1024d / 1024d;
                 double usedGb = (m.ullTotalPhys - m.ullAvailPhys) / 1024d / 1024d / 1024d;
-                g.Add(new Gauge("memory", (float)(usedGb / totalGb),
+                g.Add(new Gauge("Memory", (float)(usedGb / totalGb),
                     $"{usedGb:0.0} of {totalGb:0.0} GB used, {totalGb - usedGb:0.0} free",
                     Tint: Halo.Widgets.Fx.VitalMemory));
             }
@@ -90,12 +103,12 @@ internal static class LauncherPages
                 double f = d.AvailableFreeSpace / 1024d / 1024d / 1024d;
                 double t = d.TotalSize / 1024d / 1024d / 1024d;
                 free += f; size += t;
-                string letter = d.Name.TrimEnd(Sep, ':').ToLowerInvariant();
+                string letter = d.Name.TrimEnd(Sep, ':').ToUpperInvariant();
                 parts.Add(new Ring((float)((t - f) / t), $"{letter}: {f:0} GB free of {t:0}"));
                 says.Add(letter + " " + f.ToString("0"));
             }
             if (size > 0)
-                g.Add(new Gauge("storage", (float)((size - free) / size),
+                g.Add(new Gauge("Storage", (float)((size - free) / size),
                     $"{free:0} GB free of {size:0} - " + string.Join(", ", says) + " GB free",
                     Parts: [.. parts], Tint: Halo.Widgets.Fx.VitalStorage));
         }
@@ -111,7 +124,7 @@ internal static class LauncherPages
                     ? p.BatteryLifePercent + "% and charging - plugged in"
                     : p.BatteryLifePercent + "% - " + Remaining(p.BatteryLifeTime);
 
-                g.Add(new Gauge("battery", p.BatteryLifePercent / 100f, say, Inverted: true,
+                g.Add(new Gauge("Battery", p.BatteryLifePercent / 100f, say, Inverted: true,
                                 Badge: charging ? GlyphBolt : null, Tint: Halo.Widgets.Fx.VitalBattery));
             }
         }
@@ -139,8 +152,8 @@ internal static class LauncherPages
             string? rel = Reg(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "DisplayVersion");
             int build = Environment.OSVersion.Version.Build;
             if (name is { Length: > 0 } && build >= 22000) name = name.Replace("Windows 10", "Windows 11");
-            rows.Add(new LauncherRow(name ?? "Windows", null, false, LauncherRowKind.Info, null,
-                (rel is { Length: > 0 } ? rel + " - " : "") + "build " + build, GlyphWindows,
+            rows.Add(new LauncherRow("System", null, false, LauncherRowKind.Info, null,
+                (name ?? "Windows") + (rel is { Length: > 0 } ? " " + rel : "") + "  -  build " + build, GlyphWindows,
                 Tint: Halo.Widgets.Fx.VitalOs));
         }
         catch { }
@@ -152,8 +165,9 @@ internal static class LauncherPages
             string shown = (cpu ?? "").Replace("(R)", "").Replace("(TM)", "").Replace("CPU", "").Trim();
             int at = shown.IndexOf(" @", StringComparison.Ordinal);
             if (at > 0) shown = shown[..at];
-            rows.Add(new LauncherRow(shown.Length > 0 ? shown : "Processor", null, false, LauncherRowKind.Info,
-                null, "", GlyphCpu, Tint: Halo.Widgets.Fx.VitalCpu));
+            if (shown.Length > 0)
+                rows.Add(new LauncherRow("Processor", null, false, LauncherRowKind.Info, null,
+                    shown + "  -  " + Environment.ProcessorCount + " threads", GlyphCpu, Tint: Halo.Widgets.Fx.VitalCpu));
         }
         catch { }
 
@@ -167,7 +181,7 @@ internal static class LauncherPages
                 if (d is { Length: > 0 }) card = d;
             }
             if (card is { Length: > 0 })
-                rows.Add(new LauncherRow(card, null, false, LauncherRowKind.Info, null, "", GlyphGpu,
+                rows.Add(new LauncherRow("Graphics", null, false, LauncherRowKind.Info, null, card, GlyphGpu,
                     Tint: Halo.Widgets.Fx.VitalGpu));
         }
         catch { }
@@ -198,8 +212,8 @@ internal static class LauncherPages
                 foreach (var ip in props.UnicastAddresses)
                 {
                     if (ip.Address.AddressFamily != global::System.Net.Sockets.AddressFamily.InterNetwork) continue;
-                    rows.Add(new LauncherRow(ip.Address.ToString(), null, false, LauncherRowKind.Info, null,
-                        Trim(nic.Name, 22), GlyphNet, Tint: Halo.Widgets.Fx.VitalMemory));
+                    rows.Add(new LauncherRow("Network", null, false, LauncherRowKind.Info, null,
+                        ip.Address + "  -  " + Trim(nic.Name, 22), GlyphNet, Tint: Halo.Widgets.Fx.VitalMemory));
                     break;
                 }
                 break;
@@ -209,8 +223,8 @@ internal static class LauncherPages
 
         try
         {
-            rows.Add(new LauncherRow(Environment.MachineName, null, false, LauncherRowKind.Info, null,
-                Environment.UserName, GlyphPc, Tint: Halo.Widgets.Fx.VitalBattery));
+            rows.Add(new LauncherRow("Device", null, false, LauncherRowKind.Info, null,
+                Environment.MachineName + "  -  " + Environment.UserName, GlyphPc, Tint: Halo.Widgets.Fx.VitalBattery));
         }
         catch { }
 
@@ -230,6 +244,16 @@ internal static class LauncherPages
         catch { return null; }
     }
 
+    private static System.Drawing.Color? QuickTint(string id) => id switch
+    {
+        QuickActions.IdLock => Halo.Widgets.Fx.VitalOs,
+        QuickActions.IdSleep => Halo.Widgets.Fx.VitalGpu,
+        QuickActions.IdDownloads or QuickActions.IdRecycle => Halo.Widgets.Fx.VitalStorage,
+        QuickActions.IdDesktop or QuickActions.IdSettings => Halo.Widgets.Fx.VitalCpu,
+        QuickActions.IdTheme => Halo.Widgets.Fx.VitalBattery,
+        _ => null,
+    };
+
     private static IReadOnlyList<LauncherRow> Quick(Func<bool>? muted)
     {
         var rows = new List<LauncherRow>();
@@ -242,11 +266,13 @@ internal static class LauncherPages
 
             if (b.Id == QuickActions.IdMute)
             {
+
                 rows.Add(Action(ActMute, m is null || !m.Value ? "Mute" : "Unmute",
-                    m is null ? b.Detail : m.Value ? "currently muted" : "currently not muted", b.Glyph));
+                    m is null ? b.Detail : m.Value ? "currently muted" : "currently not muted",
+                    m == true ? b.Glyph : "\uE767") with { Tint = Halo.Widgets.Fx.VitalMemory });
                 continue;
             }
-            rows.Add(Action(QuickActions.Prefix + b.Id, b.Label, b.Detail, b.Glyph));
+            rows.Add(Action(QuickActions.Prefix + b.Id, b.Label, b.Detail, b.Glyph) with { Tint = QuickTint(b.Id) });
         }
 
         for (int slot = 1; slot <= QuickActions.CustomSlots; slot++)
@@ -261,10 +287,22 @@ internal static class LauncherPages
         if (rows.Count == 0)
             rows.Add(new LauncherRow("every action is switched off - see Settings", null, false,
                                      LauncherRowKind.Notice));
+        rows.Add(new LauncherRow("Add your own", null, true, LauncherRowKind.Page, LauncherState.PageAddAction,
+                                 "a file, folder, app or link", "\uE710", Halo.Widgets.Fx.VitalGpu));
         return rows;
     }
 
-    private static IReadOnlyList<LauncherRow> Clipboard()
+    private static IReadOnlyList<LauncherRow> AddAction(string query)
+    {
+        string typed = (query ?? "").Trim();
+        if (QuickActions.ParseCustom(typed) is not { } c)
+            return [new LauncherRow("for example:  Downloads | C:\\Users\\you\\Downloads", null, false, LauncherRowKind.Notice),
+                    new LauncherRow("Delete removes one of your own from Quick Actions", null, false, LauncherRowKind.Notice)];
+        return [new LauncherRow(c.Label, null, true, LauncherRowKind.Action, QuickActions.SavePrefix + typed, c.Target,
+                                "\uE74E", Halo.Widgets.Fx.VitalGpu)];
+    }
+
+    private static IReadOnlyList<LauncherRow> Clipboard(string query)
     {
         try
         {
@@ -272,19 +310,122 @@ internal static class LauncherPages
             if (items is null)
                 return [new LauncherRow("clipboard history is off in Windows settings", null, false,
                                         LauncherRowKind.Notice)];
-            if (items.Count == 0)
-                return [new LauncherRow("nothing copied yet", null, false, LauncherRowKind.Notice)];
-
-            var rows = new List<LauncherRow>();
-            for (int i = 0; i < items.Count; i++)
-                rows.Add(new LauncherRow(items[i].Preview, null, true, LauncherRowKind.Action,
-                                         ClipboardHistory.ActPrefix + items[i].Id, "copy back", GlyphCopy));
-            return rows;
+            return ClipRows(items, ClipPins.Load(), query);
         }
         catch
         {
             return [new LauncherRow("clipboard history could not be read", null, false, LauncherRowKind.Notice)];
         }
+    }
+
+    private static LauncherRow ClipRow(string preview, string id, bool pinned, string detail = "copy")
+    {
+        var (glyph, tint) = ClipboardHistory.Kind(preview);
+        return new LauncherRow(preview, null, true, LauncherRowKind.Action, id, detail, glyph, tint, Pin: pinned);
+    }
+
+    private static LauncherRow HistoryRow(ClipboardHistory.Item item)
+        => ClipRow(item.Preview, ClipboardHistory.ActPrefix + item.Id, item.Pinned,
+                   ClipboardHistory.Kind(item.Preview).Glyph == ClipboardHistory.CommandGlyph ? "run" : "copy");
+
+    internal static List<LauncherRow> ClipRows(IReadOnlyList<ClipboardHistory.Item> history, IReadOnlyList<string> pins, string query)
+    {
+        var rows = new List<LauncherRow>(history.Count + 2);
+        bool searching = (query ?? "").Trim().Length > 0;
+
+        if (searching)
+            for (int i = 0; i < pins.Count; i++)
+                rows.Add(ClipRow(ClipboardHistory.Preview(pins[i]), ClipboardHistory.PinPrefix + i, true));
+
+        var pinnedHere = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pin in pins) pinnedHere.Add(ClipboardHistory.Preview(pin));
+
+        int listed = 0;
+        for (int i = history.Count - 1; i >= 0; i--)
+        {
+            if (pinnedHere.Contains(history[i].Preview)) continue;
+            if (history[i].Pinned && !searching) continue;
+            rows.Add(HistoryRow(history[i]));
+            listed++;
+        }
+        if (listed == 0 && !searching)
+            rows.Add(new LauncherRow("nothing copied yet", null, false, LauncherRowKind.Notice));
+
+        int pinCount = pins.Count;
+        foreach (var item in history) if (item.Pinned && !pinnedHere.Contains(item.Preview)) pinCount++;
+        if (pinCount > 0)
+            rows.Add(new LauncherRow("Pinned", null, true, LauncherRowKind.Page, LauncherState.PageClipPins,
+                                     pinCount.ToString(global::System.Globalization.CultureInfo.InvariantCulture),
+                                     "\uE718", Halo.Widgets.Fx.VitalBattery));
+        rows.Add(new LauncherRow("Locked", null, true, LauncherRowKind.Action, ClipboardHistory.OpenVault, "Windows Hello",
+                                 "\uE72E", Halo.Widgets.Fx.VitalOs));
+        return rows;
+    }
+
+    private static readonly HashSet<string> PendingUnpins = new(StringComparer.Ordinal);
+
+    internal static bool IsPendingUnpin(string rowId) => PendingUnpins.Contains(rowId);
+
+    internal static void TogglePendingUnpin(string rowId)
+    {
+        if (!PendingUnpins.Remove(rowId)) PendingUnpins.Add(rowId);
+    }
+
+    internal static void CommitUnpins()
+    {
+        if (PendingUnpins.Count == 0) return;
+        var windows = new List<string>();
+        var mine = new List<int>();
+        foreach (string id in PendingUnpins)
+        {
+            if (id.StartsWith(ClipboardHistory.ActPrefix, StringComparison.Ordinal)) windows.Add(id[ClipboardHistory.ActPrefix.Length..]);
+            else if (id.StartsWith(ClipboardHistory.PinPrefix, StringComparison.Ordinal)
+                     && int.TryParse(id[ClipboardHistory.PinPrefix.Length..], out int at)) mine.Add(at);
+        }
+        PendingUnpins.Clear();
+
+        mine.Sort();
+        for (int i = mine.Count - 1; i >= 0; i--) ClipPins.RemoveAt(mine[i]);
+        if (windows.Count == 0) return;
+        bool refused = false;
+        foreach (string id in windows) refused |= !ClipboardHistory.UnpinInWindows(id);
+        ClipboardHistory.RefreshNow();
+        if (refused) WindowsRefused?.Invoke();
+    }
+
+    internal static Action? WindowsRefused;
+
+    private static IReadOnlyList<LauncherRow> Pinned()
+    {
+        var rows = new List<LauncherRow>();
+        var pins = ClipPins.Load();
+        var shown = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < pins.Count; i++)
+        {
+            string preview = ClipboardHistory.Preview(pins[i]);
+            shown.Add(preview);
+            string id = ClipboardHistory.PinPrefix + i;
+            rows.Add(ClipRow(preview, id, !IsPendingUnpin(id)) with { KeepPinIcon = true });
+        }
+        foreach (var item in ClipboardHistory.Read() ?? [])
+            if (item.Pinned && shown.Add(item.Preview))
+            {
+                string id = ClipboardHistory.ActPrefix + item.Id;
+                rows.Add(HistoryRow(item) with { Pin = !IsPendingUnpin(id), KeepPinIcon = true });
+            }
+        if (rows.Count == 0) rows.Add(new LauncherRow("nothing pinned", null, false, LauncherRowKind.Notice));
+        return rows;
+    }
+
+    private static IReadOnlyList<LauncherRow> Vault()
+    {
+        if (!LauncherVault.IsUnlocked) return [new LauncherRow("locked", null, false, LauncherRowKind.Notice)];
+        var rows = new List<LauncherRow>();
+        for (int i = 0; i < LauncherVault.Texts.Count; i++)
+            rows.Add(ClipRow(ClipboardHistory.Preview(LauncherVault.Texts[i]), ClipboardHistory.VaultPrefix + i, false));
+        if (rows.Count == 0)
+            rows.Add(new LauncherRow("nothing locked yet - use the lock on a clipboard row", null, false, LauncherRowKind.Notice));
+        return rows;
     }
 
     private static string? _lastSource, _lastResult;
@@ -311,7 +452,23 @@ internal static class LauncherPages
 
     internal static void CopyTranslation()
     {
-        if (_lastResult is not { Length: > 0 } text) return;
+        if (_lastResult is { Length: > 0 } text) CopyText(text);
+    }
+
+        internal static void CopySecret(string text)
+    {
+        try
+        {
+            var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            pkg.SetText(text);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContentWithOptions(pkg,
+                new Windows.ApplicationModel.DataTransfer.ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false });
+        }
+        catch { }
+    }
+
+    internal static void CopyText(string text)
+    {
         try
         {
             var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
@@ -383,6 +540,38 @@ internal static class LauncherPages
 
     internal const string AddPrefix = "remadd:";
 
+    private const int MaxChips = 5;
+
+    private static string ChipLabel(string choice) => choice switch
+    {
+        "in 15 minutes" => "15 min",
+        "in 1 hour" => "1 hour",
+        "this afternoon" => "Afternoon",
+        "this evening" => "Evening",
+        "tonight" => "Tonight",
+        "tomorrow morning" => "Tomorrow",
+        "tomorrow evening" => "Tmrw eve",
+        _ => choice.StartsWith("at ", StringComparison.Ordinal) ? choice[3..] : LauncherView.Cap(choice),
+    };
+
+    private static IReadOnlyList<LauncherRow> ReminderEdit(string query, string? id)
+    {
+        Reminder? r = null;
+        foreach (var candidate in ReminderStore.Load()) if (candidate.Id == id) r = candidate;
+        if (r is null) return [new LauncherRow("this reminder has already gone", null, false, LauncherRowKind.Notice)];
+
+        var rows = new List<LauncherRow>(MaxChips + 2);
+        foreach (var (label, when) in ReminderStore.Choices(DateTimeOffset.Now))
+        {
+            if (rows.Count == MaxChips) break;
+            rows.Add(new LauncherRow(ChipLabel(label), null, true, LauncherRowKind.Action,
+                                     WhenPrefix + when.ToUnixTimeSeconds().ToString(global::System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        rows.Add(new LauncherRow("Delete", null, true, LauncherRowKind.Action, ReminderStore.ActPrefix + r.Id, null, "\uE74D"));
+        rows.Add(new LauncherRow("Save", null, (query ?? "").Trim().Length > 0, LauncherRowKind.Action, ActSaveReminder, null, "\uE74E"));
+        return rows;
+    }
+
     private static IReadOnlyList<LauncherRow> Reminders(string query)
     {
         try
@@ -391,7 +580,7 @@ internal static class LauncherPages
             string typed = (query ?? "").Trim();
             if (typed.Length > 0)
             {
-                if (ReminderStore.ParseCommand(typed, now, out _) is { } cmd)
+                if (ReminderStore.Understand(typed, now) is { } cmd)
                     return
                     [
                         new LauncherRow(cmd.Text, null, true, LauncherRowKind.Action,
@@ -403,7 +592,7 @@ internal static class LauncherPages
 
                 var menu = new List<LauncherRow>();
                 foreach (var (label, when) in ReminderStore.Choices(now))
-                    menu.Add(new LauncherRow(label, null, true, LauncherRowKind.Action,
+                    menu.Add(new LauncherRow(LauncherView.Cap(label), null, true, LauncherRowKind.Action,
                                              AddPrefix + when.ToUnixTimeSeconds().ToString(
                                                  global::System.Globalization.CultureInfo.InvariantCulture),
                                              when.ToLocalTime().ToString("ddd HH:mm",

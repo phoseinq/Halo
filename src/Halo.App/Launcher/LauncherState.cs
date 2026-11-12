@@ -8,11 +8,11 @@ internal enum LauncherRowKind { Inert, Settings, App, Notice, Page, Action, Info
 
 internal sealed record LauncherRow(string Label, string? Aumid, bool Enabled, LauncherRowKind Kind,
                                    string? Id = null, string? Detail = null, string? Glyph = null,
-                                   System.Drawing.Color? Tint = null);
+                                   System.Drawing.Color? Tint = null, int Dots = 0, bool Pin = false, bool KeepPinIcon = false);
 
 internal sealed class LauncherState
 {
-    internal const int MaxQuery = 64;
+    internal const int MaxQuery = 200;
 
     internal const int MaxPageRows = 12;
     internal const string IndexingLabel = "still reading your apps...";
@@ -22,18 +22,30 @@ internal sealed class LauncherState
     internal const string PageClipboard = "clipboard";
     internal const string PageReminders = "reminders";
     internal const string PageTranslate = "translate";
+    internal const string PageAddAction = "addaction";
+    internal const string PageReminderEdit = "reminderedit";
+    internal const string PageClipPins = "clippins";
+    internal const string PageVault = "vault";
 
     internal static IReadOnlyList<LauncherRow> Menu { get; } =
     [
-        new("Quick Actions", null, true, LauncherRowKind.Page, PageQuick),
-        new("System Info", null, true, LauncherRowKind.Page, PageSystem),
-        new("Clipboard History", null, true, LauncherRowKind.Page, PageClipboard),
+        new("Quick Actions", null, true, LauncherRowKind.Page, PageQuick,
+            Detail: "mute, lock, sleep and your own", Tint: Halo.Widgets.Fx.VitalMemory),
+        new("System Info", null, true, LauncherRowKind.Page, PageSystem,
+            Detail: "live load and this machine", Tint: Halo.Widgets.Fx.VitalCpu),
+        new("Clipboard History", null, true, LauncherRowKind.Page, PageClipboard,
+            Detail: "what you copied, one click back", Tint: Halo.Widgets.Fx.VitalStorage),
         new("Translate", null, true, LauncherRowKind.Page, PageTranslate,
-            Tint: Halo.Widgets.Fx.VitalGpu),
+            Detail: "type a line, get it back", Tint: Halo.Widgets.Fx.VitalGpu),
         new("Reminders", null, true, LauncherRowKind.Page, PageReminders,
-            Tint: Halo.Widgets.Fx.VitalBattery),
-        new("Settings", null, true, LauncherRowKind.Settings, Tint: Halo.Widgets.Fx.VitalOs),
+            Detail: "say what, pick when", Tint: Halo.Widgets.Fx.VitalBattery),
+        new("Settings", null, true, LauncherRowKind.Settings,
+            Detail: "everything Halo can do", Tint: Halo.Widgets.Fx.VitalOs),
     ];
+
+    internal Func<string, int>? PageBadge;
+    internal Func<string, LauncherExtras.Set>? Extras;
+    internal Func<string, IReadOnlyList<LauncherRow>>? FileHits;
 
     private readonly Func<IReadOnlyList<AppEntry>> _apps;
     private readonly Func<bool> _ready;
@@ -66,6 +78,19 @@ internal sealed class LauncherState
 
     internal bool ShowGauges => _page == PageSystem && _query.Length == 0 && Gauges.Count > 0;
 
+        internal void RefreshKeeping()
+    {
+        var was = _selected >= 0 && _selected < _rows.Count ? _rows[_selected] : null;
+        Rebuild();
+        if (was is null) return;
+        for (int i = 0; i < _rows.Count; i++)
+            if (_rows[i].Enabled && _rows[i].Id == was.Id && _rows[i].Aumid == was.Aumid && _rows[i].Label == was.Label)
+            {
+                _selected = i;
+                return;
+            }
+    }
+
         internal enum LangPick { None, From, To }
 
     internal LangPick Picking { get; private set; }
@@ -91,6 +116,44 @@ internal sealed class LauncherState
 
     internal void SetHotGauge(int index, int ring = -1) { HotGauge = index; HotRing = ring; }
 
+        internal bool ShowClearAll => _page == PageClipboard && _query.Length == 0;
+
+        internal bool ClearArmed { get; private set; }
+    internal bool ClearHot { get; private set; }
+
+    internal void SetClear(bool hot, bool armed) { ClearHot = hot; ClearArmed = armed; }
+
+        internal int HotTick { get; private set; } = -1;
+    internal void SetHotTick(int index) => HotTick = index;
+
+        internal DateTimeOffset? ReminderWhen { get; private set; }
+
+    internal void SetReminderWhen(DateTimeOffset when) => ReminderWhen = when;
+
+        internal DateTimeOffset? EffectiveWhen => ReminderStore.Understand(_query, _now())?.When ?? ReminderWhen;
+
+    internal string ReminderText => (ReminderStore.Understand(_query, _now())?.Text ?? _query).Trim();
+
+        internal string? EditingReminder { get; private set; }
+
+        internal void EditReminder(Reminder r)
+    {
+        EditingReminder = r.Id;
+        ReminderWhen = r.When;
+        _page = PageReminderEdit;
+        _query = r.Text.Length <= MaxQuery ? r.Text : r.Text[..MaxQuery];
+        Rebuild();
+    }
+
+    internal void EditChoice(LauncherRow row)
+    {
+        if (row.Id is not { } id || !id.StartsWith(LauncherPages.AddPrefix, StringComparison.Ordinal)) return;
+        if (!long.TryParse(id[LauncherPages.AddPrefix.Length..], out long unix)) return;
+        string line = ReminderStore.EditLine(_query, DateTimeOffset.FromUnixTimeSeconds(unix), _now());
+        _query = line.Length <= MaxQuery ? line : line[..MaxQuery];
+        Rebuild();
+    }
+
     internal bool RefreshGauges()
     {
         if (_page != PageSystem) return false;
@@ -101,9 +164,12 @@ internal sealed class LauncherState
     internal int Selected => _selected;
     internal IReadOnlyList<LauncherRow> Rows => _rows;
 
+    internal bool FieldIsTitle => _page == PageSystem;
+
     internal void Type(char c)
     {
         if (c < ' ' || c == (char)0x7F) return;
+        if (FieldIsTitle) return;
 
         if (c == ' ' && _query.Length == 0) return;
         if (_query.Length >= MaxQuery) return;
@@ -116,6 +182,20 @@ internal sealed class LauncherState
         if (_query.Length == 0) return;
         _query = _query[..^1];
         Rebuild();
+    }
+
+        internal bool BackOrErase()
+    {
+        if (_query.Length > 0) { Backspace(); return true; }
+        return Back();
+    }
+
+        internal void MoveEdge(bool toEnd)
+    {
+        int step = toEnd ? -1 : 1;
+        int back = !toEnd && _page is not null ? 1 : 0;
+        for (int at = toEnd ? _rows.Count - 1 : back; at >= 0 && at < _rows.Count; at += step)
+            if (_rows[at].Enabled) { _selected = at; return; }
     }
 
     internal void Reset()
@@ -138,6 +218,7 @@ internal sealed class LauncherState
             if (typed.Length == 0 || _selected < 0 || _selected >= _rows.Count) return "";
             var row = _rows[_selected];
             if (!row.Enabled || row.Kind is LauncherRowKind.Back or LauncherRowKind.Notice) return "";
+            if (LauncherExtras.FromQuery(row.Id) || row.Id?.StartsWith(LauncherExtras.FilePrefix, StringComparison.Ordinal) == true) return "";
             string label = row.Label;
             if (label.Length <= typed.Length || label.Length > MaxQuery) return "";
             return label.StartsWith(typed, StringComparison.OrdinalIgnoreCase)
@@ -150,6 +231,14 @@ internal sealed class LauncherState
         if (_page is not null && PageTakesText(_page))
         {
             if (_page == PageTranslate) return TabResult.CycleTranslatePair;
+
+            if (_page == PageReminders && _query.Trim().Length > 0 && Array.IndexOf(ReminderTemplates, _query) < 0
+                && _selected >= 0 && _selected < _rows.Count
+                && (_rows[_selected].Id ?? "").StartsWith(LauncherPages.AddPrefix, StringComparison.Ordinal))
+            {
+                EditChoice(_rows[_selected]);
+                return TabResult.Changed;
+            }
             int at = Array.IndexOf(ReminderTemplates, _query);
             _query = ReminderTemplates[(at + 1) % ReminderTemplates.Length];
             Rebuild();
@@ -167,6 +256,17 @@ internal sealed class LauncherState
         var row = _rows[_selected];
 
         if (!row.Enabled || row.Kind is LauncherRowKind.Back or LauncherRowKind.Notice) return TabResult.Ignored;
+        if (LauncherExtras.FromQuery(row.Id)) return TabResult.Ignored;
+
+        if (row.Glyph == FileSearch.FolderGlyph && row.Id is { } folder && folder.StartsWith(LauncherExtras.FilePrefix, StringComparison.Ordinal))
+        {
+            string inside = folder[LauncherExtras.FilePrefix.Length..].TrimEnd('\\') + "\\";
+            if (inside.Length > MaxQuery) return TabResult.Ignored;
+            _query = inside;
+            Rebuild();
+            return TabResult.Changed;
+        }
+        if (row.Id?.StartsWith(LauncherExtras.FilePrefix, StringComparison.Ordinal) == true) return TabResult.Ignored;
         if (row.Label.Length == 0 || row.Label.Length > MaxQuery) return TabResult.Ignored;
         if (string.Equals(_query, row.Label, StringComparison.Ordinal)) return TabResult.Ignored;
         _query = row.Label;
@@ -185,14 +285,19 @@ internal sealed class LauncherState
         PageClipboard => "Search clipboard...",
         PageReminders => "Remind me to...",
         PageTranslate => "Type a line to translate...",
-        _ => "Search apps...",
+        PageAddAction => "Name | a file, folder, app or link...",
+        PageReminderEdit => "What to be reminded of...",
+        PageClipPins => "Search pinned...",
+        PageVault => "Search locked...",
+        _ => "Search apps, files, math...",
     };
 
-    internal static bool PageTakesText(string page) => page is PageReminders or PageTranslate;
+    internal static bool PageTakesText(string page) => page is PageReminders or PageTranslate or PageAddAction or PageReminderEdit;
 
     internal void GoTo(string page)
     {
         if (string.IsNullOrEmpty(page)) return;
+        EditingReminder = null;
         _page = page;
         Picking = LangPick.None;
         _query = "";
@@ -204,7 +309,11 @@ internal sealed class LauncherState
 
         if (ClosePicker()) return true;
         if (_page is null) return false;
-        _page = null;
+
+        EditingReminder = null;
+        _page = _page == PageAddAction ? PageQuick
+              : _page is PageClipPins or PageVault ? PageClipboard
+              : _page == PageReminderEdit ? PageReminders : null;
         _query = "";
         Rebuild();
         return true;
@@ -274,7 +383,16 @@ internal sealed class LauncherState
                 page = [.. page.Where(r => r.Label.Contains(needle, StringComparison.OrdinalIgnoreCase)
                                         || (r.Detail ?? "").Contains(needle, StringComparison.OrdinalIgnoreCase))];
 
-            if (page.Count > MaxPageRows)
+            if (_page == PageClipboard && page.Count > MaxPageRows)
+            {
+                var trimmed = new List<LauncherRow>(MaxPageRows + 1)
+                {
+                    new($"{page.Count - MaxPageRows} older - type to search them", null, false, LauncherRowKind.Notice),
+                };
+                trimmed.AddRange(page.Skip(page.Count - MaxPageRows));
+                page = trimmed;
+            }
+            else if (page.Count > MaxPageRows)
             {
                 int hidden = page.Count - MaxPageRows;
                 var shown = new List<LauncherRow>(page.Take(MaxPageRows))
@@ -294,15 +412,37 @@ internal sealed class LauncherState
             int first = 1;
             while (first < withBack.Count && !withBack[first].Enabled) first++;
             _selected = first < withBack.Count ? first : 0;
+            if (_page == PageReminderEdit && withBack[^1].Enabled) _selected = withBack.Count - 1;
+            if (_page == PageClipboard && _query.Length == 0)
+            {
+
+                for (int at = withBack.Count - 1; at > 0; at--)
+                    if (withBack[at].Enabled && withBack[at].Kind == LauncherRowKind.Action
+                        && withBack[at].Id != ClipboardHistory.OpenVault) { _selected = at; break; }
+            }
             return;
         }
 
         Gauges = [];
         HotGauge = -1; HotRing = -1;
+        if (_query.Length == 0)
+        {
+            _rows = HomeRows();
+            _selected = FirstEnabled(_rows);
+            return;
+        }
         if (_query.Trim().Length == 0) { _rows = Menu; _selected = FirstEnabled(Menu); return; }
 
+        var extras = Extras?.Invoke(_query);
+        if (extras is { Exclusive: true } only)
+        {
+            _rows = only.Above;
+            _selected = 0;
+            return;
+        }
+
         var hits = AppMatch.Top(_apps(), _query, id => _stats.ScoreOf(id, _now()));
-        if (hits.Count == 0 && !_ready())
+        if (hits.Count == 0 && !_ready() && extras is null)
         {
 
             _rows = [new LauncherRow(IndexingLabel, null, false, LauncherRowKind.Notice)];
@@ -310,10 +450,23 @@ internal sealed class LauncherState
             return;
         }
 
-        var rows = new List<LauncherRow>(hits.Count);
-        foreach (var a in hits) rows.Add(new LauncherRow(a.Name, a.Aumid, true, LauncherRowKind.App));
+        var rows = new List<LauncherRow>(hits.Count + 5);
+        if (extras is { } above) rows.AddRange(above.Above);
+        foreach (var a in hits)
+            rows.Add(new LauncherRow(a.Name, a.Aumid, true, LauncherRowKind.App));
+        if (FileHits?.Invoke(_query) is { Count: > 0 } files) rows.AddRange(files);
+        if (extras is { } below) rows.AddRange(below.Below);
         _rows = rows;
         _selected = 0;
+    }
+
+    private IReadOnlyList<LauncherRow> HomeRows()
+    {
+        if (PageBadge is null) return Menu;
+        var rows = new List<LauncherRow>(Menu.Count);
+        foreach (var m in Menu)
+            rows.Add(m.Id is { } id && PageBadge(id) is > 0 and var n ? m with { Dots = n } : m);
+        return rows;
     }
 
     private static int FirstEnabled(IReadOnlyList<LauncherRow> rows)

@@ -93,6 +93,8 @@ internal static class Badges
     internal static Bitmap LimitLong() => Local(0xE787, 258);
     internal static Bitmap Context() => Local(0xEC4A, 55, 34f);
     internal static Bitmap Clock() => Local(0xE917, 205);
+    internal static Bitmap Reminder() => Local(0xEA8F, 40);
+    internal static Bitmap Locked() => Local(0xE72E, 225);
 
     internal static Bitmap Hooked() => Local(0xE703, 140, 30f);
     internal static Bitmap HookFailed() => Local(0xE703, 4, 30f);

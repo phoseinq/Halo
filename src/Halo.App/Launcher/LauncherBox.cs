@@ -9,9 +9,9 @@ namespace Halo.Launcher;
 internal sealed class LauncherBox : IDisposable
 {
     private const string ClassName = "HaloLauncherBox";
-    private const float OpenSeconds = 0.40f;
-    private const float ContentLagSeconds = 0.16f;
-    private const float CloseSeconds = 0.16f;
+    private const float OpenSeconds = 0.20f;
+    private const float ContentLagSeconds = 0.05f;
+    private const float CloseSeconds = 0.11f;
     private const float CaretPeriod = 1.05f;
 
     private const float ContentGone = ContentLagSeconds / OpenSeconds;
@@ -35,6 +35,16 @@ internal sealed class LauncherBox : IDisposable
     private bool _wasDown;
     private long _downAt;
     private int _pressRow = -1;
+    private LauncherGlass? _glass;
+    private RectangleF _hl;
+    private bool _hlSet;
+    private string? _hlKey;
+    private float _shownH;
+    private int _drawnH = -1;
+    private int _filesSeen;
+    private int _clipSeen;
+    private bool _pressClear;
+    private long _clipAt;
 
     private LauncherView.LangHit _pressLang = LauncherView.LangHit.None;
     private int _lastCx = int.MinValue, _lastCy = int.MinValue;
@@ -69,10 +79,13 @@ internal sealed class LauncherBox : IDisposable
     internal bool Opening => _opening;
     internal LauncherState? State => _state;
 
-    internal void Open(Rectangle monitor, int notchBottom, LauncherState state)
+    internal void Open(Rectangle monitor, int notchBottom, LauncherState state, LauncherGlass? glass = null)
     {
         try
         {
+            _glass = glass;
+            _hlSet = false;
+            _shownH = 0f;
             _monitor = monitor;
             _notchBottom = notchBottom;
             _state = state;
@@ -98,6 +111,17 @@ internal sealed class LauncherBox : IDisposable
         catch (Exception ex) { Trace?.Invoke("box open threw " + ex); }
     }
 
+        internal void Warm(Rectangle monitor, int notchBottom)
+    {
+        try
+        {
+            _monitor = monitor;
+            _notchBottom = notchBottom;
+            Ensure();
+        }
+        catch { }
+    }
+
     internal void Close()
     {
         if (!_opening) return;
@@ -108,6 +132,7 @@ internal sealed class LauncherBox : IDisposable
     {
         if (_hwnd == IntPtr.Zero || _state is null) return;
 
+        if (_opening && _t < 1f) dt = Math.Min(dt, 1f / 60f);
         float target = _opening ? 1f : 0f;
         float speed = _opening ? 1f / OpenSeconds : 1f / CloseSeconds;
         _t = Step(_t, target, dt * speed);
@@ -118,6 +143,28 @@ internal sealed class LauncherBox : IDisposable
         {
             _gaugesAt = Environment.TickCount64;
             if (_state.RefreshGauges()) Invalidate();
+        }
+
+        bool onClipboard = _state.Page is LauncherState.PageClipboard or LauncherState.PageClipPins;
+        if (_opening && onClipboard && Environment.TickCount64 - _clipAt >= ClipPollMs)
+        {
+            _clipAt = Environment.TickCount64;
+            ClipboardHistory.RefreshSoon();
+        }
+        if (_opening && ClipboardHistory.Version != _clipSeen)
+        {
+            _clipSeen = ClipboardHistory.Version;
+            if (onClipboard)
+            {
+                if (_state.Query.Length == 0) _state.Refresh(); else _state.RefreshKeeping();
+                Invalidate();
+            }
+        }
+
+        if (_opening && FileSearch.Version != _filesSeen)
+        {
+            _filesSeen = FileSearch.Version;
+            if (_state.Page is null && _state.Query.Length > 0) { _state.RefreshKeeping(); Invalidate(); }
         }
 
         if (!_opening && _t <= ContentGone)
@@ -132,28 +179,84 @@ internal sealed class LauncherBox : IDisposable
             return;
         }
 
+        Ease(dt);
         Paint();
+    }
+
+    private const int PageStep = 5;
+    private const long ClipPollMs = 500;
+    private const float HighlightSeconds = 0.075f, HeightSeconds = 0.045f;
+
+    private void Ease(float dt)
+    {
+        var state = _state!;
+        var frame = LauncherLayout.Of(state);
+        var target = state.Selected >= 0 && state.Selected < frame.Cells.Length ? frame.Cells[state.Selected] : RectangleF.Empty;
+        string key = (state.Page ?? "") + "|" + state.Picking;
+        float k = Math.Clamp(dt / HighlightSeconds, 0f, 1f);
+        if (!_hlSet || key != _hlKey || _t < 0.999f || target.IsEmpty || _hl.IsEmpty)
+        {
+            _hl = target;
+            _hlSet = true;
+            _hlKey = key;
+        }
+        else
+        {
+            _hl = new RectangleF(Near(_hl.X, target.X, k), Near(_hl.Y, target.Y, k),
+                                 Near(_hl.Width, target.Width, k), Near(_hl.Height, target.Height, k));
+        }
+
+        float full = frame.Height;
+        if (_t < 0.999f || _shownH <= 0f) _shownH = full;
+        else _shownH = Near(_shownH, full, Math.Clamp(dt / HeightSeconds, 0f, 1f));
+    }
+
+    private static float Near(float from, float to, float k)
+    {
+        float next = from + (to - from) * k;
+        return Math.Abs(to - next) < 0.4f ? to : next;
     }
 
     private void Mouse()
     {
         var state = _state!;
-        bool band = state.ShowGauges;
-        var (w, h) = BoxSize(_t, state.Rows.Count, LauncherView.BandHeight(state));
+        var frame = LauncherLayout.Of(state);
+        var (w, h) = BoxSizeFor(_t, (int)frame.Height);
         bool down = (Win32.GetAsyncKeyState(Win32.VK_LBUTTON) & 0x8000) != 0;
         if (!Win32.GetCursorPos(out var c)) { _wasDown = down; return; }
 
         int lx = c.X - (_centerX - w / 2), ly = c.Y - _top;
         bool inside = lx >= 0 && lx < w && ly >= 0 && ly < h;
         float bandH = LauncherView.BandHeight(state);
-        int overRow = inside ? LauncherView.HitRow(lx, ly, state.Rows.Count, bandH) : -1;
+        int overRow = inside ? LauncherLayout.Hit(frame, lx, ly) : -1;
+
+        var rowHit = overRow >= 0 ? state.Rows[overRow] : null;
+        var cell = overRow >= 0 ? frame.Cells[overRow] : RectangleF.Empty;
+        bool overCircle = rowHit is { Kind: LauncherRowKind.Tick } && Math.Abs(lx - LauncherView.IconAxis) <= 14;
+        bool overTime = rowHit?.Id?.StartsWith(LauncherPages.AddPrefix, StringComparison.Ordinal) == true && lx >= cell.Right - 104f;
+        string hitId = rowHit?.Id ?? "";
+        bool hitVault = hitId.StartsWith(ClipboardHistory.VaultPrefix, StringComparison.Ordinal);
+        bool hitClip = hitVault || hitId.StartsWith(ClipboardHistory.ActPrefix, StringComparison.Ordinal)
+                       || hitId.StartsWith(ClipboardHistory.PinPrefix, StringComparison.Ordinal);
+        bool overFar = hitClip && lx >= cell.Right - LauncherView.ClipOneButton;
+        bool overLock = hitClip && !hitVault && !overFar && lx >= cell.Right - LauncherView.ClipLockEdge;
+        bool overDrop = hitClip && !hitVault && !overFar && !overLock && lx >= cell.Right - LauncherView.ClipThreeButtons;
+        bool overRun = rowHit is { Detail: "run" } && !overFar && !overLock && !overDrop && lx >= cell.Right - 154f;
+
+        bool overClear = inside && state.ShowClearAll && LauncherLayout.ClearCell.Contains(lx, ly);
+        if (overClear != state.ClearHot || (!overClear && state.ClearArmed))
+        {
+            state.SetClear(overClear, overClear && state.ClearArmed);
+            Invalidate();
+        }
+        int tickHot = overCircle ? overRow : -1;
+        if (tickHot != state.HotTick) { state.SetHotTick(tickHot); Invalidate(); }
+
         var overLang = inside && state.ShowLangBar
             ? LauncherView.HitLangBar(lx, ly, w, bandH) : LauncherView.LangHit.None;
-        int overGauge = inside ? LauncherView.HitGauge(lx, ly, state.Gauges.Count, band) : -1;
-        int overRing = overGauge >= 0
-            ? LauncherView.HitRing(lx, ly, overGauge, state.Gauges.Count,
-                                   state.Gauges[overGauge].Parts?.Length ?? 0, band)
-            : -1;
+        int overGauge = inside && state.ShowGauges
+            ? LauncherLayout.HitBand(frame, lx, ly, state.Gauges.Count) : -1;
+        const int overRing = -1;
 
         if ((c.X != _lastCx || c.Y != _lastCy) && !_dragging)
         {
@@ -170,7 +273,8 @@ internal sealed class LauncherBox : IDisposable
         if (down && !_wasDown)
         {
 
-            _downAt = inside && LauncherView.InHeader(ly) ? Environment.TickCount64 : -1;
+            _downAt = inside && LauncherView.InHeader(ly) && overRow < 0 && !overClear ? Environment.TickCount64 : -1;
+            _pressClear = overClear;
             _pressRow = overRow;
             _pressLang = overLang;
             _grabDX = lx;
@@ -195,6 +299,17 @@ internal sealed class LauncherBox : IDisposable
             LauncherPlacement.Save(_centerX, _top);
             Trace?.Invoke($"box dropped at {_centerX},{_top}");
         }
+        else if (!down && _wasDown && _pressClear && overClear)
+        {
+            if (state.ClearArmed)
+            {
+                HandledInPlace?.Invoke(new LauncherRow(string.Empty, null, true, LauncherRowKind.Action, ClipboardHistory.ClearAll));
+                state.SetClear(overClear, false);
+                state.Refresh();
+            }
+            else state.SetClear(true, true);
+            Invalidate();
+        }
         else if (!down && _wasDown && _pressLang != LauncherView.LangHit.None && _pressLang == overLang)
         {
 
@@ -210,10 +325,17 @@ internal sealed class LauncherBox : IDisposable
         {
 
             var row = state.Activate(overRow);
-            if (row is not null) Picked(row);
+
+            if (row is { Kind: LauncherRowKind.Tick } && !overCircle) { EditReminder(row); row = null; }
+            if (row is not null && overTime) { state.EditChoice(row); Invalidate(); row = null; }
+            if (row is not null && overFar) { ClipButton(row, lockIt: false); row = null; }
+            if (row is not null && overLock) { ClipButton(row, lockIt: true); row = null; }
+            if (row is not null && overDrop) { Picked(row with { Id = ClipboardHistory.DropPrefix + row.Id, Kind = LauncherRowKind.Action }); row = null; }
+            if (row is not null && overRun) Run(row);
+            else if (row is not null) Picked(row);
         }
 
-        if (!down) { _downAt = -1; _pressRow = -1; _pressLang = LauncherView.LangHit.None; }
+        if (!down) { _downAt = -1; _pressRow = -1; _pressLang = LauncherView.LangHit.None; _pressClear = false; }
         _wasDown = down;
     }
 
@@ -225,12 +347,11 @@ internal sealed class LauncherBox : IDisposable
     }
 
     internal static (int W, int H) BoxSize(float t, int rows, bool band = false)
-        => BoxSize(t, rows, band ? LauncherView.BandH : 0f);
+        => BoxSizeFor(t, LauncherView.Height(rows, band ? LauncherView.BandH : 0f));
 
-    internal static (int W, int H) BoxSize(float t, int rows, float bandH)
+    internal static (int W, int H) BoxSizeFor(float t, int fullH)
     {
         float e = EaseOutCubic(Math.Clamp(t, 0f, 1f));
-        int fullH = LauncherView.Height(rows, bandH);
         return (Math.Max(8, (int)MathF.Round(LauncherView.W * (0.34f + 0.66f * e))),
                 Math.Max(4, (int)MathF.Round(fullH * (0.12f + 0.88f * e))));
     }
@@ -250,17 +371,28 @@ internal sealed class LauncherBox : IDisposable
         float lag = Math.Clamp((_t - ContentLagSeconds / OpenSeconds) / (1f - ContentLagSeconds / OpenSeconds), 0f, 1f);
         bool caretOn = _caretT < CaretPeriod / 2f;
 
-        bool band = state.ShowGauges;
-        (int w, int h) = BoxSize(_t, state.Rows.Count, LauncherView.BandHeight(state));
+        var frame = LauncherLayout.Of(state);
+        (int w, int h) = BoxSizeFor(_t, (int)frame.Height);
+        if (_t >= 0.999f && _shownH > 0f) h = (int)MathF.Round(_shownH);
+        var hlTarget = state.Selected >= 0 && state.Selected < frame.Cells.Length ? frame.Cells[state.Selected] : RectangleF.Empty;
 
         bool settled = _t >= 0.999f || _t <= 0.001f;
         if (settled && _drawnRows == state.Rows.Count && _drawnQuery == state.Query
             && _drawnSel == state.Selected && _drawnCaret == caretOn
             && _drawnX == _centerX && _drawnY == _top
-            && _drawnHot == state.HotGauge && _drawnRing == state.HotRing) return;
+            && _drawnHot == state.HotGauge && _drawnRing == state.HotRing
+            && _drawnH == h && _hl == hlTarget && _glass?.HasPending != true) return;
+        _drawnH = h;
         _drawnRows = state.Rows.Count; _drawnQuery = state.Query;
         _drawnSel = state.Selected; _drawnCaret = caretOn;
         _drawnX = _centerX; _drawnY = _top; _drawnHot = state.HotGauge; _drawnRing = state.HotRing;
+
+        if (!_placed)
+        {
+            var start = LauncherPlacement.Load(_monitor, _notchBottom, GapBelowNotch, LauncherView.W, (int)frame.Height);
+            _centerX = start.CenterX; _top = start.Top;
+            _placed = true;
+        }
 
         var bmi = new Win32.BITMAPINFOHEADER
         {
@@ -281,15 +413,8 @@ internal sealed class LauncherBox : IDisposable
         {
             g.Clear(Color.Transparent);
 
-            LauncherView.Draw(g, w, h, state, lag, IconFor, caretOn);
-        }
-
-        if (!_placed)
-        {
-            var start = LauncherPlacement.Load(_monitor, _notchBottom, GapBelowNotch,
-                LauncherView.W, LauncherView.Height(state.Rows.Count, LauncherView.BandHeight(state)));
-            _centerX = start.CenterX; _top = start.Top;
-            _placed = true;
+            LauncherView.Draw(g, w, h, state, lag, IconFor, caretOn, _glass,
+                              new Point(_centerX - w / 2, _top), _hl.IsEmpty ? null : _hl);
         }
 
         var size = new Win32.SIZE { cx = w, cy = h };
@@ -303,7 +428,9 @@ internal sealed class LauncherBox : IDisposable
         {
             BlendOp = Win32.AC_SRC_OVER,
             BlendFlags = 0,
-            SourceConstantAlpha = 255,
+
+            SourceConstantAlpha = _glass is null ? (byte)255
+                : (byte)Math.Clamp((_opening ? Math.Min(1f, _t / 0.3f) : lag) * 255f, 0f, 255f),
             AlphaFormat = Win32.AC_SRC_ALPHA,
         };
         Win32.UpdateLayeredWindow(_hwnd, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, Win32.ULW_ALPHA);
@@ -409,6 +536,34 @@ internal sealed class LauncherBox : IDisposable
         Chosen?.Invoke(row);
     }
 
+    private void EditReminder(LauncherRow row)
+    {
+        string id = (row.Id ?? "")[ReminderStore.ActPrefix.Length..];
+        foreach (var r in ReminderStore.Load())
+            if (r.Id == id)
+            {
+                _state!.EditReminder(r);
+                Invalidate();
+                return;
+            }
+    }
+
+    private void ClipButton(LauncherRow row, bool lockIt)
+    {
+        string id = row.Id ?? "";
+        string act = id.StartsWith(ClipboardHistory.VaultPrefix, StringComparison.Ordinal)
+            ? ClipboardHistory.VaultDropPrefix + id[ClipboardHistory.VaultPrefix.Length..]
+            : lockIt ? ClipboardHistory.LockPrefix + id
+            : ClipboardHistory.FlipPrefix + (row.Pin ? "1" : "0") + id;
+        Picked(row with { Id = act, Kind = LauncherRowKind.Action });
+    }
+
+    private void Run(LauncherRow row)
+    {
+        string id = (row.Id ?? "")[ClipboardHistory.ActPrefix.Length..];
+        Chosen?.Invoke(row with { Id = ClipboardHistory.RunPrefix + id });
+    }
+
     private IntPtr Key(int vk)
     {
         var state = _state!;
@@ -416,11 +571,51 @@ internal sealed class LauncherBox : IDisposable
         {
             case Win32.VK_ESCAPE:
 
+                if (state.Query.Length > 0 && state.Picking == LauncherState.LangPick.None
+                    && state.Page != LauncherState.PageReminderEdit)
+                {
+                    state.Reset();
+                    Invalidate();
+                    return IntPtr.Zero;
+                }
+
                 if (state.Back()) { Invalidate(); return IntPtr.Zero; }
                 Dismissed?.Invoke();
                 return IntPtr.Zero;
             case Win32.VK_BACK:
-                state.Backspace(); Invalidate();
+                if ((Win32.GetKeyState(Win32.VK_CONTROL) & 0x8000) != 0 && state.Query.Length > 0) state.Reset();
+                else state.BackOrErase();
+                Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_LEFT when state.Page == LauncherState.PageReminderEdit:
+                state.Move(-1); Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_RIGHT when state.Page == LauncherState.PageReminderEdit:
+                state.Move(1); Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_LEFT when state.Query.Length == 0:
+                if (state.Back()) Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_RIGHT when state.Query.Length == 0:
+                if (state.Enter() is { Kind: LauncherRowKind.Page } opens) Picked(opens);
+                return IntPtr.Zero;
+            case Win32.VK_HOME:
+                state.MoveEdge(toEnd: false); Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_END:
+                state.MoveEdge(toEnd: true); Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_PRIOR:
+                state.Move(-PageStep); Invalidate();
+                return IntPtr.Zero;
+            case Win32.VK_NEXT:
+                state.Move(PageStep); Invalidate();
+                return IntPtr.Zero;
+
+            case Win32.VK_DELETE:
+                if (state.Enter() is { Kind: LauncherRowKind.Tick } done) Picked(done);
+                else if (state.Enter() is { Id: { } custom } mine && custom.StartsWith(QuickActions.CustomPrefix, StringComparison.Ordinal))
+                    Picked(mine with { Id = QuickActions.RemovePrefix + custom[QuickActions.CustomPrefix.Length..] });
                 return IntPtr.Zero;
             case Win32.VK_TAB:
                 switch (state.Tab())
@@ -443,6 +638,19 @@ internal sealed class LauncherBox : IDisposable
                 return IntPtr.Zero;
             case Win32.VK_RETURN:
 
+                if (state.Page == LauncherState.PageReminderEdit)
+                {
+                    if (state.Enter() is { } chosen) Picked(chosen);
+                    return IntPtr.Zero;
+                }
+
+                if (state.Page == LauncherState.PageReminders && state.Query.Trim().Length > 0
+                    && state.Enter() is { Id: { } when } timed && when.StartsWith(LauncherPages.AddPrefix, StringComparison.Ordinal))
+                {
+                    Picked(timed);
+                    return IntPtr.Zero;
+                }
+
                 if (state.Page is { } pg && LauncherState.PageTakesText(pg)
                     && state.Query.Trim().Length > 0)
                 {
@@ -450,6 +658,12 @@ internal sealed class LauncherBox : IDisposable
                     return IntPtr.Zero;
                 }
 
+                if ((Win32.GetKeyState(Win32.VK_CONTROL) & 0x8000) != 0 && state.Enter() is { Detail: "run" } command)
+                {
+                    Run(command);
+                    return IntPtr.Zero;
+                }
+                if (state.Enter() is { Kind: LauncherRowKind.Tick } opened) { EditReminder(opened); return IntPtr.Zero; }
                 if (state.Enter() is { } row) Picked(row);
                 return IntPtr.Zero;
         }

@@ -551,7 +551,13 @@ internal sealed partial class NotchController
         Halo.Interop.WheelGrab.Start();
         widgets.Add(new DownloadWidget());
         for (int s = 0; s < MediaSessions.MaxSlots; s++)
-            widgets.Add(new MediaWidget(_mediaSessions, s));
+        {
+            var player = new MediaWidget(_mediaSessions, s);
+
+            if (s == 0 && Environment.GetEnvironmentVariable("HALO_DEMO_MEDIA") == "1")
+                player.Seed(Program.SampleTitle, Program.SampleArtist, Program.SampleCover(), 0.42);
+            widgets.Add(player);
+        }
         widgets.Add(new VlcWidget(_mediaSessions));
         widgets.Add(new FileTray());
         widgets.Add(_btWidget);
@@ -1547,10 +1553,12 @@ internal sealed partial class NotchController
     private Halo.Launcher.HotKey? _hideKey;
     private Halo.Launcher.LauncherDim? _dim;
     private Halo.Launcher.LauncherBox? _box;
+    private Halo.Launcher.LauncherGlass? _launcherGlass;
+    internal const int TintLauncher = 130;
     private float _dimT;
 
     private const float DimTarget = 140f / 255f;
-    private const float DimSeconds = 0.22f;
+    private const float DimSeconds = 0.14f;
 
     private static void LaunchDebug(string line)
     {
@@ -1582,10 +1590,18 @@ internal sealed partial class NotchController
             Halo.Interop.GpuLoad.Refresh();
             _dim = new Halo.Launcher.LauncherDim();
             _box = new Halo.Launcher.LauncherBox();
+            var workArea = new System.Drawing.Rectangle(_notch.WorkLeft, _notch.WorkTop, _notch.WorkWidth, _notch.WorkHeight);
+            _dim.Warm(workArea);
+            _box.Warm(workArea, _ct + Sc(_curH));
             _box.Chosen += LauncherChose;
             _box.Dismissed += CloseLauncher;
             _box.Submitted += LauncherSubmitted;
             _box.HandledInPlace = LauncherInPlace;
+            Halo.Launcher.LauncherPages.WindowsRefused = () => _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+            {
+                App = "Halo", Icon = Halo.Shell.Badges.Clip(), Title = "Windows kept it pinned",
+                Body = "unpin it from Win+V", Kind = "clip-winpin", Duration = 5,
+            });
             _box.IconFor = Halo.Launcher.LauncherIcons.Get;
             var box = _box;
             Halo.Launcher.LauncherIcons.Arrived = () => box.Invalidate();
@@ -1597,6 +1613,20 @@ internal sealed partial class NotchController
 
             _hotKey = new Halo.Launcher.HotKey(_notch.Hwnd, Halo.Launcher.HotKey.Id);
             bool held = _hotKey.Register(chord);
+
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    Halo.Launcher.LauncherPages.SystemGauges();
+                    Halo.Launcher.LauncherPages.For(Halo.Launcher.LauncherState.PageSystem, "");
+                    Halo.Launcher.LauncherPages.For(Halo.Launcher.LauncherState.PageClipboard, "");
+                    Halo.Launcher.LauncherPages.For(Halo.Launcher.LauncherState.PageReminders, "");
+                    Halo.Launcher.FileSearch.Warm();
+                    WarmLauncherDrawing();
+                }
+                catch { }
+            });
 
             _chordApplied = stored;
             string hideText = _settings.Current.Text(Halo.Settings.SettingsKeys.HideHotkey, "Ctrl+Alt+H");
@@ -1657,7 +1687,7 @@ internal sealed partial class NotchController
         if (_userHidden && _box is { IsOpen: true }) CloseLauncher();
     }
 
-    private void OpenLauncher()
+    private void OpenLauncher(string? startPage = null)
     {
         if (_box is null || _dim is null || _appIndex is null) return;
         if (_box.IsOpen) { CloseLauncher(); return; }
@@ -1665,6 +1695,10 @@ internal sealed partial class NotchController
         {
             var mon = new System.Drawing.Rectangle(
                 _notch.WorkLeft, _notch.WorkTop, _notch.WorkWidth, _notch.WorkHeight);
+
+            long snapAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            (_launcherGlass ??= new Halo.Launcher.LauncherGlass()).Snap(mon, TintFor(TintLauncher, GlassScale));
+            LaunchDebug($"glass {System.Diagnostics.Stopwatch.GetElapsedTime(snapAt).TotalMilliseconds:0.0}ms");
 
             _dim.Show(mon);
 
@@ -1675,15 +1709,31 @@ internal sealed partial class NotchController
                 _launchStats ?? new Halo.Launcher.LaunchStats(), () => DateTimeOffset.Now);
 
             state.PageRows = (id, q) => Halo.Launcher.LauncherPages.For(
-                id, q, () => (_launcherAudio ??= new Halo.Widgets.AudioMeter()).Muted());
+                id, q, () => (_launcherAudio ??= new Halo.Widgets.AudioMeter()).Muted(), state.EditingReminder);
             state.PageGauges = Halo.Launcher.LauncherPages.SystemGauges;
 
             state.LanguageRows = () => Halo.Launcher.LauncherPages.LanguageRows(
                 state.Picking == Halo.Launcher.LauncherState.LangPick.From);
-            _box.Open(mon, _ct + Sc(_curH), state);
+            state.PageBadge = id => id == Halo.Launcher.LauncherState.PageReminders
+                ? Halo.Launcher.ReminderStore.Pending(Halo.Launcher.ReminderStore.Load(), DateTimeOffset.Now).Count : 0;
+            state.Extras = Halo.Launcher.LauncherExtras.For;
+            state.FileHits = Halo.Launcher.FileSearch.For;
+            Halo.Launcher.ClipboardHistory.RefreshSoon();
+            state.Refresh();
+            if (startPage is not null) state.GoTo(startPage);
+            _box.Open(mon, _ct + Sc(_curH), state, _launcherGlass);
             LaunchDebug($"opened mon={mon} top={_ct + Sc(_curH)} apps={_appIndex.Apps.Count} ready={_appIndex.Ready}");
         }
         catch (Exception ex) { LaunchDebug("open FAILED " + ex); }
+    }
+
+    private static void WarmLauncherDrawing()
+    {
+        using var bmp = new System.Drawing.Bitmap(Halo.Launcher.LauncherView.W, 300,
+            System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        var state = new Halo.Launcher.LauncherState(() => [], () => true, new Halo.Launcher.LaunchStats(), () => DateTimeOffset.Now);
+        Halo.Launcher.LauncherView.Draw(g, bmp.Width, bmp.Height, state, 1f, null);
     }
 
     private void CloseLauncher()
@@ -1691,6 +1741,8 @@ internal sealed partial class NotchController
         try
         {
             _box?.Close();
+            Halo.Launcher.LauncherVault.Lock();
+            Halo.Launcher.LauncherPages.CommitUnpins();
 
             _appIndex?.RefreshSoon();
         }
@@ -1737,6 +1789,59 @@ internal sealed partial class NotchController
                 return;
             }
             if (id == Halo.Launcher.LauncherPages.ActLock) { Win32.LockWorkStation(); return; }
+            if (id.StartsWith(Halo.Launcher.ClipboardHistory.RunPrefix, StringComparison.Ordinal))
+            {
+
+                string? command = Halo.Launcher.ClipboardHistory.TextOf(id[Halo.Launcher.ClipboardHistory.RunPrefix.Length..]);
+                if (!string.IsNullOrWhiteSpace(command))
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+                        "/s /k \"" + command.Trim().Replace("\r\n", " & ").Replace('\n', ' ') + "\"") { UseShellExecute = true });
+                return;
+            }
+            if (id.StartsWith(Halo.Launcher.ClipboardHistory.PinPrefix, StringComparison.Ordinal)
+                && int.TryParse(id[Halo.Launcher.ClipboardHistory.PinPrefix.Length..], out int pinAt))
+            {
+                var pins = Halo.Launcher.ClipPins.Load();
+                if (pinAt >= 0 && pinAt < pins.Count) Halo.Launcher.LauncherPages.CopyText(pins[pinAt]);
+                return;
+            }
+            if (id.StartsWith(Halo.Launcher.ClipboardHistory.VaultPrefix, StringComparison.Ordinal)
+                && int.TryParse(id[Halo.Launcher.ClipboardHistory.VaultPrefix.Length..], out int vaultAt))
+            {
+
+                _secretClearAt = Environment.TickCount64 + SecretOnClipboardMs;
+                Halo.Launcher.LauncherPages.CopySecret(_vaultCopy ?? "");
+                _vaultCopy = null;
+                _ = vaultAt;
+                return;
+            }
+            if (id.StartsWith(Halo.Launcher.LauncherExtras.CopyPrefix, StringComparison.Ordinal))
+            {
+                Halo.Launcher.LauncherPages.CopyText(id[Halo.Launcher.LauncherExtras.CopyPrefix.Length..]);
+                return;
+            }
+            if (id.StartsWith(Halo.Launcher.LauncherExtras.WebPrefix, StringComparison.Ordinal))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = Halo.Launcher.LauncherExtras.WebUrl(id[Halo.Launcher.LauncherExtras.WebPrefix.Length..]),
+                    UseShellExecute = true,
+                });
+                return;
+            }
+            if (id.StartsWith(Halo.Launcher.LauncherExtras.FilePrefix, StringComparison.Ordinal))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                { FileName = id[Halo.Launcher.LauncherExtras.FilePrefix.Length..], UseShellExecute = true });
+                return;
+            }
+
+            if (id.StartsWith(Halo.Launcher.LauncherExtras.RunPrefix, StringComparison.Ordinal))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+                    "/s /k \"" + id[Halo.Launcher.LauncherExtras.RunPrefix.Length..] + "\"") { UseShellExecute = true });
+                return;
+            }
             if (id == Halo.Launcher.LauncherPages.ActSleep)
             {
 
@@ -1833,25 +1938,88 @@ internal sealed partial class NotchController
             return true;
         }
         if (id == Halo.Launcher.LauncherPages.ActSwapLangs) { SwapLanguages(); return true; }
+        if (id.StartsWith(Halo.Launcher.LauncherPages.WhenPrefix, StringComparison.Ordinal))
+        {
+            if (long.TryParse(id[Halo.Launcher.LauncherPages.WhenPrefix.Length..], out long picked))
+                _box?.State?.SetReminderWhen(DateTimeOffset.FromUnixTimeSeconds(picked));
+            return true;
+        }
+        if (id == Halo.Launcher.LauncherPages.ActSaveReminder)
+        {
+            if (_box?.State is { EditingReminder: { } editing, EffectiveWhen: { } when } form && form.ReminderText.Length > 0)
+            {
+                Halo.Launcher.ReminderStore.Add(when, form.ReminderText);
+                Halo.Launcher.ReminderStore.Remove(editing);
+            }
+            BackToReminderList();
+            return true;
+        }
+        if (id == Halo.Launcher.ClipboardHistory.OpenVault)
+        {
+            if (Halo.Launcher.LauncherVault.IsUnlocked) _box?.State?.GoTo(Halo.Launcher.LauncherState.PageVault);
+            else BeginVaultUnlock(null, null);
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.ClipboardHistory.FlipPrefix, StringComparison.Ordinal))
+        {
+            FlipClipPin(id[Halo.Launcher.ClipboardHistory.FlipPrefix.Length..]);
+            return true;
+        }
+        if (id == Halo.Launcher.ClipboardHistory.ClearAll)
+        {
+            Halo.Launcher.ClipboardHistory.ClearUnpinned();
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.ClipboardHistory.DropPrefix, StringComparison.Ordinal))
+        {
+            DropClipRow(id[Halo.Launcher.ClipboardHistory.DropPrefix.Length..]);
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.ClipboardHistory.LockPrefix, StringComparison.Ordinal))
+        {
+            LockClipRow(id[Halo.Launcher.ClipboardHistory.LockPrefix.Length..]);
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.ClipboardHistory.VaultDropPrefix, StringComparison.Ordinal))
+        {
+            if (int.TryParse(id[Halo.Launcher.ClipboardHistory.VaultDropPrefix.Length..], out int drop))
+                Halo.Launcher.LauncherVault.RemoveAt(drop);
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.QuickActions.SavePrefix, StringComparison.Ordinal))
+        {
+            SaveCustomAction(id[Halo.Launcher.QuickActions.SavePrefix.Length..]);
+            return true;
+        }
+        if (id.StartsWith(Halo.Launcher.QuickActions.RemovePrefix, StringComparison.Ordinal))
+        {
+            if (int.TryParse(id[Halo.Launcher.QuickActions.RemovePrefix.Length..], out int slot))
+                _settings.Set(Halo.Launcher.QuickActions.CustomKey(slot), "");
+            return true;
+        }
 
         if (id.StartsWith(Halo.Launcher.LauncherPages.AddPrefix, StringComparison.Ordinal))
         {
             string text = (_box?.State?.Query ?? "").Trim();
 
-            if (Halo.Launcher.ReminderStore.ParseCommand(text, DateTimeOffset.Now, out _) is { } cmd)
+            if (Halo.Launcher.ReminderStore.Understand(text, DateTimeOffset.Now) is { } cmd)
                 text = cmd.Text;
             if (text.Length == 0) return true;
             if (long.TryParse(id[Halo.Launcher.LauncherPages.AddPrefix.Length..],
                               System.Globalization.NumberStyles.Integer,
                               System.Globalization.CultureInfo.InvariantCulture, out long unix))
+            {
                 Halo.Launcher.ReminderStore.Add(DateTimeOffset.FromUnixTimeSeconds(unix), text);
-            _box?.State?.Reset();
+                if (_box?.State?.EditingReminder is { } replaced) Halo.Launcher.ReminderStore.Remove(replaced);
+            }
+            BackToReminderList();
             return true;
         }
 
         if (id.StartsWith(Halo.Launcher.ReminderStore.ActPrefix, StringComparison.Ordinal))
         {
             Halo.Launcher.ReminderStore.Remove(id[Halo.Launcher.ReminderStore.ActPrefix.Length..]);
+            if (_box?.State?.Page == Halo.Launcher.LauncherState.PageReminderEdit) BackToReminderList();
             return true;
         }
         return false;
@@ -1873,24 +2041,183 @@ internal sealed partial class NotchController
         catch { }
     }
 
+    private void BackToReminderList()
+    {
+        if (_box?.State is not { } state) return;
+        if (state.Page == Halo.Launcher.LauncherState.PageReminderEdit) state.GoTo(Halo.Launcher.LauncherState.PageReminders);
+        else state.Reset();
+    }
+
+    private void DropClipRow(string rowId)
+    {
+
+        Halo.Launcher.LauncherPages.CommitUnpins();
+        const string Clip = Halo.Launcher.ClipboardHistory.ActPrefix, Mine = Halo.Launcher.ClipboardHistory.PinPrefix;
+        if (rowId.StartsWith(Mine, StringComparison.Ordinal))
+        {
+            if (int.TryParse(rowId[Mine.Length..], out int at)) Halo.Launcher.ClipPins.RemoveAt(at);
+            return;
+        }
+        if (rowId.StartsWith(Clip, StringComparison.Ordinal) && Halo.Launcher.ClipboardHistory.Delete(rowId[Clip.Length..]))
+            Halo.Launcher.ClipboardHistory.RefreshNow();
+    }
+
+    private void FlipClipPin(string encoded)
+    {
+        bool pinned = encoded.StartsWith('1');
+        string rowId = encoded[1..];
+        if (_box?.State?.Page == Halo.Launcher.LauncherState.PageClipPins)
+        {
+            Halo.Launcher.LauncherPages.TogglePendingUnpin(rowId);
+            return;
+        }
+        const string Clip = Halo.Launcher.ClipboardHistory.ActPrefix, Mine = Halo.Launcher.ClipboardHistory.PinPrefix;
+        if (rowId.StartsWith(Mine, StringComparison.Ordinal))
+        {
+            if (int.TryParse(rowId[Mine.Length..], out int at)) Halo.Launcher.ClipPins.RemoveAt(at);
+            return;
+        }
+        if (!rowId.StartsWith(Clip, StringComparison.Ordinal)) return;
+        string entry = rowId[Clip.Length..];
+        if (pinned)
+        {
+            Halo.Launcher.LauncherPages.TogglePendingUnpin(rowId);
+            Halo.Launcher.LauncherPages.CommitUnpins();
+            return;
+        }
+        if (Halo.Launcher.ClipboardHistory.TextOf(rowId[Clip.Length..]) is { Length: > 0 } text) Halo.Launcher.ClipPins.Add(text);
+    }
+
+    private void LockClipRow(string rowId)
+    {
+        const string Clip = Halo.Launcher.ClipboardHistory.ActPrefix, Mine = Halo.Launcher.ClipboardHistory.PinPrefix;
+        string? text = null, historyId = null;
+        int mineAt = -1;
+        if (rowId.StartsWith(Clip, StringComparison.Ordinal))
+        {
+            historyId = rowId[Clip.Length..];
+            text = Halo.Launcher.ClipboardHistory.TextOf(historyId);
+        }
+        else if (rowId.StartsWith(Mine, StringComparison.Ordinal) && int.TryParse(rowId[Mine.Length..], out mineAt))
+        {
+            var pins = Halo.Launcher.ClipPins.Load();
+            if (mineAt >= 0 && mineAt < pins.Count) text = pins[mineAt];
+        }
+        if (string.IsNullOrEmpty(text)) return;
+        if (Halo.Launcher.LauncherVault.IsUnlocked)
+        {
+            FinishLocking(text, historyId, mineAt);
+            return;
+        }
+        BeginVaultUnlock(text, historyId, mineAt);
+    }
+
+    private static void FinishLocking(string text, string? historyId, int pinAt)
+    {
+        Halo.Launcher.LauncherVault.Add(text);
+
+        if (historyId is not null) Halo.Launcher.ClipboardHistory.Delete(historyId);
+        if (pinAt >= 0) Halo.Launcher.ClipPins.RemoveAt(pinAt);
+    }
+
+    private void BeginVaultUnlock(string? text, string? historyId, int pinAt = -1)
+    {
+        if (_vaultBusy) return;
+        _vaultBusy = true;
+        (_vaultText, _vaultHistoryId, _vaultPinAt) = (text, historyId, pinAt);
+        CloseLauncher();
+        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        {
+            bool ok = false;
+            try { ok = Halo.Launcher.LauncherVault.UnlockAsync().GetAwaiter().GetResult(); } catch { }
+            System.Threading.Volatile.Write(ref _vaultResult, ok ? 1 : 2);
+        });
+    }
+
+    private void VaultFrame()
+    {
+        int result = System.Threading.Interlocked.Exchange(ref _vaultResult, 0);
+        if (result != 0)
+        {
+            _vaultBusy = false;
+            if (result == 1)
+            {
+                if (_vaultText is { } text) FinishLocking(text, _vaultHistoryId, _vaultPinAt);
+                _vaultText = null;
+                OpenLauncher(Halo.Launcher.LauncherState.PageVault);
+            }
+            else
+            {
+                _vaultText = null;
+                _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+                {
+                    App = "Halo", Icon = Halo.Shell.Badges.Locked(), Title = "locked section stayed locked",
+                    Body = "Windows Hello did not confirm it. Check that a PIN or fingerprint is set up", Kind = "vault-failed", Duration = 6,
+                });
+            }
+        }
+
+        if (_secretClearAt > 0 && Environment.TickCount64 >= _secretClearAt)
+        {
+            _secretClearAt = 0;
+            try { Windows.ApplicationModel.DataTransfer.Clipboard.Clear(); } catch { }
+        }
+    }
+
+    private const long SecretOnClipboardMs = 30_000;
+    private long _secretClearAt;
+    private string? _vaultCopy, _vaultText, _vaultHistoryId;
+    private int _vaultPinAt = -1, _vaultResult;
+    private bool _vaultBusy;
+
+    private void SaveCustomAction(string line)
+    {
+        try
+        {
+            int slot = Halo.Launcher.QuickActions.FreeSlot(n =>
+                _settings.Current.Text(Halo.Launcher.QuickActions.CustomKey(n), ""));
+            if (slot == 0)
+            {
+                _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
+                {
+                    App = "Halo", Icon = Halo.Shell.Badges.Reminder(), Title = "no room for another action",
+                    Body = "delete one of your own from Quick Actions first", Kind = "action-full", Duration = 6,
+                });
+                return;
+            }
+            _settings.Set(Halo.Launcher.QuickActions.CustomKey(slot), line);
+            _box?.State?.GoTo(Halo.Launcher.LauncherState.PageQuick);
+            _box?.Invalidate();
+        }
+        catch { }
+    }
+
     private void LauncherSubmitted(string page, string text)
     {
+        if (page == Halo.Launcher.LauncherState.PageAddAction)
+        {
+            if (Halo.Launcher.QuickActions.ParseCustom(text) is not null) SaveCustomAction(text);
+            return;
+        }
         if (page == Halo.Launcher.LauncherState.PageTranslate) { TranslateSubmitted(text); return; }
         if (page != Halo.Launcher.LauncherState.PageReminders) return;
         try
         {
-            var cmd = Halo.Launcher.ReminderStore.ParseCommand(text, DateTimeOffset.Now, out string? complaint);
+            string? complaint = null;
+            var cmd = Halo.Launcher.ReminderStore.Understand(text, DateTimeOffset.Now);
+            if (cmd is null) Halo.Launcher.ReminderStore.ParseCommand(text, DateTimeOffset.Now, out complaint);
             if (cmd is not { } ok)
             {
                 _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
                 {
-                    App = "Halo", Title = "reminder not set",
+                    App = "Halo", Icon = Halo.Shell.Badges.Reminder(), Title = "reminder not set",
                     Body = complaint ?? "try: in 20m walk the dog, or at 17:30 call mum",
                     Kind = "reminder-help", Duration = 6,
                 });
                 return;
             }
             Halo.Launcher.ReminderStore.Add(ok.When, ok.Text);
+            if (_box?.State?.EditingReminder is { } replaced) Halo.Launcher.ReminderStore.Remove(replaced);
             _box?.State?.Reset();
             _box?.Invalidate();
         }
@@ -1934,7 +2261,7 @@ internal sealed partial class NotchController
             foreach (var r in due)
                 _notifSrc.EnqueueLocal(new Halo.Notifications.NotifItem
                 {
-                    App = "Halo", Title = "reminder", Body = r.Text,
+                    App = "Halo", Icon = Halo.Shell.Badges.Reminder(), Title = "reminder", Body = r.Text,
                     Kind = "reminder-" + r.Id, Duration = 10,
                 });
             Halo.Launcher.ReminderStore.Save(
@@ -1945,6 +2272,11 @@ internal sealed partial class NotchController
 
     private void LauncherChose(Halo.Launcher.LauncherRow row)
     {
+
+        if ((row.Id ?? "").StartsWith(Halo.Launcher.ClipboardHistory.VaultPrefix, StringComparison.Ordinal)
+            && int.TryParse(row.Id![Halo.Launcher.ClipboardHistory.VaultPrefix.Length..], out int vaultRow)
+            && vaultRow >= 0 && vaultRow < Halo.Launcher.LauncherVault.Texts.Count)
+            _vaultCopy = Halo.Launcher.LauncherVault.Texts[vaultRow];
         CloseLauncher();
         try
         {
@@ -2036,6 +2368,7 @@ internal sealed partial class NotchController
         try
         {
             _box.Frame(_dt);
+            VaultFrame();
 
             float target = _box.Opening ? DimTarget : 0f;
             _dimT += Math.Clamp(_dt / DimSeconds, 0f, 1f) * (target - _dimT);
@@ -3510,6 +3843,7 @@ internal sealed partial class NotchController
             if (_progress > 0.9f)
             {
                 if (Contains(PinRect(ExpandedW, ExpandedH), _el, _et, p)) return true;
+                if (OverTrayCard(p.X, p.Y)) return true;
                 foreach (var (r, _) in _widgets[_primary].Buttons(ExpandedW, ExpandedH))
                     if (Contains(r, _el, _et, p)) return true;
                 return false;
@@ -4822,63 +5156,6 @@ internal sealed partial class NotchController
         DrawPushpin(g, r, _pinned, hv, a, _recordable, PinHoldProgress());
     }
 
-    private static void Sphere(Graphics g, RectangleF head, float hr, GraphicsPath? needle, float a,
-        Color baseColor, Color? needleColor = null)
-    {
-        int A(float f) => (int)Math.Clamp(f * a, 0, 255);
-        Color Tint(Color c, float k) => Color.FromArgb(A(255),
-            (int)Math.Clamp(c.R * k, 0, 255),
-            (int)Math.Clamp(c.G * k, 0, 255),
-            (int)Math.Clamp(c.B * k, 0, 255));
-        Color Shade(float k) => Tint(baseColor, k);
-
-        if (needle != null)
-        {
-            var nc = needleColor ?? baseColor;
-            using var nb = new LinearGradientBrush(
-                new PointF(-3f * hr, 0), new PointF(3f * hr, 0), Tint(nc, 1.16f), Tint(nc, 0.52f));
-            g.FillPath(nb, needle);
-        }
-
-        using (var shadow = new GraphicsPath())
-        {
-            shadow.AddEllipse(head.X + hr * 0.16f, head.Y + hr * 0.42f, head.Width * 0.92f, head.Height * 0.92f);
-            using var sb = new PathGradientBrush(shadow)
-            {
-                CenterColor = Color.FromArgb(A(96), 0, 0, 0),
-                SurroundColors = [Color.FromArgb(0, 0, 0, 0)],
-            };
-            g.FillPath(sb, shadow);
-        }
-
-        using (var hp = new GraphicsPath())
-        {
-            hp.AddEllipse(head);
-            using var pgb = new PathGradientBrush(hp)
-            {
-
-                CenterPoint = new PointF(head.X + hr * 0.60f, head.Y + hr * 0.58f),
-                CenterColor = Shade(1.34f),
-                SurroundColors = [Shade(0.55f)],
-            };
-            g.FillPath(pgb, hp);
-        }
-
-        using (var spec = new GraphicsPath())
-        {
-            spec.AddEllipse(head.X + hr * 0.34f, head.Y + hr * 0.30f, hr * 0.62f, hr * 0.62f);
-            using var sb = new PathGradientBrush(spec)
-            {
-                CenterColor = Color.FromArgb(A(215), 255, 255, 255),
-                SurroundColors = [Color.FromArgb(0, 255, 255, 255)],
-            };
-            g.FillPath(sb, spec);
-        }
-
-        using (var rim = new Pen(Color.FromArgb(A(70), 255, 255, 255), Math.Max(0.7f, hr * 0.11f)))
-            g.DrawArc(rim, head.X + 0.6f, head.Y + 0.6f, head.Width - 1.2f, head.Height - 1.2f, 20f, 130f);
-    }
-
     internal static void DrawPushpin(Graphics g, RectangleF r, bool pinned, float hover, float a,
         bool recordable = false, float holdT = 0f)
 
@@ -4905,27 +5182,14 @@ internal sealed partial class NotchController
             hr = gh;
         }
 
-        if (recordable)
-        {
+        Color ink = recordable ? Color.FromArgb(255, 255, 200, 92) : Color.White;
 
-            var amber = Color.FromArgb(255, 255, 200, 92);
-            Sphere(g, head, hr, null, a, pinned ? amber : amber);
-        }
-        else if (pinned)
-        {
-
-            using (var fill = new SolidBrush(Color.FromArgb((int)((15 + 19 * hover) * a), 255, 255, 255)))
-                g.FillEllipse(fill, head);
-            using (var pen = new Pen(Color.FromArgb((int)((34 + 30 * hover) * a), 255, 255, 255), 1.7f * u))
-                g.DrawEllipse(pen, head);
-        }
-        else
-        {
-            int dim = (int)((122 + 78 * hover) * a);
-            using var pen = new Pen(Color.FromArgb(dim, 255, 255, 255), 1.7f * u)
-            { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
+        float rest = recordable ? 90f : pinned ? 70f : 30f;
+        float lit = recordable ? 170f : pinned ? 150f : 120f;
+        int alpha = (int)Math.Clamp((rest + (lit - rest) * hover) * a, 0f, 255f);
+        float width = ((pinned || recordable) ? 0.7f : 0.62f) * u * (1f + 0.12f * hover);
+        using (var pen = new Pen(Color.FromArgb(alpha, ink), width))
             g.DrawEllipse(pen, head.X, head.Y, hr * 2, hr * 2);
-        }
         g.Restore(st);
     }
 
@@ -5280,6 +5544,7 @@ internal sealed partial class NotchController
         if (_progress <= 0.9f || _primary < 0 || _primary >= _widgets.Length) return false;
 
         if (OverPin(p)) return true;
+        if (OverTrayCard(p.X, p.Y)) return true;
         try
         {
             foreach (var (r, _) in _widgets[_primary].Buttons(ExpandedW, ExpandedH))
@@ -5695,10 +5960,18 @@ internal sealed partial class NotchController
         return !historyOpen && dy > threshold ? PullStep.Open : PullStep.Keep;
     }
 
+    private bool _moveWasDown;
+
+    private bool OverTrayCard(int x, int y)
+        => _progress > 0.9f && _primary >= 0 && _primary < _widgets.Length && _widgets[_primary] is FileTray tray
+           && tray.RowPathAt(ExpandedW, ExpandedH, new PointF((x - _el) / S, (y - _et) / S)) != null;
+
     private void UpdateMove(Win32.POINT p, bool down, bool hovered)
     {
         int centre = _notch.WorkLeft + _notch.WorkWidth / 2;
         const float snap = 55f;
+        bool freshPress = down && !_moveWasDown;
+        _moveWasDown = down;
         if (_moving)
         {
             if (down)
@@ -5733,6 +6006,7 @@ internal sealed partial class NotchController
         if (pullReady && _holdStart == DateTime.MaxValue && !_historyOpen)
         { _holdStart = DateTime.UtcNow; _holdAnchor = p; }
 
+        if (freshPress) _holdAnchor = p;
         var step = PullDecide(Math.Abs(p.X - _holdAnchor.X), p.Y - _holdAnchor.Y, Sc(PullDown), historyOpen: false);
         bool onPull = (holding || pullReady) && down && step is PullStep.Open or PullStep.Keep;
 

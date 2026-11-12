@@ -280,6 +280,13 @@ internal static class Win32
     public static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
 
     public const uint SRCCOPY = 0x00CC0020;
+    public const int HALFTONE = 4;
+
+    [DllImport("gdi32.dll")]
+    public static extern int SetStretchBltMode(IntPtr hdc, int mode);
+
+    [DllImport("gdi32.dll")]
+    public static extern bool StretchBlt(IntPtr hdc, int x, int y, int w, int h, IntPtr src, int sx, int sy, int sw, int sh, uint rop);
 
     [DllImport("gdi32.dll")]
     public static extern bool BitBlt(IntPtr hdc, int x, int y, int w, int h, IntPtr src, int sx, int sy, uint rop);
@@ -674,6 +681,13 @@ internal static class Win32
     public const int SW_SHOW = 5;
     public const uint WM_KILLFOCUS = 0x0008;
     public const uint WM_HOTKEY = 0x0312;
+    public const int VK_PRIOR = 0x21;
+    public const int VK_NEXT = 0x22;
+    public const int VK_END = 0x23;
+    public const int VK_HOME = 0x24;
+    public const int VK_DELETE = 0x2E;
+    public const int VK_LEFT = 0x25;
+    public const int VK_RIGHT = 0x27;
     public const int VK_UP = 0x26;
     public const int VK_DOWN = 0x28;
 

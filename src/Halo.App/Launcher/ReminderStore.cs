@@ -45,10 +45,33 @@ internal static class ReminderStore
         if (Is(s, "at")) { complaint = "at what time? try: at 17:30 call mum"; return null; }
         if (Is(s, "tomorrow")) { complaint = "tomorrow at what time? try: tomorrow 9am dentist"; return null; }
 
+        string dayLine = Head(s, "in") ?? Head(s, "on") ?? s;
+        if (Weekday(dayLine.Split(' ', 2)[0]) is { } weekday) return OnDay(dayLine, weekday, now, ref complaint);
+
         if (Head(s, "in") is { } after) return Relative(after, now, ref complaint);
         if (Head(s, "at") is { } clock) return Clock(clock, now, sameDayOnly: false, ref complaint);
         if (Head(s, "tomorrow") is { } tom) return Clock(tom, now.AddDays(1), sameDayOnly: true, ref complaint);
         return null;
+    }
+
+    private static int? Weekday(string word) => word.ToLowerInvariant() switch
+    {
+        "sun" or "sunday" => 0,
+        "mon" or "monday" => 1,
+        "tue" or "tues" or "tuesday" => 2,
+        "wed" or "wednesday" => 3,
+        "thu" or "thur" or "thurs" or "thursday" => 4,
+        "fri" or "friday" => 5,
+        "sat" or "saturday" => 6,
+        _ => null,
+    };
+
+    private static ReminderCommand? OnDay(string line, int weekday, DateTimeOffset now, ref string? complaint)
+    {
+        string rest = line.Contains(' ') ? line[(line.IndexOf(' ') + 1)..].TrimStart() : "";
+        int days = (weekday - (int)now.DayOfWeek + 7) % 7;
+        if (Clock(rest, now.AddDays(days), sameDayOnly: true, ref complaint) is not { } found) return null;
+        return found.When > now ? found : found with { When = found.When.AddDays(7) };
     }
 
     private static bool Is(string s, string word) => string.Equals(s, word, StringComparison.OrdinalIgnoreCase);
@@ -156,18 +179,63 @@ internal static class ReminderStore
 
     internal static (string Label, DateTimeOffset When)[] Choices(DateTimeOffset now)
     {
-        var list = new List<(string, DateTimeOffset)>
-        {
-            ("in 20 minutes", now.AddMinutes(20)),
-            ("in 1 hour", now.AddHours(1)),
-            ("in 3 hours", now.AddHours(3)),
-        };
         var today = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset);
-        var evening = today.AddHours(18);
-        if (evening > now) list.Add(("this evening", evening));
+        var list = new List<(string Label, DateTimeOffset When)>
+        {
+            ("in 15 minutes", now.AddMinutes(15)),
+            ("in 1 hour", now.AddHours(1)),
+        };
+
+        var round = today.AddHours(now.Hour + 1);
+        if (round - now < MinAhead) round = round.AddHours(1);
+        if (round.Date == today.Date && Math.Abs((round - now.AddHours(1)).TotalMinutes) > 5d)
+            list.Add(("at " + round.ToString("HH:mm", CultureInfo.InvariantCulture), round));
+
+        void Part(string label, int hour)
+        {
+            var at = today.AddHours(hour);
+            bool taken = list.Exists(c => c.When == at);
+            if (at - now >= MinAhead && !taken) list.Add((label, at));
+        }
+        Part("this afternoon", 14);
+        Part("this evening", 18);
+        Part("tonight", 21);
+
+        while (list.Count > MaxChoices - 2) list.RemoveAt(list.Count - 1);
         list.Add(("tomorrow morning", today.AddDays(1).AddHours(9)));
         list.Add(("tomorrow evening", today.AddDays(1).AddHours(18)));
-        return [.. list];
+        return [.. list.OrderBy(c => c.When)];
+    }
+
+        internal static string EditLine(string typed, DateTimeOffset when, DateTimeOffset now)
+    {
+        string text = Understand(typed, now)?.Text ?? (typed ?? "").Trim();
+        var local = when.ToOffset(now.Offset);
+        string clock = local.ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (local.Date == now.Date) return text + " at " + clock;
+        if (local.Date == now.Date.AddDays(1)) return text + " tomorrow " + clock;
+        if ((local.Date - now.Date).TotalDays < 7d)
+            return text + " on " + local.ToString("ddd HH:mm", CultureInfo.InvariantCulture).ToLowerInvariant();
+
+        return text + " in " + Math.Max(1, (int)Math.Ceiling((when - now).TotalMinutes)).ToString(CultureInfo.InvariantCulture) + "m";
+    }
+
+    private const int MaxChoices = 6;
+    private static readonly TimeSpan MinAhead = TimeSpan.FromMinutes(30);
+
+    internal static ReminderCommand? Understand(string input, DateTimeOffset now)
+    {
+        string s = (input ?? "").Trim();
+        if (ParseCommand(s, now, out _) is { } front) return front;
+        foreach (string word in new[] { "in", "at", "on", "tomorrow", "sun", "sunday", "mon", "monday", "tue", "tues", "tuesday",
+                                        "wed", "wednesday", "thu", "thur", "thurs", "thursday", "fri", "friday", "sat", "saturday" })
+        {
+            int at = s.LastIndexOf(" " + word + " ", StringComparison.OrdinalIgnoreCase);
+            if (at <= 0) continue;
+            string message = s[..at].Trim(), time = s[(at + 1)..];
+            if (ParseCommand(time + " " + message, now, out _) is { } end && end.Text == message) return end;
+        }
+        return null;
     }
 
     internal static IReadOnlyList<Reminder> Due(IEnumerable<Reminder> all, DateTimeOffset now)

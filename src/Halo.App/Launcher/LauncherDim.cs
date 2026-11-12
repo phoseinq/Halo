@@ -34,6 +34,11 @@ internal sealed class LauncherDim : IDisposable
         catch (Exception ex) { Trace?.Invoke("dim show threw " + ex); }
     }
 
+    internal void Warm(Rectangle monitor)
+    {
+        try { Ensure(monitor); } catch { }
+    }
+
     internal void SetAlpha(byte a)
     {
         if (_hwnd == IntPtr.Zero || a == _alpha) return;

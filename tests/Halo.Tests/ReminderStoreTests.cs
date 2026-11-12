@@ -222,4 +222,89 @@ public sealed class ReminderStoreTests
         Assert.Contains(c, x => x.Label == "tomorrow morning" && x.When.Hour == 9);
         Assert.Contains(c, x => x.Label == "tomorrow evening" && x.When.Hour == 18);
     }
+
+    [Theory]
+    [InlineData(9, "this afternoon")]
+    [InlineData(19, "tonight")]
+    public void Choices_FollowTheClock(int hour, string expected)
+    {
+        var at = new DateTimeOffset(2026, 8, 24, hour, 10, 0, TimeSpan.Zero);
+        Assert.Contains(ReminderStore.Choices(at), x => x.Label == expected);
+    }
+
+    [Fact]
+    public void Choices_NeverOfferAPartOfTheDayThatHasGone()
+    {
+        var at = new DateTimeOffset(2026, 8, 24, 19, 10, 0, TimeSpan.Zero);
+        var c = ReminderStore.Choices(at);
+        Assert.DoesNotContain(c, x => x.Label is "this afternoon" or "this evening");
+        Assert.True(c.Length <= 6);
+        Assert.Equal(c.Select(x => x.When).OrderBy(w => w), c.Select(x => x.When));
+    }
+
+    [Theory]
+    [InlineData("call mum in 20m", "call mum", 20)]
+    [InlineData("in 20m call mum", "call mum", 20)]
+    public void Understand_TakesTheTimeAtEitherEnd(string line, string text, int minutes)
+    {
+        var got = ReminderStore.Understand(line, Now);
+        Assert.Equal(text, got?.Text);
+        Assert.Equal(Now.AddMinutes(minutes), got?.When);
+    }
+
+    [Theory]
+    [InlineData("meet in the park")]
+    [InlineData("dentist")]
+    public void Understand_LeavesOrdinaryWordsAlone(string line)
+        => Assert.Null(ReminderStore.Understand(line, Now));
+
+    [Fact]
+    public void EditLine_WritesTheTimeWhereUnderstandReadsItBack()
+    {
+        var at = Now.AddHours(3);
+        var line = ReminderStore.EditLine("buy milk", at, Now);
+        var back = ReminderStore.Understand(line, Now);
+        Assert.Equal("buy milk", back?.Text);
+        Assert.Equal(at, back?.When);
+    }
+
+    [Fact]
+    public void EditLine_NamesTomorrow_AndReplacesATimeAlreadyTyped()
+    {
+        var at = new DateTimeOffset(Now.Year, Now.Month, Now.Day, 9, 0, 0, Now.Offset).AddDays(1);
+        var line = ReminderStore.EditLine("buy milk in 20m", at, Now);
+        Assert.Equal("buy milk tomorrow 09:00", line);
+        Assert.Equal(at, ReminderStore.Understand(line, Now)?.When);
+    }
+
+    [Theory]
+    [InlineData("test in tue 9:00")]
+    [InlineData("test on tue 9:00")]
+    [InlineData("test tue 9:00")]
+    [InlineData("tue 9:00 test")]
+    [InlineData("test on tuesday 9am")]
+    public void Understand_TakesAWeekday(string line)
+    {
+        var got = ReminderStore.Understand(line, Now);
+        Assert.Equal("test", got?.Text);
+        Assert.Equal(DayOfWeek.Tuesday, got?.When.DayOfWeek);
+        Assert.Equal(9, got?.When.Hour);
+        Assert.True(got?.When > Now);
+    }
+
+    [Fact]
+    public void AWeekdayWhoseTimeHasPassedToday_MeansNextWeek()
+    {
+        var today = Now.DayOfWeek.ToString()[..3];
+        var got = ReminderStore.Understand("test on " + today + " 06:00", Now);
+        Assert.Equal(Now.Date.AddDays(7), got?.When.Date);
+    }
+
+    [Fact]
+    public void EditLine_WritesTheDayOfAReminderLaterThisWeek()
+    {
+        var at = Now.AddDays(3);
+        var back = ReminderStore.Understand(ReminderStore.EditLine("x", at, Now), Now);
+        Assert.Equal(at, back?.When);
+    }
 }

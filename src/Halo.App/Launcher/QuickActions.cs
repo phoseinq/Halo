@@ -32,10 +32,19 @@ internal static class QuickActions
 
         internal static string CustomKey(int slot) => "quick.custom" + slot.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    internal const int CustomSlots = 3;
+    internal const int CustomSlots = 8;
 
         internal const string Prefix = "act:";
     internal const string CustomPrefix = "act:custom:";
+    internal const string SavePrefix = "act:save:";
+    internal const string RemovePrefix = "act:remove:";
+
+        internal static int FreeSlot(Func<int, string> read)
+    {
+        for (int slot = 1; slot <= CustomSlots; slot++)
+            if (ParseCustom(read(slot)) is null) return slot;
+        return 0;
+    }
 
     internal static bool DefaultOn(string id) => id is IdMute or IdLock or IdSleep;
 

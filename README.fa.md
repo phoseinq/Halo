@@ -43,8 +43,9 @@
 <h2 align="center">🎬 هالو در یک دقیقه</h2>
 
 <div align="center">
-<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer-poster.jpg" alt="هالو در یک دقیقه" width="880"></a>
-<br /><sub>برای دیدن تریلر کلیک کن.</sub>
+
+https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
+
 </div>
 
 <br />

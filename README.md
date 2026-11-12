@@ -43,8 +43,9 @@ folds away when there is not. No app to open, nothing covering your work.
 <h2 align="center">🎬 Halo in a minute</h2>
 
 <div align="center">
-<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer-poster.jpg" alt="Halo in a minute" width="880"></a>
-<br /><sub>Click to watch the trailer.</sub>
+
+https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
+
 </div>
 
 <br />

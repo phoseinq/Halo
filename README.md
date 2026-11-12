@@ -40,6 +40,62 @@ folds away when there is not. No app to open, nothing covering your work.
 
 <br />
 
+<h2 align="center">🎬 Halo in a minute</h2>
+
+<div align="center">
+<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer-poster.jpg" alt="Halo in a minute" width="880"></a>
+<br /><sub>Click to watch the trailer.</sub>
+</div>
+
+<br />
+
+<h2 align="center">🖼️ Screenshots</h2>
+
+<div align="center">
+<img src="ReadmeFiles/gallery.webp" alt="Screenshots" width="880">
+<br /><sub>Ten screens, turning on their own.</sub>
+</div>
+
+<details>
+<summary><b>All ten, one by one</b></summary>
+<br />
+<div align="center">
+
+<img src="ReadmeFiles/shots/01-media.jpg" alt="Everything that is playing, in one place" width="880">
+<br /><sub>Everything that is playing, in one place</sub>
+
+<img src="ReadmeFiles/shots/02-tray.jpg" alt="Drop files on the pill and it holds them" width="880">
+<br /><sub>Drop files on the pill and it holds them</sub>
+
+<img src="ReadmeFiles/shots/03-notifications.jpg" alt="Every notification, mirrored with its real icon" width="880">
+<br /><sub>Every notification, mirrored with its real icon</sub>
+
+<img src="ReadmeFiles/shots/04-agents.jpg" alt="A live panel for every coding session" width="880">
+<br /><sub>A live panel for every coding session</sub>
+
+<img src="ReadmeFiles/shots/05-pill.jpg" alt="The rest of the time, it stays out of the way" width="880">
+<br /><sub>The rest of the time, it stays out of the way</sub>
+
+<img src="ReadmeFiles/shots/06-recent.jpg" alt="Missed something? It is all still there" width="880">
+<br /><sub>Missed something? It is all still there</sub>
+
+<img src="ReadmeFiles/shots/07-launcher.jpg" alt="Press Alt+Space and everything is one line away" width="880">
+<br /><sub>Press Alt+Space and everything is one line away</sub>
+
+<img src="ReadmeFiles/shots/08-search.jpg" alt="Find it, or just work it out" width="880">
+<br /><sub>Find it, or just work it out</sub>
+
+<img src="ReadmeFiles/shots/09-system.jpg" alt="Your machine at a glance" width="880">
+<br /><sub>Your machine at a glance</sub>
+
+<img src="ReadmeFiles/shots/10-translate.jpg" alt="Translate without leaving what you are doing" width="880">
+<br /><sub>Translate without leaving what you are doing</sub>
+
+</div>
+</details>
+
+<br />
+
 <h2 align="center">⬇️ Install</h2>
 
 <div align="center">

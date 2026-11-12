@@ -40,6 +40,62 @@
 
 <br />
 
+<h2 align="center">🎬 هالو در یک دقیقه</h2>
+
+<div align="center">
+<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer-poster.jpg" alt="هالو در یک دقیقه" width="880"></a>
+<br /><sub>برای دیدن تریلر کلیک کن.</sub>
+</div>
+
+<br />
+
+<h2 align="center">🖼️ تصاویر</h2>
+
+<div align="center">
+<img src="ReadmeFiles/gallery.webp" alt="تصاویر" width="880">
+<br /><sub>ده صفحه که خودشون ورق می‌خورن.</sub>
+</div>
+
+<details>
+<summary><b>همه‌ی تصاویر، یکی‌یکی</b></summary>
+<br />
+<div align="center">
+
+<img src="ReadmeFiles/shots/01-media.jpg" alt="همه‌ی چیزهایی که پخش می‌شود، یک‌جا" width="880">
+<br /><sub>همه‌ی چیزهایی که پخش می‌شود، یک‌جا</sub>
+
+<img src="ReadmeFiles/shots/02-tray.jpg" alt="فایل‌ها را روی قرص بیندازید تا نگهشان دارد" width="880">
+<br /><sub>فایل‌ها را روی قرص بیندازید تا نگهشان دارد</sub>
+
+<img src="ReadmeFiles/shots/03-notifications.jpg" alt="هر اعلان، با آیکون واقعی خودش" width="880">
+<br /><sub>هر اعلان، با آیکون واقعی خودش</sub>
+
+<img src="ReadmeFiles/shots/04-agents.jpg" alt="یک پنل زنده برای هر نشست کدنویسی" width="880">
+<br /><sub>یک پنل زنده برای هر نشست کدنویسی</sub>
+
+<img src="ReadmeFiles/shots/05-pill.jpg" alt="بقیه‌ی وقت‌ها، از سر راه کنار می‌ماند" width="880">
+<br /><sub>بقیه‌ی وقت‌ها، از سر راه کنار می‌ماند</sub>
+
+<img src="ReadmeFiles/shots/06-recent.jpg" alt="چیزی را از دست دادید؟ هنوز همه‌چیز آنجاست" width="880">
+<br /><sub>چیزی را از دست دادید؟ هنوز همه‌چیز آنجاست</sub>
+
+<img src="ReadmeFiles/shots/07-launcher.jpg" alt="Alt+Space را بزنید و همه‌چیز یک خط فاصله دارد" width="880">
+<br /><sub>Alt+Space را بزنید و همه‌چیز یک خط فاصله دارد</sub>
+
+<img src="ReadmeFiles/shots/08-search.jpg" alt="پیدایش کنید، یا همین‌جا حسابش کنید" width="880">
+<br /><sub>پیدایش کنید، یا همین‌جا حسابش کنید</sub>
+
+<img src="ReadmeFiles/shots/09-system.jpg" alt="دستگاه شما در یک نگاه" width="880">
+<br /><sub>دستگاه شما در یک نگاه</sub>
+
+<img src="ReadmeFiles/shots/10-translate.jpg" alt="بدون ترک کار فعلی ترجمه کنید" width="880">
+<br /><sub>بدون ترک کار فعلی ترجمه کنید</sub>
+
+</div>
+</details>
+
+<br />
+
 <h2 align="center">⬇️ دانلود</h2>
 
 <div align="center">

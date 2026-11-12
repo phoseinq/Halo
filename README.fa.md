@@ -1,35 +1,12 @@
 <div align="center">
 
-**یک قرصِ شیشه‌ای برای ویندوز؛ همان Dynamic Islandی که همیشه جایش روی دسکتاپ خالی بود.**
-
-<br />
+<img src="ReadmeFiles/banner-fa-2.svg" alt="Halo — یک قرصِ شیشه‌ای برای ویندوز، همان Dynamic Islandی که همیشه جایش روی دسکتاپ خالی بود" width="900">
 
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-get%20Halo-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
 [![Release](https://img.shields.io/github/v/release/phoseinq/Halo?label=release&color=c49b04&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases/latest)
-[![Platform](https://img.shields.io/badge/Windows-11-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
-[![Built with](https://img.shields.io/badge/C%23-.NET%209-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
 [![Downloads](https://img.shields.io/github/downloads/phoseinq/Halo/total?label=downloads&color=2CA5E0&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases)
-[![License](https://img.shields.io/badge/License-MIT-c49b04.svg)](LICENSE)
 
-<br />
-
-[English](README.md) · **فارسی**
-
-[⬇️ دانلود](https://apps.microsoft.com/detail/9n9rs278cwk2) · [گزارش باگ](https://github.com/phoseinq/Halo/issues) · [پیشنهاد قابلیت](https://github.com/phoseinq/Halo/issues)
-
-</div>
-
-<br />
-
-<div align="center">
-
-<img src="ReadmeFiles/banner-fa-2.svg" alt="Halo — یک قرصِ شیشه‌ای برای ویندوز، همان Dynamic Islandی که همیشه جایش روی دسکتاپ خالی بود" width="900">
-
-<br /><br />
-
-### 👈 [قبل از نصب امتحانش کن](https://pvboy.dev/assets/blog/halo-live.html)
-
-<sub>بدون نصب، مستقیم داخل مرورگر. روی قرص موس ببر، پنل رو باز کن، نوار زمان رو جابه‌جا کن یا بین اپ‌ها سوییچ کن تا ببینی حس کار کردن باهاش چطوریه.</sub>
+**[⬇️ دانلود از Microsoft Store](https://apps.microsoft.com/detail/9n9rs278cwk2)** · [👈 قبل از نصب امتحانش کن](https://pvboy.dev/assets/blog/halo-live.html) · [English](README.md)
 
 </div>
 
@@ -43,9 +20,8 @@
 <h2 align="center">🎬 هالو در یک دقیقه</h2>
 
 <div align="center">
-
-https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
-
+<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer.gif" alt="Halo trailer" width="880"></a>
+<br /><sub>برای دیدن تریلر کامل با صدا، روش بزن.</sub>
 </div>
 
 <br />
@@ -53,7 +29,7 @@ https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
 <h2 align="center">🖼️ تصاویر</h2>
 
 <div align="center">
-<img src="ReadmeFiles/gallery.webp" alt="تصاویر" width="880">
+<img src="ReadmeFiles/gallery.gif" alt="تصاویر" width="880">
 <br /><sub>ده صفحه که خودشون ورق می‌خورن.</sub>
 </div>
 

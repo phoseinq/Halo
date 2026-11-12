@@ -1,35 +1,12 @@
 <div align="center">
 
-**A glass notch for Windows — the Dynamic Island your desktop never got.**
-
-<br />
+<img src="ReadmeFiles/banner-2.svg" alt="Halo — a glass notch for Windows, the Dynamic Island your desktop never got" width="900">
 
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-get%20Halo-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
 [![Release](https://img.shields.io/github/v/release/phoseinq/Halo?label=release&color=c49b04&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases/latest)
-[![Platform](https://img.shields.io/badge/Windows-11-0078D6?logo=windows11&logoColor=white)](https://apps.microsoft.com/detail/9n9rs278cwk2)
-[![Built with](https://img.shields.io/badge/C%23-.NET%209-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
 [![Downloads](https://img.shields.io/github/downloads/phoseinq/Halo/total?label=downloads&color=2CA5E0&logo=github&logoColor=white)](https://github.com/phoseinq/Halo/releases)
-[![License](https://img.shields.io/badge/License-MIT-c49b04.svg)](LICENSE)
 
-<br />
-
-**English** · [فارسی](README.fa.md)
-
-[⬇️ Download](https://apps.microsoft.com/detail/9n9rs278cwk2) · [Report a bug](https://github.com/phoseinq/Halo/issues) · [Request a feature](https://github.com/phoseinq/Halo/issues)
-
-</div>
-
-<br />
-
-<div align="center">
-
-<img src="ReadmeFiles/banner-2.svg" alt="Halo — a glass notch for Windows, the Dynamic Island your desktop never got" width="900">
-
-<br /><br />
-
-### 👉 [Try the pill in your browser](https://pvboy.dev/assets/blog/halo-live.html)
-
-<sub>No install. Hover it, open the panel, drag the seek bar, tap the circle to swap app.</sub>
+**[⬇️ Get it from the Store](https://apps.microsoft.com/detail/9n9rs278cwk2)** · [👉 Try it in your browser](https://pvboy.dev/assets/blog/halo-live.html) · [فارسی](README.fa.md)
 
 </div>
 
@@ -43,9 +20,8 @@ folds away when there is not. No app to open, nothing covering your work.
 <h2 align="center">🎬 Halo in a minute</h2>
 
 <div align="center">
-
-https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
-
+<a href="https://boystore.org/assets/blog/halo-trailer.mp4"><img src="ReadmeFiles/trailer.gif" alt="Halo trailer" width="880"></a>
+<br /><sub>Tap to watch the full trailer, with sound.</sub>
 </div>
 
 <br />
@@ -53,7 +29,7 @@ https://github.com/user-attachments/assets/251a6204-8762-4210-93bb-dd4113be9168
 <h2 align="center">🖼️ Screenshots</h2>
 
 <div align="center">
-<img src="ReadmeFiles/gallery.webp" alt="Screenshots" width="880">
+<img src="ReadmeFiles/gallery.gif" alt="Screenshots" width="880">
 <br /><sub>Ten screens, turning on their own.</sub>
 </div>
 
